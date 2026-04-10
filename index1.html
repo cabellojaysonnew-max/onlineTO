@@ -8,49 +8,27 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
-            --dar-green: #003811; --dar-light: #006400; --dar-gold: #D4AF37;
-            --bg-main: #f4f7f6; --card-bg: #ffffff; --text-main: #1f2937;
-            --text-muted: #6b7280; --danger: #dc2626; --success: #16a34a; --warning: #f59e0b;
+            --dar-green: #003811; --dar-gold: #D4AF37; --bg-main: #f4f7f6;
+            --card-bg: #ffffff; --text-main: #1f2937; --danger: #dc2626;
         }
-
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
         body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
-
-        .screen { display: none; }
-        .screen.active { display: block; animation: fadeIn 0.3s ease; }
-        .view { display: none; padding: 15px; padding-bottom: 120px; }
-        .view.active { display: block; animation: fadeIn 0.2s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
-        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
-        
-        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
-        label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+        .screen { display: none; } .screen.active { display: block; }
+        .view { display: none; padding: 15px; padding-bottom: 120px; } .view.active { display: block; }
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--dar-gold); }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
-
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn-primary { background: var(--dar-green); }
-        .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        .btn-danger { background: var(--danger); }
-        .btn-warning { background: var(--warning); }
-
-        .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
-        .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; }
-        .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
-        .dot { width: 5px; height: 5px; border-radius: 50%; }
-        .dot-to { background: var(--dar-green); } .dot-pso { background: var(--dar-gold); } .dot-holiday { background: var(--danger); }
-
-        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; gap: 8px; }
+        .btn-primary { background: var(--dar-green); } .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; }
         .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); }
-        
-        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
-        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
-        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
-        .bg-approved { background: #ecfdf5; color: #166534; } .bg-pending { background: #fefce8; color: #854d0e; }
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; float: right; font-weight: bold; }
+        .bg-approved { background: #ecfdf5; color: #166534; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; border: 1px solid #eee; position: relative; }
+        .dot { width: 5px; height: 5px; border-radius: 50%; }
+        .dot-to { background: var(--dar-green); } .dot-holiday { background: var(--danger); }
     </style>
 </head>
 <body>
@@ -58,9 +36,8 @@
     <div id="login-screen" class="screen active">
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div class="card">
-                <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px;">CAMARINES SUR I - MOBILE</p>
-                <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
+                <h2 style="text-align: center; color: var(--dar-green);">DAR PORTAL</h2>
+                <input type="text" id="login-id" placeholder="Employee ID">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
             </div>
@@ -69,42 +46,34 @@
 
     <div id="app-screen" class="screen">
         <div class="app-header">
-            <div>
-                <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
-                <div id="user-info" style="font-size: 10px; color: var(--dar-gold);">Division | Position</div>
-            </div>
-            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            <div><div id="user-name" style="font-weight: bold;">User</div><div id="user-info" style="font-size: 10px; color: var(--dar-gold);">Info</div></div>
+            <button onclick="location.reload()" style="background:none; border:1px solid white; color:white; font-size:10px;">Logout</button>
         </div>
 
         <div id="apply-view" class="view active">
             <div class="card">
-                <h4>1. Personnel (Max 5)</h4>
+                <h4>1. Personnel</h4>
                 <div style="display: flex; gap: 5px;">
-                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
-                    <button class="btn btn-primary" style="width: 70px; padding:0;" onclick="searchEmployees()">Find</button>
+                    <input type="text" id="emp-search" placeholder="Search Name" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" style="width: 70px;" onclick="searchEmployees()">Find</button>
                 </div>
-                <div id="search-results" class="search-results"></div>
-                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
+                <div id="search-results" style="background:white; border:1px solid #ddd; display:none; max-height:100px; overflow:auto;"></div>
+                <div id="personnel-draft-list" style="margin-top:10px;"></div>
             </div>
 
             <div class="card">
                 <h4>2. Logistics</h4>
-                <select id="to-transport">
-                    <option value="LAND">Public Utility (LAND)</option>
-                    <option value="GOV'T VEHICLE">Gov't Vehicle</option>
-                    <option value="AIR">Air Travel</option>
-                    <option value="OTHERS">Others</option>
-                </select>
-                <input type="text" id="to-report" placeholder="Report To (e.g. Division Chief)">
+                <select id="to-transport"><option value="LAND">LAND</option><option value="GOV'T VEHICLE">GOV'T VEHICLE</option></select>
+                <input type="text" id="to-report" placeholder="Report To">
             </div>
 
             <div class="card">
-                <h4>3. Itinerary Builder</h4>
+                <h4>3. Itinerary</h4>
                 <input type="date" id="itin-date">
                 <input type="text" id="itin-dest" placeholder="Destination">
-                <textarea id="itin-purp" rows="2" placeholder="Purpose"></textarea>
+                <textarea id="itin-purp" placeholder="Purpose"></textarea>
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
-                <div id="itin-draft-list" style="margin-top: 15px;"></div>
+                <div id="itin-draft-list" style="margin-top:10px;"></div>
             </div>
             <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
@@ -113,23 +82,8 @@
 
         <div id="calendar-view" class="view">
             <div class="card">
-                <div class="cal-nav">
-                    <button onclick="changeCalMonth(-1)">&lt;</button>
-                    <div id="cal-month-year" style="font-weight: bold;"></div>
-                    <button onclick="changeCalMonth(1)">&gt;</button>
-                </div>
-                <div class="calendar-grid" id="cal-header"></div>
+                <div id="cal-month-year" style="font-weight: bold; text-align: center; margin-bottom: 10px;"></div>
                 <div class="calendar-grid" id="cal-body"></div>
-            </div>
-            <div id="day-details" class="card" style="display:none; font-size:12px;"></div>
-        </div>
-
-        <div id="security-view" class="view">
-            <div class="card">
-                <h4>Update Password</h4>
-                <input type="password" id="pass-curr" placeholder="Current Password">
-                <input type="password" id="pass-new" placeholder="New Password">
-                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
             </div>
         </div>
 
@@ -137,7 +91,6 @@
             <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
             <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
             <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Calendar</div>
-            <div class="nav-item" onclick="switchTab('security-view', this)">🔒 Security</div>
         </div>
     </div>
 
@@ -148,7 +101,6 @@
 
         let currentUser = null; let itineraryDraft = []; let personnelDraft = [];
         const todayStr = new Date().toISOString().split('T')[0];
-        let calDate = new Date();
 
         const urlToBase64 = async (url) => {
             try {
@@ -179,29 +131,17 @@
 
         window.searchEmployees = async function() {
             const term = document.getElementById('emp-search').value;
-            if (term.length < 2) return;
-            const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
-            const resDiv = document.getElementById('search-results');
-            resDiv.innerHTML = ''; resDiv.style.display = 'block';
-            data.forEach(emp => {
-                const row = document.createElement('div'); row.className = 'search-row';
-                row.innerHTML = `${emp.full_name}`;
-                row.onclick = () => {
-                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
-                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
-                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
-                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
-                };
-                resDiv.appendChild(row);
+            const { data } = await supabase.from('employees').select('emp_id, full_name, unit').ilike('full_name', `%${term}%`).limit(5);
+            const resDiv = document.getElementById('search-results'); resDiv.innerHTML = ''; resDiv.style.display = 'block';
+            data.forEach(e => {
+                const div = document.createElement('div'); div.style.padding = '8px'; div.innerText = e.full_name;
+                div.onclick = () => { personnelDraft.push({ emp_id: e.emp_id, name: e.full_name, unit: e.unit }); resDiv.style.display = 'none'; renderPersonnel(); };
+                resDiv.appendChild(div);
             });
         };
 
         function renderPersonnel() {
-            document.getElementById('personnel-draft-list').innerHTML = personnelDraft.map((p, i) => `
-                <div style="display:flex; justify-content:space-between; padding:8px; background:#f0f4f8; margin-bottom:5px; border-radius:8px; font-size:12px;">
-                    <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<span onclick="personnelDraft.splice(${i},1); renderPersonnel();" style="color:red;">X</span>` : ''}
-                </div>`).join('');
+            document.getElementById('personnel-draft-list').innerHTML = personnelDraft.map(p => `<div style="font-size:12px; padding:5px; background:#eee; margin-bottom:2px;">👤 ${p.name}</div>`).join('');
         }
 
         window.addItinDraft = () => {
@@ -212,39 +152,21 @@
         };
 
         function renderItin() {
-            document.getElementById('itin-draft-list').innerHTML = itineraryDraft.map((it, i) => `
-                <div class="card" style="font-size:11px;">
-                    <b>📅 ${it.date}</b> | 📍 ${it.dest} <span onclick="itineraryDraft.splice(${i},1); renderItin();" style="float:right; color:red;">Del</span>
-                </div>`).join('');
+            document.getElementById('itin-draft-list').innerHTML = itineraryDraft.map(it => `<div style="font-size:11px;">${it.date} | ${it.dest}</div>`).join('');
         }
 
         window.submitTO = async function() {
-            if (itineraryDraft.length === 0) return alert("Empty itinerary");
-            const to_no = await generateToNo();
-            const draftDates = itineraryDraft.map(it => it.date);
-            let remarks = "";
+            const year = new Date().getFullYear();
+            const div = (currentUser.division || "GEN").substring(0,5).toUpperCase();
+            const to_no = `${year}-${div}-${Math.floor(10000 + Math.random() * 90000)}`;
 
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
-                if(!confirm("Conflicts with existing PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
-                remarks = "WITH EXISTING PSO/RSO";
-            }
-
-            const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            if(activeTOs?.length > 0) {
-                const { data: conflicts } = await supabase.from('itinerary').select('*').in('to_no', activeTOs.map(t => t.to_no)).in('travel_date', draftDates);
-                if(conflicts?.length > 0) {
-                    if(!confirm(`Conflicting date in existing TO. Overwrite?`)) return;
-                    await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflicts[0].to_no);
-                }
-            }
-
-            let routeStatus = "PENDING_CHIEF";
-            if (document.getElementById('to-transport').value === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
+            const conflict = psos?.some(p => itineraryDraft.some(it => it.date >= p.start_date && it.date <= p.end_date));
+            const remarks = conflict ? "WITH EXISTING PSO/RSO" : "";
 
             const batchP = personnelDraft.map(p => ({
-                to_no, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: currentUser.division, 
-                status: routeStatus, transport: document.getElementById('to-transport').value, 
+                to_no, emp_id: p.emp_id, emp_name: p.name, division: currentUser.division, unit: p.unit, 
+                status: 'APPROVED', transport: document.getElementById('to-transport').value, 
                 report_to: document.getElementById('to-report').value, remarks
             }));
             const batchI = itineraryDraft.map(it => ({ to_no, travel_date: it.date, destination: it.dest, purpose: it.purp }));
@@ -254,15 +176,6 @@
             alert("Submitted: " + to_no); location.reload();
         };
 
-        async function generateToNo() {
-            const year = new Date().getFullYear();
-            const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
-            let seq = data && data[0] ? parseInt(data[0].to_no.split('-')[2]) + 1 : 1;
-            return `${year}-${div}-${String(seq).padStart(5, '0')}`;
-        }
-
-        // CORRECTED PDF LOGIC: DYNAMIC SPACING, 159MM RIGHT BORDER, FULL UNDERLINING
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -273,12 +186,12 @@
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
 
-                const img_bg = await urlToBase64(getAssetUrl("bg_form.jpg"));
-                const img_p2 = await urlToBase64(getAssetUrl("P2.png"));
-                const img_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${toNo}`);
+                const [img_bg, img_p2, img_qr] = await Promise.all([
+                    urlToBase64(getAssetUrl("bg_form.jpg")), urlToBase64(getAssetUrl("P2.png")),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${toNo}`)
+                ]);
 
-                const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
-                for (let i = 0; i < copies.length; i++) {
+                for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
                     if (img_qr) doc.addImage(img_qr, 'PNG', 172, 10, 22, 22);
@@ -290,20 +203,18 @@
                     const fDate = new Date(od_list[0].created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
                     doc.text(`Date Filed: ${fDate}`, 159, 52, { align: 'right' });
 
-                    let currY = 75; // Dynamic tracker
-                    const rightLimit = 159; 
+                    let currY = 75; const rightLimit = 159;
 
                     const drawRow = (label, value, xStart) => {
                         doc.setFont("helvetica", "bold"); doc.text(label, 20, currY);
                         doc.setFont("helvetica", "normal");
                         const textLines = doc.splitTextToSize(value || "", rightLimit - xStart);
-                        
                         textLines.forEach((line, idx) => {
                             const lineY = currY + (idx * 5.5);
                             doc.text(line, xStart, lineY);
-                            doc.line(xStart, lineY + 1, rightLimit, lineY + 1); // Full Underline
+                            doc.line(xStart, lineY + 1, rightLimit, lineY + 1);
                         });
-                        currY += (textLines.length * 5.5) + 2.5; // Automatic Spacing
+                        currY += (textLines.length * 5.5) + 2.5;
                     };
 
                     drawRow("NAME:", od_list.map(m => m.emp_name.toUpperCase()).join(", "), 45);
@@ -320,18 +231,16 @@
                     currY += 8;
 
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, currY); currY += 6;
-                    const tr = od_list[0].transport;
                     const check = (x, y, lbl, val) => { doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5); doc.text(lbl, x+6, y+3.5); };
-                    check(30, currY, "LAND", tr === "LAND"); check(80, currY, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
+                    check(30, currY, "LAND", od_list[0].transport === "LAND"); check(80, currY, "GOV'T VEHICLE", od_list[0].transport === "GOV'T VEHICLE");
                     currY += 10;
 
-                    const destStr = itin.map(it => `${it.destination} (${it.travel_date})`).join(", ");
-                    drawRow("DESTINATION:", destStr, 50);
+                    drawRow("DESTINATION:", itin.map(it => `${it.destination} (${it.travel_date})`).join(", "), 50);
                     
                     doc.setFont("helvetica", "bold"); doc.text("DEPARTURE:", 20, currY); 
-                    doc.setFont("helvetica", "normal"); doc.text(itin[0]?.travel_date || "", 50, currY); doc.line(50, currY+1, 100, currY+1);
-                    doc.setFont("helvetica", "bold"); doc.text("RETURN:", 110, currY); 
-                    doc.setFont("helvetica", "normal"); doc.text(itin[itin.length-1]?.travel_date || "", 135, currY); doc.line(135, currY+1, rightLimit, currY+1);
+                    doc.text(itin[0]?.travel_date || "", 50, currY); doc.line(50, currY+1, 100, currY+1);
+                    doc.text("RETURN:", 110, currY); 
+                    doc.text(itin[itin.length-1]?.travel_date || "", 135, currY); doc.line(135, currY+1, rightLimit, currY+1);
                     currY += 8;
 
                     drawRow("REPORT TO:", od_list[0].report_to, 50);
@@ -347,40 +256,18 @@
 
         async function loadStatus() {
             const { data } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', { ascending: false });
-            document.getElementById('status-list').innerHTML = (data || []).map(to => `
-                <div class="card">
-                    <span class="badge bg-pending">${to.status}</span>
-                    <b>${to.to_no}</b>
-                    <div style="margin-top:10px;">
-                        <button class="btn btn-primary" style="padding:5px; width:auto; font-size:10px;" onclick="generateOfficialPDF('${to.to_no}')">Print PDF</button>
-                    </div>
-                </div>`).join('');
+            document.getElementById('status-list').innerHTML = data.map(to => `<div class="card"><span class="badge bg-approved">${to.status}</span><b>${to.to_no}</b><br><button onclick="generateOfficialPDF('${to.to_no}')" style="margin-top:10px; font-size:10px;">Print PDF</button></div>`).join('');
         }
 
         window.renderCalendar = async function() {
-            const month = calDate.getMonth(), year = calDate.getFullYear();
-            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no').in('to_no', myTOs?.map(t => t.to_no) || []);
-            const { data: hol } = await supabase.from('holidays').select('*');
-            
+            document.getElementById('cal-month-year').innerText = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id);
+            const { data: itins } = await supabase.from('itinerary').select('travel_date').in('to_no', myTOs?.map(t => t.to_no) || []);
             const body = document.getElementById('cal-body'); body.innerHTML = '';
-            const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
-            for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
-            for(let d=1; d<=last; d++) {
-                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const hasTO = itins?.some(i => i.travel_date === ds);
-                const isHol = hol?.some(h => h.date === ds);
-                body.innerHTML += `<div class="calendar-day">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>' : ''}${isHol ? '<div class="dot dot-holiday"></div>' : ''}</div></div>`;
+            for(let d=1; d<=31; d++) {
+                const hasTO = itins?.some(i => i.travel_date.includes(`-${String(d).padStart(2,'0')}`));
+                body.innerHTML += `<div class="calendar-day">${d}${hasTO ? '<div class="dot dot-to"></div>' : ''}</div>`;
             }
-        };
-
-        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth() + d); renderCalendar(); };
-
-        window.changePassword = async () => {
-            const nw = document.getElementById('pass-new').value;
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-            alert("Updated!");
         };
     </script>
 </body>
