@@ -8,22 +8,48 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
-            --dar-green: #003811; --dar-gold: #D4AF37; --bg-main: #f4f7f6;
-            --card-bg: #ffffff; --text-main: #1f2937; --danger: #dc2626;
+            --dar-green: #003811; --dar-light: #006400; --dar-gold: #D4AF37;
+            --bg-main: #f4f7f6; --card-bg: #ffffff; --text-main: #1f2937;
+            --text-muted: #6b7280; --danger: #dc2626; --success: #16a34a; --warning: #f59e0b;
         }
-        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); }
-        .screen { display: none; } .screen.active { display: block; }
-        .view { display: none; padding: 15px; padding-bottom: 120px; } .view.active { display: block; }
-        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--dar-gold); }
-        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
+
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        .view { display: none; padding: 15px; padding-bottom: 120px; }
+        .view.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
+        
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
+        label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
-        .btn-primary { background: var(--dar-green); } .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; }
-        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; }
+
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-primary { background: var(--dar-green); }
+        .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--warning); }
+
+        .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
+        .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; }
+        .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
+        .dot { width: 5px; height: 5px; border-radius: 50%; }
+        .dot-to { background: var(--dar-green); } .dot-pso { background: var(--dar-gold); } .dot-holiday { background: var(--danger); }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; }
         .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); }
-        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; float: right; font-weight: bold; }
+        
+        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
+        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
         .bg-approved { background: #ecfdf5; color: #166534; } .bg-pending { background: #fefce8; color: #854d0e; }
     </style>
 </head>
@@ -32,8 +58,9 @@
     <div id="login-screen" class="screen active">
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div class="card">
-                <h2 style="text-align: center; color: var(--dar-green);">DAR PORTAL</h2>
-                <input type="text" id="login-id" placeholder="Employee ID">
+                <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
+                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px;">CAMARINES SUR I - MOBILE</p>
+                <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
             </div>
@@ -42,29 +69,75 @@
 
     <div id="app-screen" class="screen">
         <div class="app-header">
-            <div><div id="user-name" style="font-weight: bold;">User</div><div id="user-info" style="font-size: 10px; color: var(--dar-gold);">Info</div></div>
-            <button onclick="location.reload()" style="background:none; border:1px solid white; color:white; font-size:10px;">Logout</button>
+            <div>
+                <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
+                <div id="user-info" style="font-size: 10px; color: var(--dar-gold);">Division | Position</div>
+            </div>
+            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
         </div>
+
         <div id="apply-view" class="view active">
             <div class="card">
-                <h4>1. Logistics</h4>
-                <select id="to-transport"><option value="LAND">LAND</option><option value="GOV'T VEHICLE">GOV'T VEHICLE</option></select>
-                <input type="text" id="to-report" placeholder="Report To">
+                <h4>1. Personnel (Max 5)</h4>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" style="width: 70px; padding:0;" onclick="searchEmployees()">Find</button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
             </div>
+
             <div class="card">
-                <h4>2. Itinerary</h4>
+                <h4>2. Logistics</h4>
+                <select id="to-transport">
+                    <option value="LAND">Public Utility (LAND)</option>
+                    <option value="GOV'T VEHICLE">Gov't Vehicle</option>
+                    <option value="AIR">Air Travel</option>
+                    <option value="OTHERS">Others</option>
+                </select>
+                <input type="text" id="to-report" placeholder="Report To (e.g. Division Chief)">
+            </div>
+
+            <div class="card">
+                <h4>3. Itinerary Builder</h4>
                 <input type="date" id="itin-date">
                 <input type="text" id="itin-dest" placeholder="Destination">
-                <textarea id="itin-purp" placeholder="Purpose"></textarea>
+                <textarea id="itin-purp" rows="2" placeholder="Purpose"></textarea>
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
-                <div id="itin-draft-list" style="margin-top:10px;"></div>
+                <div id="itin-draft-list" style="margin-top: 15px;"></div>
             </div>
-            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT REQUEST</button>
+            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
+
         <div id="status-view" class="view"><div id="status-list"></div></div>
+
+        <div id="calendar-view" class="view">
+            <div class="card">
+                <div class="cal-nav">
+                    <button onclick="changeCalMonth(-1)">&lt;</button>
+                    <div id="cal-month-year" style="font-weight: bold;"></div>
+                    <button onclick="changeCalMonth(1)">&gt;</button>
+                </div>
+                <div class="calendar-grid" id="cal-header"></div>
+                <div class="calendar-grid" id="cal-body"></div>
+            </div>
+            <div id="day-details" class="card" style="display:none; font-size:12px;"></div>
+        </div>
+
+        <div id="security-view" class="view">
+            <div class="card">
+                <h4>Update Password</h4>
+                <input type="password" id="pass-curr" placeholder="Current Password">
+                <input type="password" id="pass-new" placeholder="New Password">
+                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
+            </div>
+        </div>
+
         <div class="bottom-nav">
             <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
             <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
+            <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Calendar</div>
+            <div class="nav-item" onclick="switchTab('security-view', this)">🔒 Security</div>
         </div>
     </div>
 
@@ -73,7 +146,10 @@
         const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        let currentUser = null; let itineraryDraft = [];
+        let currentUser = null; let itineraryDraft = []; let personnelDraft = [];
+        const todayStr = new Date().toISOString().split('T')[0];
+        let calDate = new Date();
+
         const urlToBase64 = async (url) => {
             try {
                 const res = await fetch(url); if (!res.ok) return null;
@@ -88,7 +164,9 @@
             const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
             if (data && data.pass === pass) {
                 currentUser = data; document.getElementById('user-name').innerText = data.full_name;
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`;
                 document.getElementById('app-screen').classList.add('active'); document.getElementById('login-screen').classList.remove('active');
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }]; renderPersonnel();
             } else alert("Invalid Credentials");
         };
 
@@ -96,7 +174,35 @@
             document.querySelectorAll('.view, .nav-item').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active'); el.classList.add('active');
             if (id === 'status-view') loadStatus();
+            if (id === 'calendar-view') renderCalendar();
         };
+
+        window.searchEmployees = async function() {
+            const term = document.getElementById('emp-search').value;
+            if (term.length < 2) return;
+            const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
+            const resDiv = document.getElementById('search-results');
+            resDiv.innerHTML = ''; resDiv.style.display = 'block';
+            data.forEach(emp => {
+                const row = document.createElement('div'); row.className = 'search-row';
+                row.innerHTML = `${emp.full_name}`;
+                row.onclick = () => {
+                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
+                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
+                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
+                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
+                };
+                resDiv.appendChild(row);
+            });
+        };
+
+        function renderPersonnel() {
+            document.getElementById('personnel-draft-list').innerHTML = personnelDraft.map((p, i) => `
+                <div style="display:flex; justify-content:space-between; padding:8px; background:#f0f4f8; margin-bottom:5px; border-radius:8px; font-size:12px;">
+                    <span>👤 ${p.name}</span>
+                    ${p.emp_id !== currentUser.emp_id ? `<span onclick="personnelDraft.splice(${i},1); renderPersonnel();" style="color:red;">X</span>` : ''}
+                </div>`).join('');
+        }
 
         window.addItinDraft = () => {
             const date = document.getElementById('itin-date').value;
@@ -106,18 +212,57 @@
         };
 
         function renderItin() {
-            document.getElementById('itin-draft-list').innerHTML = itineraryDraft.map((it, i) => `<div class="card" style="font-size:12px;">${it.date} | ${it.dest}</div>`).join('');
+            document.getElementById('itin-draft-list').innerHTML = itineraryDraft.map((it, i) => `
+                <div class="card" style="font-size:11px;">
+                    <b>📅 ${it.date}</b> | 📍 ${it.dest} <span onclick="itineraryDraft.splice(${i},1); renderItin();" style="float:right; color:red;">Del</span>
+                </div>`).join('');
         }
 
         window.submitTO = async function() {
-            const to_no = `${new Date().getFullYear()}-TO-${Math.floor(Math.random()*10000)}`;
-            const payload = itineraryDraft.map(it => ({ to_no, travel_date: it.date, destination: it.dest, purpose: it.purp }));
-            await supabase.from('travel_orders').insert([{ to_no, emp_id: currentUser.emp_id, emp_name: currentUser.full_name, transport: document.getElementById('to-transport').value, report_to: document.getElementById('to-report').value, status: 'APPROVED' }]);
-            await supabase.from('itinerary').insert(payload);
-            alert("Submitted!"); location.reload();
+            if (itineraryDraft.length === 0) return alert("Empty itinerary");
+            const to_no = await generateToNo();
+            const draftDates = itineraryDraft.map(it => it.date);
+            let remarks = "";
+
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
+                if(!confirm("Conflicts with existing PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
+                remarks = "WITH EXISTING PSO/RSO";
+            }
+
+            const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            if(activeTOs?.length > 0) {
+                const { data: conflicts } = await supabase.from('itinerary').select('*').in('to_no', activeTOs.map(t => t.to_no)).in('travel_date', draftDates);
+                if(conflicts?.length > 0) {
+                    if(!confirm(`Conflicting date in existing TO. Overwrite?`)) return;
+                    await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflicts[0].to_no);
+                }
+            }
+
+            let routeStatus = "PENDING_CHIEF";
+            if (document.getElementById('to-transport').value === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
+
+            const batchP = personnelDraft.map(p => ({
+                to_no, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: currentUser.division, 
+                status: routeStatus, transport: document.getElementById('to-transport').value, 
+                report_to: document.getElementById('to-report').value, remarks
+            }));
+            const batchI = itineraryDraft.map(it => ({ to_no, travel_date: it.date, destination: it.dest, purpose: it.purp }));
+
+            await supabase.from('travel_orders').insert(batchP);
+            await supabase.from('itinerary').insert(batchI);
+            alert("Submitted: " + to_no); location.reload();
         };
 
-        // PDF GENERATION WITH AUTOMATIC FLEXIBLE SPACING & 2-INCH RIGHT BORDER
+        async function generateToNo() {
+            const year = new Date().getFullYear();
+            const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
+            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
+            let seq = data && data[0] ? parseInt(data[0].to_no.split('-')[2]) + 1 : 1;
+            return `${year}-${div}-${String(seq).padStart(5, '0')}`;
+        }
+
+        // CORRECTED PDF LOGIC: DYNAMIC SPACING, 159MM RIGHT BORDER, FULL UNDERLINING
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -126,7 +271,7 @@
             try {
                 const { data: od_list } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                const { data: emp } = await supabase.from('employees').select('*').eq('emp_id', od_list[0].emp_id).single();
+                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
 
                 const img_bg = await urlToBase64(getAssetUrl("bg_form.jpg"));
                 const img_p2 = await urlToBase64(getAssetUrl("P2.png"));
@@ -136,68 +281,64 @@
                 for (let i = 0; i < copies.length; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
-                    if (img_qr) doc.addImage(img_qr, 'PNG', 175, 10, 20, 20);
+                    if (img_qr) doc.addImage(img_qr, 'PNG', 172, 10, 22, 22);
 
                     doc.setFontSize(16); doc.setFont("helvetica", "bold");
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
                     const fDate = new Date(od_list[0].created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-                    // Strict 2-inch right border (159mm)
                     doc.text(`Date Filed: ${fDate}`, 159, 52, { align: 'right' });
 
-                    let currY = 75; // Starting flexible Y coordinate
+                    let currY = 75; // Dynamic tracker
                     const rightLimit = 159; 
 
-                    // Flexible Row Function
                     const drawRow = (label, value, xStart) => {
                         doc.setFont("helvetica", "bold"); doc.text(label, 20, currY);
                         doc.setFont("helvetica", "normal");
                         const textLines = doc.splitTextToSize(value || "", rightLimit - xStart);
-                        doc.text(textLines, xStart, currY);
                         
-                        // Underline each line of data
                         textLines.forEach((line, idx) => {
-                            doc.line(xStart, currY + (idx * 5) + 1, rightLimit, currY + (idx * 5) + 1);
+                            const lineY = currY + (idx * 5.5);
+                            doc.text(line, xStart, lineY);
+                            doc.line(xStart, lineY + 1, rightLimit, lineY + 1); // Full Underline
                         });
-                        currY += (textLines.length * 5) + 2; // Flexible increment
+                        currY += (textLines.length * 5.5) + 2.5; // Automatic Spacing
                     };
 
-                    drawRow("NAME:", emp.full_name.toUpperCase(), 45);
+                    drawRow("NAME:", od_list.map(m => m.emp_name.toUpperCase()).join(", "), 45);
                     
-                    // Combined Row
                     doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, currY);
-                    doc.setFont("helvetica", "normal"); doc.text(emp.position.toUpperCase(), 45, currY);
+                    doc.setFont("helvetica", "normal"); 
+                    doc.text([...new Set(od_list.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase(), 45, currY);
                     doc.line(45, currY+1, 100, currY+1);
+
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 110, currY);
-                    doc.setFont("helvetica", "normal"); doc.text(emp.station.toUpperCase(), 130, currY);
+                    doc.setFont("helvetica", "normal"); 
+                    doc.text([...new Set(od_list.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase(), 130, currY);
                     doc.line(130, currY+1, rightLimit, currY+1);
                     currY += 8;
 
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, currY); currY += 6;
                     const tr = od_list[0].transport;
-                    const drawCheck = (x, y, lbl, active) => { doc.rect(x, y, 4, 4); if(active) doc.text("X", x+1, y+3.5); doc.text(lbl, x+6, y+3.5); };
-                    drawCheck(30, currY, "LAND", tr === "LAND"); drawCheck(80, currY, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
-                    currY += 12;
+                    const check = (x, y, lbl, val) => { doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5); doc.text(lbl, x+6, y+3.5); };
+                    check(30, currY, "LAND", tr === "LAND"); check(80, currY, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
+                    currY += 10;
 
                     const destStr = itin.map(it => `${it.destination} (${it.travel_date})`).join(", ");
                     drawRow("DESTINATION:", destStr, 50);
                     
                     doc.setFont("helvetica", "bold"); doc.text("DEPARTURE:", 20, currY); 
-                    doc.setFont("helvetica", "normal"); doc.text(itin[0].travel_date, 50, currY); doc.line(50, currY+1, 100, currY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(itin[0]?.travel_date || "", 50, currY); doc.line(50, currY+1, 100, currY+1);
                     doc.setFont("helvetica", "bold"); doc.text("RETURN:", 110, currY); 
-                    doc.setFont("helvetica", "normal"); doc.text(itin[itin.length-1].travel_date, 135, currY); doc.line(135, currY+1, rightLimit, currY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(itin[itin.length-1]?.travel_date || "", 135, currY); doc.line(135, currY+1, rightLimit, currY+1);
                     currY += 8;
 
                     drawRow("REPORT TO:", od_list[0].report_to, 50);
+                    drawRow("PURPOSE OF TRAVEL:", itin[0]?.purpose || "", 65);
 
-                    // Purpose - Enforced on same line as label
-                    drawRow("PURPOSE:", itin[0].purpose, 45);
-
-                    // Final Signatures
                     if (i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
-                    doc.setFont("helvetica", "bold");
-                    doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
+                    doc.setFont("helvetica", "bold"); doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
                     doc.setFontSize(10); doc.text("PARPO II", 105, 280, { align: 'center' });
                 }
                 doc.save(`TO_${toNo}.pdf`);
@@ -205,14 +346,42 @@
         };
 
         async function loadStatus() {
-            const { data } = await supabase.from('travel_orders').select('*').order('created_at', { ascending: false });
-            document.getElementById('status-list').innerHTML = data.map(to => `
+            const { data } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', { ascending: false });
+            document.getElementById('status-list').innerHTML = (data || []).map(to => `
                 <div class="card">
-                    <span class="badge bg-approved">${to.status}</span>
+                    <span class="badge bg-pending">${to.status}</span>
                     <b>${to.to_no}</b>
-                    <button class="btn btn-primary" style="padding:5px; margin-top:10px;" onclick="generateOfficialPDF('${to.to_no}')">Print PDF</button>
+                    <div style="margin-top:10px;">
+                        <button class="btn btn-primary" style="padding:5px; width:auto; font-size:10px;" onclick="generateOfficialPDF('${to.to_no}')">Print PDF</button>
+                    </div>
                 </div>`).join('');
         }
+
+        window.renderCalendar = async function() {
+            const month = calDate.getMonth(), year = calDate.getFullYear();
+            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no').in('to_no', myTOs?.map(t => t.to_no) || []);
+            const { data: hol } = await supabase.from('holidays').select('*');
+            
+            const body = document.getElementById('cal-body'); body.innerHTML = '';
+            const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
+            for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
+            for(let d=1; d<=last; d++) {
+                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const hasTO = itins?.some(i => i.travel_date === ds);
+                const isHol = hol?.some(h => h.date === ds);
+                body.innerHTML += `<div class="calendar-day">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>' : ''}${isHol ? '<div class="dot dot-holiday"></div>' : ''}</div></div>`;
+            }
+        };
+
+        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth() + d); renderCalendar(); };
+
+        window.changePassword = async () => {
+            const nw = document.getElementById('pass-new').value;
+            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            alert("Updated!");
+        };
     </script>
 </body>
 </html>
