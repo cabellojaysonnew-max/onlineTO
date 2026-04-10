@@ -48,10 +48,11 @@
         .action-group { display: flex; gap: 6px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
+        /* CALENDAR CSS */
         .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
         .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; font-weight: bold; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; }
+        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; min-height: 45px; }
         .calendar-header { font-weight: bold; color: var(--dar-green); font-size: 10px; text-transform: uppercase; padding: 5px 0; text-align: center; }
         .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
         .dot { width: 5px; height: 5px; border-radius: 50%; }
@@ -142,16 +143,22 @@
         </div>
 
         <div id="calendar-view" class="view">
+            <h3 style="color: var(--dar-green);">Personal Schedule</h3>
             <div class="card">
                 <div class="cal-nav">
                     <button onclick="changeCalMonth(-1)">&lt;</button>
-                    <div id="cal-month-year" style="font-weight: bold;"></div>
+                    <div id="cal-month-year" style="font-weight: bold; color: var(--dar-green);"></div>
                     <button onclick="changeCalMonth(1)">&gt;</button>
                 </div>
                 <div class="calendar-grid" id="cal-header"></div>
                 <div class="calendar-grid" id="cal-body"></div>
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 12px; font-size: 10px;">
+                    <span><span class="dot dot-to" style="display:inline-block;"></span> Travel</span>
+                    <span><span class="dot dot-pso" style="display:inline-block;"></span> PSO</span>
+                    <span><span class="dot dot-holiday" style="display:inline-block;"></span> Holiday</span>
+                </div>
             </div>
-            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold);"></div>
+            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold); font-size:12px;"></div>
         </div>
 
         <div id="security-view" class="view">
@@ -159,7 +166,6 @@
                 <h4>Update Password</h4>
                 <input type="password" id="pass-curr" placeholder="Current Password">
                 <input type="password" id="pass-new" placeholder="New Password">
-                <input type="password" id="pass-conf" placeholder="Confirm New Password">
                 <button class="btn btn-primary" onclick="changePassword()">UPDATE</button>
             </div>
         </div>
@@ -203,12 +209,13 @@
                 setTimeout(() => {
                     const canvas = buffer.querySelector('canvas');
                     resolve(canvas ? canvas.toDataURL("image/png") : null);
-                }, 100);
+                }, 150);
             });
         }
 
+        // --- PDF GENERATION: 2-INCH RIGHT MARGIN & CENTERED TO NO ---
         window.printOfficialTO = async function(toNo) {
-            alert("Preparing PDF...");
+            alert("Preparing Official PDF...");
             const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
             const { jsPDF } = window.jspdf;
@@ -219,22 +226,22 @@
             const qrData = await generateQRDataURL(toNo);
 
             const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
-            const limitX = 159; // 210mm - 50.8mm (2 inches)
+            const limitX = 159.2; // 210mm - 2 inches
 
             for (let i = 0; i < copies.length; i++) {
                 if (i > 0) doc.addPage();
                 if (bgImg) doc.addImage(bgImg, 'JPEG', 0, 0, 210, 297);
 
                 doc.setFontSize(7); doc.setFont("helvetica", "italic");
-                doc.text(copies[i], limitX, 8, { align: "right" });
-                if (qrData) doc.addImage(qrData, 'PNG', 135, 10, 22, 22);
+                doc.text(copies[i], 200, 8, { align: "right" });
+                if (qrData) doc.addImage(qrData, 'PNG', 178, 10, 22, 22); // Right QR
 
                 doc.setFontSize(16); doc.setFont("helvetica", "bold");
-                doc.text(`TRAVEL ORDER NO. ${toNo}`, 85, 42, { align: "center" });
+                doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 42, { align: "center" }); // Centered
 
                 doc.setTextColor(0, 0, 0); doc.setFontSize(11);
 
-                // SINGLE SPACING (8mm - 10mm gaps)
+                // FIELD DATA (SINGLE SPACING)
                 doc.setFont("helvetica", "bold"); doc.text("NAME:", 15, 60);
                 doc.setFont("helvetica", "normal"); doc.text(to.emp_name.toUpperCase(), 40, 60);
                 doc.line(40, 61, limitX, 61);
@@ -263,7 +270,7 @@
                 doc.text(itin[0]?.purpose || "", 40, 100, { maxWidth: 115 });
 
                 doc.setFont("helvetica", "bold"); doc.text("Recommended by:", 15, 120);
-                doc.text(to.unithead_signed || "UNIT HEAD", 45, 140, { align: "center" });
+                doc.text(to.unithead_signed || "AUTHORIZED OFFICIAL", 45, 140, { align: "center" });
 
                 if (p2Sig) doc.addImage(p2Sig, 'PNG', 110, 150, 30, 20);
                 doc.setFontSize(11); doc.text("RICARDO C. GARCIA", 125, 175, { align: "center" });
@@ -307,8 +314,9 @@
                 row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
                 row.onclick = () => {
                     if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
-                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
-                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
+                    if (!personnelDraft.some(p => p.emp_id === emp.emp_id)) {
+                        personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
+                    }
                     resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
                 };
                 resDiv.appendChild(row);
@@ -349,23 +357,16 @@
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             const reportTo = document.getElementById('to-report').value.trim();
             if (!reportTo) return alert("Report To is required.");
-            const transport = document.getElementById('to-transport').value;
             try {
                 const finalToNo = await generateToNo(); 
-                let routeStatus = "PENDING_CHIEF";
-                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
-                else if (currentUser.unit) routeStatus = "PENDING_UNIT_HEAD";
-                
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks: ""
+                    division: currentUser.division, status: "PENDING_UNIT_HEAD", 
+                    transport: document.getElementById('to-transport').value, report_to: reportTo, remarks: ""
                 }));
                 const batchItin = itineraryDraft.map(it => ({ to_no: finalToNo, travel_date: it.date, destination: it.dest, purpose: it.purp }));
-                
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
-                
                 alert("Submitted: " + finalToNo); 
                 itineraryDraft = []; 
                 document.getElementById('to-report').value = "";
@@ -401,9 +402,8 @@
             let html = '';
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
-                const status = to.status.toUpperCase();
-                const sCls = status.includes('APPROVED') ? 'bg-approved' : (status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                
+                const status = (to.status || "").toUpperCase();
+                const sCls = status === 'APPROVED' ? 'bg-approved' : (status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 html += `
                     <div class="card">
                         <span class="badge ${sCls}">${to.status}</span>
@@ -422,32 +422,63 @@
                         </div>
                     </div>`;
             }
-            list.innerHTML = html || "No records.";
+            list.innerHTML = html || "No records found.";
         }
 
-        window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value;
-            const nw = document.getElementById('pass-new').value;
-            if(curr !== currentUser.pass) return alert("Wrong password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); 
-            switchTab('apply-view', document.querySelectorAll('.nav-item')[0]);
-        };
-
+        // --- CALENDAR LOGIC RESTORED & ENHANCED ---
         window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
 
         async function renderCalendar() {
             const month = calDate.getMonth(), year = calDate.getFullYear();
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+            
+            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const myToNos = myTOs?.map(t => t.to_no) || [];
+            const { data: itins } = await supabase.from('itinerary').select('travel_date').in('to_no', myToNos);
+            const { data: psos } = await supabase.from('pso_records').select('start_date, end_date').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*');
+
             const header = document.getElementById('cal-header'); const body = document.getElementById('cal-body');
             header.innerHTML = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="calendar-header">${d}</div>`).join('');
             body.innerHTML = '';
+
             const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
             for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
             for(let d=1; d<=last; d++) {
-                body.innerHTML += `<div class="calendar-day">${d}</div>`;
+                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const hasTO = itins?.some(i => i.travel_date === ds);
+                const hasPSO = psos?.some(p => ds >= p.start_date && ds <= p.end_date);
+                const holiday = holidays?.find(h => h.date === ds);
+
+                body.innerHTML += `
+                    <div class="calendar-day ${ds === todayStr ? 'today' : ''}" onclick="showDayInfo('${ds}')">
+                        ${d}
+                        <div class="dot-container">
+                            ${hasTO ? '<div class="dot dot-to"></div>' : ''}
+                            ${hasPSO ? '<div class="dot dot-pso"></div>' : ''}
+                            ${holiday ? '<div class="dot dot-holiday"></div>' : ''}
+                        </div>
+                    </div>`;
             }
         }
+
+        window.showDayInfo = async function(date) {
+            const info = document.getElementById('day-details');
+            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const myToNumbers = myTOs?.map(t => t.to_no) || [];
+            const { data: itins } = await supabase.from('itinerary').select('to_no, destination').in('to_no', myToNumbers).eq('travel_date', date);
+            const { data: hol } = await supabase.from('holidays').select('remarks').eq('date', date).single();
+            const { data: psos } = await supabase.from('pso_records').select('subject').eq('emp_id', currentUser.emp_id).lte('start_date', date).gte('end_date', date);
+
+            let html = `<strong>${date}</strong><hr style="border:none; border-top:1px solid #eee;">`;
+            if(hol) html += `<div style="color:var(--danger); margin-bottom:8px; font-weight:bold;">🚩 Holiday: ${hol.remarks}</div>`; 
+            if(psos?.length) psos.forEach(p => html += `<div style="color:var(--dar-gold); margin-bottom:8px;">📌 PSO: ${p.subject}</div>`);
+            if(itins?.length) itins.forEach(i => html += `<div style="margin-bottom:8px;">🛫 Travel Order: ${i.destination}</div>`);
+            
+            if(!hol && !itins?.length && !psos?.length) html += "No activities scheduled.";
+            
+            info.innerHTML = html; info.style.display = 'block';
+        };
     </script>
 </body>
 </html>
