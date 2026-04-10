@@ -8,266 +8,279 @@
     <style>
         :root {
             --dar-green: #003811;
+            --dar-light: #006400;
             --dar-gold: #D4AF37;
             --bg-main: #f4f7f6;
             --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
             --danger: #dc2626;
+            --success: #16a34a;
         }
 
         * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
 
-        /* Screen & View Management */
-        .screen { display: none; height: 100vh; flex-direction: column; }
-        .screen.active { display: flex; }
-        .view { display: none; padding: 15px; padding-bottom: 80px; overflow-y: auto; }
-        .view.active { display: block; }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        .view { display: none; padding: 15px; padding-bottom: 90px; }
+        .view.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* UI Components */
-        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; }
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
         .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
-        .section-title { color: var(--dar-green); font-size: 13px; font-weight: 700; border-left: 4px solid var(--dar-gold); padding-left: 8px; margin-bottom: 12px; }
         
-        input, select { width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 15px; margin-bottom: 10px; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; color: white; }
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
+
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; gap: 8px; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); font-size: 11px; padding: 5px 10px; width: auto; }
 
-        /* Draft Lists */
-        .draft-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
-        .search-results { background: white; border: 1px solid #cbd5e1; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-bottom: 10px; display: none; }
-        .search-item { padding: 10px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-        
-        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; }
-        .nav-item { flex: 1; padding: 15px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 600; }
+        .list-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-bottom: 10px; display: none; }
+        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; }
+        .nav-item { flex: 1; padding: 12px 0; text-align: center; color: #9ca3af; font-size: 11px; font-weight: bold; cursor: pointer; }
         .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); }
     </style>
 </head>
 <body>
 
     <div id="login-screen" class="screen active">
-        <div style="padding: 50px 30px; text-align: center;">
-            <h2 style="color: var(--dar-green)">DAR PORTAL</h2>
-            <input type="text" id="login-id" placeholder="Employee ID">
-            <input type="password" id="login-pass" placeholder="Password">
-            <button class="btn btn-primary" onclick="handleLogin()">LOGIN</button>
+        <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
+            <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 5px solid var(--dar-gold);">
+                <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
+                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px;">Camarines Sur I - Mobile</p>
+                <label>Employee ID</label>
+                <input type="text" id="login-id" placeholder="ID Number">
+                <label>Password</label>
+                <input type="password" id="login-pass" placeholder="Password">
+                <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
+            </div>
         </div>
     </div>
 
     <div id="app-screen" class="screen">
         <div class="app-header">
             <div>
-                <div id="user-display" style="font-weight:700;">Name</div>
-                <small id="user-div" style="color:var(--dar-gold)">Division</small>
+                <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
+                <div id="user-div" style="font-size: 11px; color: var(--dar-gold);">Division</div>
             </div>
-            <button onclick="location.reload()" style="background:none; border:none; color:white;">Logout</button>
+            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
         </div>
 
         <div id="apply-view" class="view active">
             <div class="card">
-                <div class="section-title">1. PERSONNEL (Max 5)</div>
+                <h4>1. Personnel Involved (Max 5)</h4>
                 <div style="display: flex; gap: 5px;">
-                    <input type="text" id="search-term" placeholder="Name or ID" onkeyup="if(event.key==='Enter') searchPersonnel()">
-                    <button class="btn btn-primary" style="width: 70px;" onclick="searchPersonnel()">FIND</button>
+                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" style="width: 80px;" onclick="searchEmployees()">Find</button>
                 </div>
-                <div id="search-results-box" class="search-results"></div>
-                <div id="personnel-list"></div>
+                <div id="search-results" class="search-results"></div>
+                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
             </div>
 
             <div class="card">
-                <div class="section-title">2. LOGISTICS</div>
+                <h4>2. Logistics</h4>
+                <label>Means of Transportation</label>
                 <select id="to-transport">
                     <option value="LAND">LAND</option>
                     <option value="GOV'T VEHICLE">GOV'T VEHICLE</option>
                     <option value="AIR">AIR</option>
                 </select>
-                <input type="text" id="to-report" placeholder="Report To (Official/Position)">
+                <label>Report To</label>
+                <input type="text" id="to-report" placeholder="e.g. Division Chief">
             </div>
 
             <div class="card">
-                <div class="section-title">3. ITINERARY BUILDER</div>
+                <h4>3. Itinerary Builder</h4>
                 <input type="date" id="itin-date">
                 <input type="text" id="itin-dest" placeholder="Destination">
                 <input type="text" id="itin-purp" placeholder="Purpose">
-                <button class="btn btn-primary" onclick="addItineraryRow()">+ ADD DATE TO LIST</button>
-                <div id="itin-list" style="margin-top: 10px;"></div>
+                <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
+                <div id="itin-draft-list" style="margin-top: 10px;"></div>
             </div>
 
-            <button class="btn btn-gold" style="margin-bottom: 20px;" onclick="submitGroupTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+        </div>
+
+        <div id="status-view" class="view">
+            <h3 style="color: var(--dar-green);">Application Status</h3>
+            <div id="status-list"></div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
+            <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
         </div>
     </div>
 
-    <script>
-        const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SUPABASE_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    <script type="module">
+        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
         let personnelDraft = [];
         let itineraryDraft = [];
 
-        async function handleLogin() {
-            const uid = document.getElementById('login-id').value;
-            const pwd = document.getElementById('login-pass').value;
-            const { data } = await supabase.from('employees').select('*').eq('emp_id', uid).single();
+        // LOGIN
+        window.handleLogin = async function() {
+            const id = document.getElementById('login-id').value;
+            const pass = document.getElementById('login-pass').value;
+            const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).single();
 
-            if (data && data.pass === pwd) {
+            if (data && data.pass === pass) {
                 currentUser = data;
-                document.getElementById('user-display').innerText = data.full_name;
+                document.getElementById('user-name').innerText = data.full_name;
                 document.getElementById('user-div').innerText = data.division;
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 
-                // Add self automatically (Python Logic)
-                personnelDraft = [{ emp_id: data.emp_id, full_name: data.full_name, unit: data.unit }];
+                // Add self as first personnel automatically
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                 renderPersonnel();
             } else {
-                alert("Invalid Access");
+                alert("Invalid Credentials");
             }
-        }
+        };
 
-        // PERSONNEL SEARCH LOGIC (Python Port)
-        async function searchPersonnel() {
-            const term = document.getElementById('search-term').value.trim();
+        // PERSONNEL SEARCH & ADD
+        window.searchEmployees = async function() {
+            const term = document.getElementById('emp-search').value;
             if (!term) return;
+            const { data } = await supabase.from('employees').select('emp_id, full_name, unit')
+                .or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(10);
 
-            const { data, error } = await supabase.from('employees')
-                .select('emp_id, full_name, unit')
-                .or(`full_name.ilike.%${term}%,emp_id.eq.${term}`);
-
-            const resultsBox = document.getElementById('search-results-box');
-            resultsBox.innerHTML = '';
+            const resDiv = document.getElementById('search-results');
+            resDiv.innerHTML = '';
+            resDiv.style.display = 'block';
             
-            if (data && data.length > 0) {
-                if (data.length === 1) {
-                    selectPersonnel(data[0]);
-                } else {
-                    resultsBox.style.display = 'block';
-                    data.forEach(emp => {
-                        const div = document.createElement('div');
-                        div.className = 'search-item';
-                        div.innerHTML = `<strong>${emp.full_name}</strong> (${emp.emp_id})`;
-                        div.onclick = () => selectPersonnel(emp);
-                        resultsBox.appendChild(div);
-                    });
-                }
-            } else {
-                alert("No results found");
-            }
-        }
-
-        function selectPersonnel(emp) {
-            if (personnelDraft.length >= 5) return alert("Limit of 5 reached");
-            if (personnelDraft.some(p => p.emp_id == emp.emp_id)) return alert("Already added");
-            
-            personnelDraft.push(emp);
-            document.getElementById('search-results-box').style.display = 'none';
-            document.getElementById('search-term').value = '';
-            renderPersonnel();
-        }
-
-        function removePersonnel(index) {
-            if (personnelDraft[index].emp_id == currentUser.emp_id) return alert("You cannot remove yourself");
-            personnelDraft.splice(index, 1);
-            renderPersonnel();
-        }
+            data.forEach(emp => {
+                const row = document.createElement('div');
+                row.className = 'search-row';
+                row.innerHTML = `<strong>${emp.full_name}</strong> (${emp.emp_id})`;
+                row.onclick = () => {
+                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
+                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
+                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
+                    resDiv.style.display = 'none';
+                    document.getElementById('emp-search').value = '';
+                    renderPersonnel();
+                };
+                resDiv.appendChild(row);
+            });
+        };
 
         function renderPersonnel() {
-            document.getElementById('personnel-list').innerHTML = personnelDraft.map((p, i) => `
-                <div class="draft-item">
-                    <span>${p.full_name}</span>
-                    <button class="btn-danger" onclick="removePersonnel(${i})">REMOVE</button>
+            const list = document.getElementById('personnel-draft-list');
+            list.innerHTML = personnelDraft.map((p, i) => `
+                <div class="list-item">
+                    <span>${p.name}</span>
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" onclick="removePersonnel(${i})">X</button>` : ''}
                 </div>
             `).join('');
         }
 
-        // ITINERARY LOGIC
-        async function addItineraryRow() {
+        window.removePersonnel = function(index) {
+            personnelDraft.splice(index, 1);
+            renderPersonnel();
+        };
+
+        // ITINERARY DRAFT
+        window.addItinDraft = function() {
             const date = document.getElementById('itin-date').value;
             const dest = document.getElementById('itin-dest').value;
             const purp = document.getElementById('itin-purp').value;
-
-            if (!date || !dest) return alert("Missing fields");
-            if (itineraryDraft.some(i => i.date === date)) return alert("Date already in list");
-
-            // Overwrite Check (Functioning)
-            const { data: conflict } = await supabase.from('itinerary')
-                .select('to_no, travel_orders!inner(status)')
-                .eq('travel_date', date)
-                .eq('travel_orders.emp_id', currentUser.emp_id)
-                .not('travel_orders.status', 'ilike', '%CANCEL%');
-
-            if (conflict && conflict.length > 0) {
-                if (!confirm(`Conflict with ${conflict[0].to_no}. Overwrite?`)) return;
-            }
+            if (!date || !dest) return alert("Fill mandatory fields");
+            if (itineraryDraft.some(i => i.date === date)) return alert("Date already added");
 
             itineraryDraft.push({ date, dest, purp });
-            renderItinerary();
-        }
+            renderItin();
+        };
 
-        function removeItinerary(index) {
-            itineraryDraft.splice(index, 1);
-            renderItinerary();
-        }
-
-        function renderItinerary() {
-            document.getElementById('itin-list').innerHTML = itineraryDraft.map((it, i) => `
-                <div class="draft-item">
-                    <div style="font-size:12px;"><strong>${it.date}</strong><br>${it.dest}</div>
-                    <button class="btn-danger" onclick="removeItinerary(${i})">REMOVE</button>
+        function renderItin() {
+            const list = document.getElementById('itin-draft-list');
+            list.innerHTML = itineraryDraft.map((it, i) => `
+                <div class="list-item" style="font-size:12px;">
+                    <div><strong>${it.date}</strong><br>${it.dest}</div>
+                    <button class="btn-danger" onclick="removeItin(${i})">X</button>
                 </div>
             `).join('');
         }
 
-        async function submitGroupTO() {
-            if (itineraryDraft.length === 0) return alert("Add dates first");
+        window.removeItin = function(index) {
+            itineraryDraft.splice(index, 1);
+            renderItin();
+        };
 
-            // TO Number Generation
-            const year = "2026";
-            const divCode = (currentUser.division || "GEN").substring(0, 3).toUpperCase();
-            const { data: lastTO } = await supabase.from('travel_orders').select('to_no').order('created_at', {ascending: false}).limit(1);
-            let seq = lastTO && lastTO[0] ? parseInt(lastTO[0].to_no.split('-').pop()) + 1 : 1;
-            const newToId = `${year}-${divCode}-${String(seq).padStart(5, '0')}`;
-
+        // SUBMIT
+        window.submitTO = async function() {
+            if (itineraryDraft.length === 0) return alert("No itinerary added");
+            
             const transport = document.getElementById('to-transport').value;
             const reportTo = document.getElementById('to-report').value;
+            const year = "2026";
+            const divCode = (currentUser.division || "GEN").substring(0, 3).toUpperCase();
+            
+            // Check Overwrites (Logic from Python)
+            const draftDates = itineraryDraft.map(i => i.date);
+            const { data: conflicts } = await supabase.from('itinerary').select('to_no').in('travel_date', draftDates);
+            if (conflicts && conflicts.length > 0) {
+                if (!confirm("Overlapping TO found. Overwrite and Cancel existing applications?")) return;
+                // Simplified overwrite: Cancel old ones
+                const oldToNos = [...new Set(conflicts.map(c => c.to_no))];
+                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).in('to_no', oldToNos);
+            }
 
-            // Python Routing Logic
+            // Generate TO No
+            const { data: last } = await supabase.from('travel_orders').select('to_no').order('created_at', {ascending:false}).limit(1);
+            let seq = last && last[0] ? parseInt(last[0].to_no.split('-').pop()) + 1 : 1;
+            const toNo = `${year}-${divCode}-${String(seq).padStart(5, '0')}`;
+
+            // Determine Status Routing
             let status = "PENDING_CHIEF";
             if (transport === "GOV'T VEHICLE") status = "PENDING_VEHICLE_APPROVER";
-            else if (String(currentUser.unit).toUpperCase() === "PARPO") status = "PENDING_PARPO";
+            else if (currentUser.unit === "PARPO") status = "PENDING_PARPO";
             else if (currentUser.unit) status = "PENDING_UNIT_HEAD";
 
-            try {
-                // Bulk Personnel Insert
-                const toInserts = personnelDraft.map(p => ({
-                    to_no: newToId,
-                    emp_id: p.emp_id,
-                    emp_name: p.full_name,
-                    unit: p.unit,
-                    division: currentUser.division,
-                    status: status,
-                    transport: transport,
-                    report_to: reportTo,
-                    remarks: transport === "GOV'T VEHICLE" ? "NOT VALID FOR REIMBURSEMENT" : ""
-                }));
-                await supabase.from('travel_orders').insert(toInserts);
+            // Insert TO and Itinerary
+            const toBatch = personnelDraft.map(p => ({
+                to_no: toNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit,
+                division: currentUser.division, status: status, transport, report_to: reportTo
+            }));
+            const itinBatch = itineraryDraft.map(it => ({
+                to_no: toNo, travel_date: it.date, destination: it.dest, purpose: it.purp
+            }));
 
-                // Bulk Itinerary Insert
-                const itinInserts = itineraryDraft.map(it => ({
-                    to_no: newToId,
-                    travel_date: it.date,
-                    destination: it.dest,
-                    purpose: it.purp
-                }));
-                await supabase.from('itinerary').insert(itinInserts);
+            await supabase.from('travel_orders').insert(toBatch);
+            await supabase.from('itinerary').insert(itinBatch);
 
-                alert("Submitted: " + newToId);
-                location.reload();
-            } catch (e) {
-                alert("Error: " + e.message);
-            }
+            alert("Success! TO Number: " + toNo);
+            location.reload();
+        };
+
+        // TABS
+        window.switchTab = function(id, el) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            el.classList.add('active');
+            if (id === 'status-view') loadStatus();
+        };
+
+        async function loadStatus() {
+            const { data } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending:false}).limit(10);
+            const list = document.getElementById('status-list');
+            list.innerHTML = data.map(to => `
+                <div class="list-item">
+                    <div style="font-size:13px;"><strong>${to.to_no}</strong><br>${to.status.replace(/_/g, ' ')}</div>
+                </div>
+            `).join('');
         }
     </script>
 </body>
