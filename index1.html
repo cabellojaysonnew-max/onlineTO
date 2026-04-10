@@ -32,21 +32,20 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
-        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
+        .card { background: var(--card-bg); padding: 12px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; border: 1px solid #e5e7eb; }
         
-        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px; }
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 8px; }
 
         .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); opacity: 0.8; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
         .btn-warning { background: var(--warning); }
         .btn-info { background: var(--info); }
         
-        .action-group { display: flex; gap: 8px; margin-top: 12px; }
+        .action-group { display: flex; gap: 6px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
@@ -83,7 +82,6 @@
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div style="background: white; padding: 35px 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 6px solid var(--dar-gold);">
                 <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
@@ -124,18 +122,16 @@
 
             <div class="card">
                 <h4>3. Itinerary Builder</h4>
-                <label>Date (No Backdating)</label>
-                <input type="date" id="itin-date" onkeydown="return false">
+                <label>Date</label>
+                <input type="date" id="itin-date">
                 <label>Destination</label>
                 <input type="text" id="itin-dest" placeholder="Where to?">
                 <label>Detailed Purpose</label>
                 <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
-                
                 <label>Report To (Required)</label>
-                <input type="text" id="to-report" placeholder="Required: e.g. Division Chief">
-                
+                <input type="text" id="to-report" placeholder="e.g. Division Chief">
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
-                <div id="itin-draft-list" style="margin-top: 15px;"></div>
+                <div id="itin-draft-list" style="margin-top: 10px;"></div>
             </div>
             <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
@@ -146,35 +142,25 @@
         </div>
 
         <div id="calendar-view" class="view">
-            <h3 style="color: var(--dar-green);">My Personal Schedule</h3>
             <div class="card">
                 <div class="cal-nav">
                     <button onclick="changeCalMonth(-1)">&lt;</button>
-                    <div id="cal-month-year" style="font-weight: bold; color: var(--dar-green);"></div>
+                    <div id="cal-month-year" style="font-weight: bold;"></div>
                     <button onclick="changeCalMonth(1)">&gt;</button>
                 </div>
                 <div class="calendar-grid" id="cal-header"></div>
                 <div class="calendar-grid" id="cal-body"></div>
-                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 12px; font-size: 10px;">
-                    <span><span class="dot dot-to" style="display:inline-block;"></span> My Travel</span>
-                    <span><span class="dot dot-pso" style="display:inline-block;"></span> My PSO</span>
-                    <span><span class="dot dot-holiday" style="display:inline-block;"></span> Holiday</span>
-                </div>
             </div>
-            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold); font-size:12px;"></div>
+            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold);"></div>
         </div>
 
         <div id="security-view" class="view">
-            <h3 style="color: var(--dar-green);">Security</h3>
             <div class="card">
-                <h4>Update Portal Password</h4>
-                <label>Current Password</label>
-                <input type="password" id="pass-curr">
-                <label>New Password</label>
-                <input type="password" id="pass-new">
-                <label>Confirm Password</label>
-                <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
+                <h4>Update Password</h4>
+                <input type="password" id="pass-curr" placeholder="Current Password">
+                <input type="password" id="pass-new" placeholder="New Password">
+                <input type="password" id="pass-conf" placeholder="Confirm New Password">
+                <button class="btn btn-primary" onclick="changePassword()">UPDATE</button>
             </div>
         </div>
 
@@ -206,7 +192,7 @@
                     reader.onloadend = () => resolve(reader.result);
                     reader.readAsDataURL(data);
                 });
-            } catch (e) { console.warn("Missing asset:", filename); return null; }
+            } catch (e) { return null; }
         }
 
         function generateQRDataURL(text) {
@@ -221,12 +207,10 @@
             });
         }
 
-        // --- UPDATED PDF GENERATION (Single Spacing + 20pt Margin) ---
         window.printOfficialTO = async function(toNo) {
-            alert("Generating PDF...");
+            alert("Preparing PDF...");
             const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-            
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
@@ -234,74 +218,57 @@
             const p2Sig = await getAssetDataURL('P2.png');
             const qrData = await generateQRDataURL(toNo);
 
-            let unitSig = null;
-            if (to.unithead_signed) {
-                const { data: signer } = await supabase.from('users').select('username').eq('full_name', to.unithead_signed).single();
-                if (signer) unitSig = await getAssetDataURL(`${signer.username}.png`);
-            }
-
             const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
-            const rightMarginPt = 210 - (20 * 0.3527); // 210mm - 20pt converted to mm
+            const limitX = 159; // 210mm - 50.8mm (2 inches)
 
             for (let i = 0; i < copies.length; i++) {
                 if (i > 0) doc.addPage();
                 if (bgImg) doc.addImage(bgImg, 'JPEG', 0, 0, 210, 297);
 
-                // Right Margin for Copies Label
                 doc.setFontSize(7); doc.setFont("helvetica", "italic");
-                doc.text(copies[i], rightMarginPt, 8, { align: "right" });
-                
-                if (qrData) doc.addImage(qrData, 'PNG', 175, 10, 25, 25);
+                doc.text(copies[i], limitX, 8, { align: "right" });
+                if (qrData) doc.addImage(qrData, 'PNG', 135, 10, 22, 22);
 
                 doc.setFontSize(16); doc.setFont("helvetica", "bold");
-                doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 42, { align: "center" });
+                doc.text(`TRAVEL ORDER NO. ${toNo}`, 85, 42, { align: "center" });
 
-                doc.setFontSize(10); doc.setTextColor(192, 0, 0);
-                if (to.remarks.includes("PSO")) doc.text("WITH EXISTING PSO/TO, SUBJECT FOR PARPO'S APPROVAL", 105, 50, { align: "center" });
-                if (to.transport === "GOV'T VEHICLE") doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 54, { align: "center" });
-                
                 doc.setTextColor(0, 0, 0); doc.setFontSize(11);
 
-                // SINGLE SPACING (10mm intervals)
-                doc.setFont("helvetica", "bold"); doc.text("NAME:", 15, 65);
-                doc.setFont("helvetica", "normal"); doc.text(to.emp_name.toUpperCase(), 40, 65);
-                doc.line(40, 66, 195, 66);
+                // SINGLE SPACING (8mm - 10mm gaps)
+                doc.setFont("helvetica", "bold"); doc.text("NAME:", 15, 60);
+                doc.setFont("helvetica", "normal"); doc.text(to.emp_name.toUpperCase(), 40, 60);
+                doc.line(40, 61, limitX, 61);
 
-                doc.setFont("helvetica", "bold"); doc.text("DESTINATION:", 15, 75);
+                doc.setFont("helvetica", "bold"); doc.text("DESTINATION:", 15, 70);
                 doc.setFont("helvetica", "normal");
                 const dests = itin.map(x => x.destination).join(", ");
-                doc.text(dests, 45, 75, { maxWidth: 150 });
-                doc.line(45, 76, 195, 76);
+                doc.text(dests, 45, 70, { maxWidth: 110 });
+                doc.line(45, 71, limitX, 71);
 
                 const start = itin[0]?.travel_date || "";
                 const end = itin[itin.length - 1]?.travel_date || "";
                 doc.setFont("helvetica", "bold");
-                doc.text("DEPARTURE:", 15, 85); doc.setFont("helvetica", "normal"); doc.text(start, 45, 85);
+                doc.text("DEPARTURE:", 15, 80); doc.setFont("helvetica", "normal"); doc.text(start, 45, 80);
                 
-                // Right Margin for RETURN Date
                 doc.setFont("helvetica", "bold");
-                doc.text("RETURN:", 115, 85); doc.setFont("helvetica", "normal"); 
-                doc.text(end, rightMarginPt, 85, { align: "right" });
+                doc.text("RETURN:", 90, 80); doc.setFont("helvetica", "normal"); 
+                doc.text(end, limitX, 80, { align: "right" });
 
-                doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 15, 95);
-                doc.setFont("helvetica", "normal"); doc.text(to.report_to.toUpperCase(), 45, 95);
-                doc.line(45, 96, 195, 96);
+                doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 15, 90);
+                doc.setFont("helvetica", "normal"); doc.text(to.report_to.toUpperCase(), 45, 90);
+                doc.line(45, 91, limitX, 91);
 
-                doc.setFont("helvetica", "bold"); doc.text("PURPOSE:", 15, 105);
+                doc.setFont("helvetica", "bold"); doc.text("PURPOSE:", 15, 100);
                 doc.setFont("helvetica", "normal");
-                doc.text(itin[0]?.purpose || "", 40, 105, { maxWidth: 155 });
+                doc.text(itin[0]?.purpose || "", 40, 100, { maxWidth: 115 });
 
-                // Signatories
-                doc.setFont("helvetica", "bold"); doc.text("Recommended by:", 15, 125);
-                if (unitSig) doc.addImage(unitSig, 'PNG', 30, 115, 30, 20);
-                doc.text(to.unithead_signed || "UNIT HEAD", 45, 145, { align: "center" });
-                doc.setFontSize(8); doc.text("Authorized Official", 45, 149, { align: "center" });
+                doc.setFont("helvetica", "bold"); doc.text("Recommended by:", 15, 120);
+                doc.text(to.unithead_signed || "UNIT HEAD", 45, 140, { align: "center" });
 
-                if (p2Sig) doc.addImage(p2Sig, 'PNG', 135, 155, 35, 25);
-                doc.setFontSize(11); doc.text("RICARDO C. GARCIA", 150, 185, { align: "center" });
-                doc.setFontSize(9); doc.text("PARPO II", 150, 189, { align: "center" });
+                if (p2Sig) doc.addImage(p2Sig, 'PNG', 110, 150, 30, 20);
+                doc.setFontSize(11); doc.text("RICARDO C. GARCIA", 125, 175, { align: "center" });
+                doc.setFontSize(9); doc.text("PARPO II", 125, 179, { align: "center" });
             }
-
             doc.save(`TO_${toNo}.pdf`);
         };
 
@@ -315,8 +282,6 @@
                 document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-date').min = todayStr;
-                document.getElementById('itin-date').value = todayStr;
                 personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                 renderPersonnel();
             } else { alert("Invalid Credentials"); }
@@ -326,7 +291,7 @@
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            el.classList.add('active');
+            if(el) el.classList.add('active');
             if (id === 'status-view') loadStatus();
             if (id === 'calendar-view') renderCalendar();
         };
@@ -360,7 +325,7 @@
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
 
-        window.addItinDraft = async function() {
+        window.addItinDraft = function() {
             const date = document.getElementById('itin-date').value;
             const dest = document.getElementById('itin-dest').value.trim();
             const purp = document.getElementById('itin-purp').value.trim();
@@ -391,46 +356,69 @@
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit) routeStatus = "PENDING_UNIT_HEAD";
+                
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
                     division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks: ""
                 }));
                 const batchItin = itineraryDraft.map(it => ({ to_no: finalToNo, travel_date: it.date, destination: it.dest, purpose: it.purp }));
+                
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
-                alert("Submitted: " + finalToNo); location.reload();
-            } catch(e) { alert("Submission error: " + e.message); }
+                
+                alert("Submitted: " + finalToNo); 
+                itineraryDraft = []; 
+                document.getElementById('to-report').value = "";
+                renderItinerary();
+                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
+            } catch(e) { alert("Error: " + e.message); }
         };
 
         async function generateToNo() {
             const year = new Date().getFullYear();
             const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
             const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
-            let seq = 1;
-            if (data && data[0]) {
-                const parts = data[0].to_no.split('-');
-                seq = parseInt(parts[2]) + 1;
-            }
+            let seq = (data && data[0]) ? parseInt(data[0].to_no.split('-')[2]) + 1 : 1;
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
+        window.deletePendingTO = async function(toNo) {
+            if(!confirm(`Delete Pending TO ${toNo}?`)) return;
+            await supabase.from('itinerary').delete().eq('to_no', toNo);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            loadStatus();
+        };
+
+        window.cancelApprovedTO = async function(toNo) {
+            if(!confirm(`Cancel Approved TO ${toNo}?`)) return;
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
+            loadStatus();
+        };
+
         async function loadStatus() {
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('to_no', {ascending: false}).limit(10);
+            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('to_no', {ascending: false});
             let html = '';
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
-                const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                const isApproved = to.status === 'APPROVED';
+                const status = to.status.toUpperCase();
+                const sCls = status.includes('APPROVED') ? 'bg-approved' : (status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                
                 html += `
                     <div class="card">
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                        <div style="font-weight:bold; font-size:14px;">${to.to_no}</div>
-                        <div style="margin-top:10px; border-top:1px dashed #eee; padding-top:8px;">
-                            ${itin?.map(i => `<div style="font-size:11px; margin-bottom:8px;"><strong>📅 ${i.travel_date}</strong> | 📍 ${i.destination}</div>`).join('')}
+                        <span class="badge ${sCls}">${to.status}</span>
+                        <div style="font-weight:bold;">${to.to_no}</div>
+                        <div style="margin-top:8px;">
+                            ${itin?.map(i => `<div style="font-size:11px;">📅 ${i.travel_date} | 📍 ${i.destination}</div>`).join('')}
                         </div>
                         <div class="action-group">
-                            ${isApproved ? `<button class="btn btn-info btn-small" onclick="printOfficialTO('${to.to_no}')">🖨️ Print PDF</button>` : ''}
+                            ${status === 'APPROVED' ? `
+                                <button class="btn btn-info btn-small" onclick="printOfficialTO('${to.to_no}')">🖨️ Print</button>
+                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>
+                            ` : ''}
+                            ${status.includes('PENDING') ? `
+                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>
+                            ` : ''}
                         </div>
                     </div>`;
             }
@@ -442,8 +430,24 @@
             const nw = document.getElementById('pass-new').value;
             if(curr !== currentUser.pass) return alert("Wrong password.");
             await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
+            alert("Updated."); 
+            switchTab('apply-view', document.querySelectorAll('.nav-item')[0]);
         };
+
+        window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
+
+        async function renderCalendar() {
+            const month = calDate.getMonth(), year = calDate.getFullYear();
+            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+            const header = document.getElementById('cal-header'); const body = document.getElementById('cal-body');
+            header.innerHTML = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="calendar-header">${d}</div>`).join('');
+            body.innerHTML = '';
+            const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
+            for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
+            for(let d=1; d<=last; d++) {
+                body.innerHTML += `<div class="calendar-day">${d}</div>`;
+            }
+        }
     </script>
 </body>
 </html>
