@@ -3,440 +3,562 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Portal - TO Module</title>
+    <title>PERSONNEL MG'T | Employee's Portal</title>
+    <!-- Import Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* CORE UI: Styling and Hide/Show Logic */
         :root {
-            --primary: #2c3e50;
-            --secondary: #34495e;
-            --accent: #3498db;
-            --danger: #e74c3c;
-            --bg: #ecf0f1;
-            --text: #333;
+            --dar-green: #003811;
+            --dar-light: #006400;
+            --dar-gold: #D4AF37;
+            --bg-main: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-main: #1F2937;
+            --text-muted: #6B7280;
+            --danger: #b91c1c;
+            --success: #15803d;
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg);
-            color: var(--text);
-        }
-
-        nav {
-            background-color: var(--primary);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        nav h2 { margin: 0; color: white; }
-
-        nav ul {
-            list-style: none;
-            display: flex;
-            gap: 1.5rem;
-            margin: 0;
-            padding: 0;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            transition: background 0.3s;
-        }
-
-        nav a:hover, nav a.active-link {
-            background-color: var(--accent);
-        }
-
-        .container {
-            max-width: 1000px;
-            margin: 2rem auto;
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-
-        /* Load Once, Hide & Show Rule */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: var(--bg-main); color: var(--text-main); }
+        
+        /* --- LOAD ONCE, HIDE & SHOW LOGIC --- */
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s; }
         .view { display: none; }
-        .view.active { display: block; animation: fadeIn 0.3s ease-in; }
-
+        .view.active { display: block; animation: fadeIn 0.2s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        .form-row {
-            display: flex;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .form-group {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 250px;
-        }
-
-        label { font-weight: bold; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        /* --- LOGIN SCREEN --- */
+        #login-screen { height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-card { background: var(--card-bg); padding: 40px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; border-top: 4px solid var(--dar-gold); }
+        .login-card h2 { color: var(--dar-green); margin-top: 0; }
         
-        input, select {
-            padding: 0.6rem;
-            border: 1px solid #bdc3c7;
-            border-radius: 4px;
-            font-size: 1rem;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-
-        th, td {
-            border: 1px solid #ecf0f1;
-            padding: 0.75rem;
-            text-align: left;
-        }
-
-        th { background-color: #f8f9fa; }
-
-        .btn {
-            padding: 0.6rem 1.2rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            color: white;
-        }
-
-        .btn-primary { background-color: var(--accent); }
-        .btn-primary:hover { background-color: #2980b9; }
-        .btn-danger { background-color: var(--danger); }
+        /* --- MAIN APP LAYOUT --- */
+        #app-screen { display: flex; height: 100vh; }
+        #sidebar { width: 260px; background: var(--dar-green); color: white; display: flex; flex-direction: column; }
+        .brand { padding: 25px 15px; text-align: center; border-bottom: 1px solid #14532d; }
+        .brand h3 { color: var(--dar-gold); margin: 0; }
+        .profile-box { background: #052e16; padding: 15px; margin: 15px; border-radius: 4px; }
+        .nav-btn { background: transparent; color: #d1d5db; border: none; padding: 15px 20px; text-align: left; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; transition: 0.2s; }
+        .nav-btn:hover, .nav-btn.active { background: var(--dar-light); color: var(--dar-gold); }
         
-        .mock-db-info {
-            background: #e8f4f8;
-            padding: 1rem;
-            border-left: 4px solid var(--accent);
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
-        }
-
-        .status-badge {
-            padding: 0.3rem 0.6rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            background: #f1c40f;
-            color: #000;
-            display: inline-block;
-        }
+        #content { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        /* --- COMPONENTS --- */
+        .card { background: var(--card-bg); padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card-header { font-weight: bold; color: var(--dar-green); border-bottom: 1px solid var(--bg-main); padding-bottom: 10px; margin-bottom: 15px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; font-weight: bold; color: var(--text-muted); margin-bottom: 5px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: var(--dar-green); color: white; }
+        .btn-primary:hover { background: var(--dar-light); }
+        .btn-success { background: var(--dar-gold); color: var(--dar-green); }
+        .btn-danger { background: var(--danger); color: white; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: var(--dar-green); color: white; font-size: 13px; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .bg-pending { background: #fefce8; color: #854d0e; }
+        .bg-approved { background: #ecfdf5; color: var(--success); }
+        .bg-cancelled { background: #f3f4f6; color: var(--text-muted); }
+        
+        .flex-row { display: flex; gap: 15px; }
+        .flex-1 { flex: 1; }
     </style>
 </head>
 <body>
 
-    <nav>
-        <h2>HR Portal - TO System</h2>
-        <ul>
-            <li><a href="#" class="nav-link active-link" onclick="switchView('apply-to-view', this)">Apply TO</a></li>
-            <li><a href="#" class="nav-link" onclick="switchView('status-to-view', this)">My Applications</a></li>
-            <li><a href="#" class="nav-link" onclick="switchView('password-view', this)">Security</a></li>
-        </ul>
-    </nav>
-
-    <div class="container">
-
-        <div id="apply-to-view" class="view active">
-            <h3>Apply for Travel Order</h3>
-            
-            <div class="mock-db-info">
-                <strong>Current Schedule Context (For Testing):</strong><br>
-                You have a <em>PENDING TO</em> on <strong>April 15</strong>.<br>
-                You have an <em>APPROVED MULTI-DAY TO</em> from <strong>April 18 to April 20</strong>.<br>
-                You have an <em>APPROVED PSO</em> on <strong>April 25</strong>.<br>
-                <em>Try applying on these dates to trigger the strict overwrite/conflict rules.</em>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="screen active">
+        <div class="login-card">
+            <h2>PERSONNEL MG'T</h2>
+            <p style="font-size: 13px; color: var(--text-muted);">Sign in to your account</p>
+            <div class="form-group">
+                <label>Employee ID</label>
+                <input type="text" id="login-id">
             </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="login-pass">
+            </div>
+            <p id="login-error" style="color: var(--danger); font-size: 12px; display: none;"></p>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="handleLogin()">SECURE LOGIN</button>
+        </div>
+    </div>
 
-            <form id="toForm" onsubmit="processTravelOrder(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Start Date</label>
-                        <input type="date" id="startDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label>End Date (Multi-day)</label>
-                        <input type="date" id="endDate" required>
+    <!-- MAIN APP SCREEN -->
+    <div id="app-screen" class="screen">
+        <div id="sidebar">
+            <div class="brand">
+                <h3>PERSONNEL MG'T</h3>
+                <span style="font-size: 11px;">DAR CS I - Portal</span>
+            </div>
+            <div class="profile-box">
+                <div id="ui-fullname" style="font-weight: bold; font-size: 14px;">User</div>
+                <div id="ui-subtext" style="color: var(--dar-gold); font-size: 11px;">Position, Division</div>
+            </div>
+            <button class="nav-btn active" onclick="switchView('apply-view', this)">✏️ NEW TRAVEL ORDER</button>
+            <button class="nav-btn" onclick="switchView('status-view', this)">📋 MY APPLICATIONS</button>
+            <button class="nav-btn" onclick="switchView('password-view', this)">🔒 CHANGE PASSWORD</button>
+            <button class="nav-btn" style="margin-top: auto; background: var(--danger); color: white;" onclick="logout()">🚪 LOGOUT</button>
+        </div>
+
+        <div id="content">
+            
+            <!-- APPLY TO VIEW -->
+            <div id="apply-view" class="view active">
+                <h2 style="color: var(--dar-green);">New Travel Order Application</h2>
+                
+                <div class="flex-row">
+                    <div class="card flex-1">
+                        <div class="card-header">1. LOGISTICS</div>
+                        <div class="form-group">
+                            <label>Means of Transportation</label>
+                            <select id="to-transport">
+                                <option value="LAND">LAND</option>
+                                <option value="GOV'T VEHICLE">GOV'T VEHICLE</option>
+                                <option value="AIR">AIR</option>
+                                <option value="OTHERS">OTHERS</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Report To</label>
+                            <input type="text" id="to-report">
+                        </div>
                     </div>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Employee Unit/Division</label>
-                        <select id="unitSelect" required>
-                            <option value="HAS_UNIT">Standard Unit</option>
-                            <option value="PARPO">PARPO</option>
-                            <option value="NO_UNIT">No Unit (Chief)</option>
-                        </select>
+                <div class="card">
+                    <div class="card-header">2. ITINERARY BUILDER</div>
+                    <div class="flex-row" style="align-items: flex-end; margin-bottom: 15px;">
+                        <div class="form-group flex-1">
+                            <label>Start Date</label>
+                            <input type="date" id="itin-start" onchange="document.getElementById('itin-end').min = this.value; document.getElementById('itin-end').value = this.value;">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>End Date</label>
+                            <input type="date" id="itin-end">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Destination</label>
+                            <input type="text" id="itin-dest">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Purpose</label>
+                            <input type="text" id="itin-purp">
+                        </div>
+                        <button class="btn btn-primary" style="margin-bottom: 15px;" onclick="addItineraryRow()">+ Add</button>
                     </div>
-                    <div class="form-group">
-                        <label>Mode of Transportation</label>
-                        <select id="transportSelect" required>
-                            <option value="PUBLIC">Public Utility Vehicle</option>
-                            <option value="GOV_VEHICLE">Government Vehicle</option>
-                        </select>
-                    </div>
-                </div>
 
-                <h4>Itinerary Builder</h4>
-                <div style="overflow-x: auto;">
-                    <table id="itineraryTable">
+                    <table id="itin-table">
                         <thead>
                             <tr>
                                 <th>Date</th>
                                 <th>Destination</th>
                                 <th>Purpose</th>
-                                <th style="width: 50px;">Action</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
-                        <tbody id="itineraryBody">
+                        <tbody id="itin-body"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-success" style="width: 100%; padding: 15px; font-size: 16px;" onclick="submitTravelOrder()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            </div>
+
+            <!-- STATUS VIEW -->
+            <div id="status-view" class="view">
+                <h2 style="color: var(--dar-green);">My Application Tracking</h2>
+                <div class="card">
+                    <div class="card-header" style="display: flex; justify-content: space-between;">
+                        <span>HISTORY & STATUS</span>
+                        <button class="btn btn-primary" style="padding: 4px 10px;" onclick="loadMyTOs()">Refresh</button>
+                    </div>
+                    <table id="status-table">
+                        <thead>
                             <tr>
-                                <td><input type="date" class="itin-date" required></td>
-                                <td><input type="text" placeholder="Location..." required></td>
-                                <td><input type="text" placeholder="Purpose..." required></td>
-                                <td><button type="button" class="btn btn-danger" onclick="removeRow(this)">X</button></td>
+                                <th>TO No</th>
+                                <th>Status</th>
+                                <th>Dates</th>
+                                <th>Destination</th>
+                                <th>Remarks / Routing</th>
                             </tr>
+                        </thead>
+                        <tbody id="status-body">
+                            <tr><td colspan="5">Loading data...</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-primary" onclick="addRow()" style="margin-top: 10px; font-size: 0.8rem;">+ Add Row</button>
-
-                <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #ccc;">
-                <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 1.1rem; padding: 1rem;">Submit Application</button>
-            </form>
-        </div>
-
-        <div id="status-to-view" class="view">
-            <h3>My Travel Orders & PSOs</h3>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID / Type</th>
-                            <th>Dates</th>
-                            <th>Routing Status</th>
-                            <th>System Notes / Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="statusBody">
-                        </tbody>
-                </table>
             </div>
-        </div>
 
-        <div id="password-view" class="view">
-            <h3>Change Password</h3>
-            <form onsubmit="changePassword(event)" style="max-width: 400px;">
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Current Password</label>
-                    <input type="password" required>
+            <!-- PASSWORD VIEW -->
+            <div id="password-view" class="view">
+                <h2 style="color: var(--dar-green);">Change Password</h2>
+                <div class="card" style="max-width: 400px;">
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <input type="password" id="pwd-curr">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="pwd-new">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" id="pwd-conf">
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%;" onclick="changePassword()">UPDATE SECURITY</button>
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>New Password</label>
-                    <input type="password" id="newPass" required>
-                </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label>Confirm Password</label>
-                    <input type="password" id="confPass" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Update Security</button>
-            </form>
-        </div>
+            </div>
 
+        </div>
     </div>
 
-    <script>
-        // MOCK DATABASE: Simulating existing records to test the strict logic
-        let currentYear = new Date().getFullYear(); // dynamic year for testing
-        let applications = [
-            { id: 'TO-001', type: 'TO', start: `${currentYear}-04-15`, end: `${currentYear}-04-15`, status: 'PENDING', route: 'PENDING_UNIT_HEAD', notes: '' },
-            { id: 'TO-002', type: 'TO', start: `${currentYear}-04-18`, end: `${currentYear}-04-20`, status: 'APPROVED', route: 'APPROVED', notes: 'Multi-day' },
-            { id: 'PSO-001', type: 'PSO', start: `${currentYear}-04-25`, end: `${currentYear}-04-25`, status: 'APPROVED', route: 'APPROVED', notes: 'Existing PSO' }
-        ];
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script type="module">
+        // --- 1. SUPABASE INITIALIZATION ---
+        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+        // ⚠️ CRITICAL: Replace with your ANON PUBLIC KEY. NEVER use the sb_secret here!
+        const supabaseKey = 'YOUR_SUPABASE_ANON_PUBLIC_KEY_HERE'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- UI LOGIC ---
-        function switchView(viewId, navElement) {
+        let currentUser = null;
+        let itineraryDraft = [];
+        let toOverwriteSet = new Set();
+        let psoOverrideFlag = false;
+
+        // --- UI ROUTING ---
+        window.switchView = function(viewId, btnElement) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
-            
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
-            navElement.classList.add('active-link');
-
-            if(viewId === 'status-to-view') renderStatusTable();
+            if(btnElement) btnElement.classList.add('active');
+            
+            if(viewId === 'status-view') loadMyTOs();
         }
 
-        // --- ITINERARY LOGIC ---
-        function addRow() {
-            const tbody = document.getElementById('itineraryBody');
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td><input type="date" class="itin-date" required></td>
-                <td><input type="text" placeholder="Location..." required></td>
-                <td><input type="text" placeholder="Purpose..." required></td>
-                <td><button type="button" class="btn btn-danger" onclick="removeRow(this)">X</button></td>
-            `;
-            tbody.appendChild(newRow);
-        }
+        // --- AUTHENTICATION LOGIC ---
+        window.handleLogin = async function() {
+            const uid = document.getElementById('login-id').value.trim();
+            const pwd = document.getElementById('login-pass').value.trim();
+            const err = document.getElementById('login-error');
+            
+            if(!uid || !pwd) { err.innerText = "Please enter ID and Password."; err.style.display = "block"; return; }
+            err.style.display = "none";
 
-        function removeRow(btn) {
-            if(document.querySelectorAll('#itineraryBody tr').length > 1) {
-                btn.closest('tr').remove();
+            // Authenticate purely against the employees table as per Python script logic
+            const { data, error } = await supabase
+                .from('employees')
+                .select('emp_id, pass, full_name, position, division, unit, station')
+                .eq('emp_id', uid)
+                .single();
+
+            if (error || !data) {
+                err.innerText = "Access Denied: Invalid Credentials or Network Error.";
+                err.style.display = "block";
+                return;
+            }
+
+            if (data.pass === pwd) {
+                currentUser = data;
+                document.getElementById('ui-fullname').innerText = data.full_name;
+                document.getElementById('ui-subtext').innerText = `${data.position || 'N/A'}, ${data.division || 'N/A'}`;
+                
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
             } else {
-                alert("Itinerary must have at least one entry.");
+                err.innerText = "Access Denied: Invalid Credentials.";
+                err.style.display = "block";
             }
         }
 
-        // Auto-fill itinerary date based on Start Date
-        document.getElementById('startDate').addEventListener('change', function(e) {
-            const dates = document.querySelectorAll('.itin-date');
-            if(dates.length > 0 && !dates[0].value) dates[0].value = e.target.value;
-            // Also set min limit for end date
-            document.getElementById('endDate').min = e.target.value;
-        });
-
-        // --- CORE BUSINESS LOGIC ---
-        function checkDateOverlap(start1, end1, start2, end2) {
-            const s1 = new Date(start1), e1 = new Date(end1);
-            const s2 = new Date(start2), e2 = new Date(end2);
-            return (s1 <= e2) && (s2 <= e1); // True if ranges overlap
+        window.logout = function() {
+            currentUser = null;
+            document.getElementById('app-screen').classList.remove('active');
+            document.getElementById('login-screen').classList.add('active');
+            document.getElementById('login-pass').value = '';
         }
 
-        function processTravelOrder(event) {
-            event.preventDefault();
+        // --- ITINERARY BUILDER LOGIC ---
+        window.addItineraryRow = async function() {
+            const start = document.getElementById('itin-start').value;
+            const end = document.getElementById('itin-end').value || start;
+            const dest = document.getElementById('itin-dest').value.trim();
+            const purp = document.getElementById('itin-purp').value.trim();
 
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value || startDate;
-            const unit = document.getElementById('unitSelect').value;
-            const transport = document.getElementById('transportSelect').value;
+            if(!start || !dest || !purp) { alert("Missing Date, Destination, or Purpose."); return; }
+            if(new Date(end) < new Date(start)) { alert("End date cannot be before Start date."); return; }
+
+            // Generate Date Array
+            let datesToCheck = [];
+            let curr = new Date(start);
+            let endObj = new Date(end);
+            while(curr <= endObj) {
+                datesToCheck.push(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            // 1. Check Draft Duplicates
+            const existingDates = itineraryDraft.map(i => i.date);
+            const duplicates = datesToCheck.filter(d => existingDates.includes(d));
+            if (duplicates.length > 0) { alert(`Date ${duplicates[0]} is already in your draft.`); return; }
+
+            // 2. CHECK PSO (Python Rule)
+            const { data: psoData } = await supabase
+                .from('pso_records')
+                .select('pso_no, start_date, end_date')
+                .eq('emp_id', currentUser.emp_id);
             
-            if(new Date(endDate) < new Date(startDate)) {
-                alert("End date cannot be before start date."); return;
-            }
-
-            let routing = "";
-            let notes = [];
-
-            // 1. CHECK CONFLICTS WITH EXISTING APPLICATIONS
-            for (let i = 0; i < applications.length; i++) {
-                let app = applications[i];
-                if (checkDateOverlap(startDate, endDate, app.start, app.end)) {
-                    
-                    // PSO OVERRIDE RULE
-                    if (app.type === 'PSO') {
-                        let confirmPSO = confirm(`Conflict with ${app.id} (PSO).\nTO cannot supersede PSO.\nDo you want to force proceed subject to PARPO final approval?`);
-                        if (!confirmPSO) return;
-                        notes.push(`WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL`);
-                        routing = 'PENDING_PARPO_FINAL';
-                        break; 
-                    }
-                    
-                    // PENDING SAME DATE / 1-DAY APPROVED OVERWRITE RULE
-                    if (app.type === 'TO' && app.start === app.end && (app.status === 'PENDING' || app.status === 'APPROVED')) {
-                        let confirmOverwrite = confirm(`Conflict with ${app.id} (${app.status}).\nDo you want to overwrite? This will cancel the old and create a NEW APPLICATION.`);
-                        if (!confirmOverwrite) return;
-                        notes.push(`Overwrote previous 1-day ${app.status} TO (${app.id})`);
-                        applications.splice(i, 1); // Remove old
-                        i--; // Adjust index
-                    }
-
-                    // MULTI-DAY APPROVED AFFECTED RULE
-                    if (app.type === 'TO' && app.start !== app.end && app.status === 'APPROVED') {
-                        let confirmSplit = confirm(`Conflict with Multi-Day ${app.id}.\nProceeding will Cancel OLD TO and create 2 NEW TOs (1 for remaining days auto-approved, 1 for new routing).`);
-                        if (!confirmSplit) return;
-                        notes.push(`Split from multi-day TO cancellation (${app.id})`);
-                        
-                        // Mock the split logic: remove old, push a mock "remainder" TO
-                        applications.splice(i, 1);
-                        applications.push({
-                            id: `TO-SPLIT-AUTO`, type: 'TO', start: app.start, end: app.end, 
-                            status: 'APPROVED', route: 'AUTO_APPROVED_REMAINDER', notes: 'Remainder of split Multi-Day'
-                        });
-                        i--; // Adjust index
+            let psoConflict = false;
+            if (psoData) {
+                for (let pso of psoData) {
+                    for (let d of datesToCheck) {
+                        if (d >= pso.start_date && d <= pso.end_date) {
+                            psoConflict = pso.pso_no; break;
+                        }
                     }
                 }
             }
 
-            // 2. STANDARD ROUTING LOGIC (If not hijacked by PSO conflict)
-            if (routing === "") {
-                if (transport === 'GOV_VEHICLE') {
-                    routing = 'PENDING_VEHICLE_APPROVER';
-                    notes.push("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM");
-                } else {
-                    if (unit === 'PARPO') routing = 'PENDING_PARPO';
-                    else if (unit === 'HAS_UNIT') routing = 'PENDING_UNIT_HEAD';
-                    else if (unit === 'NO_UNIT') routing = 'PENDING_CHIEF';
+            if (psoConflict) {
+                if(!confirm(`TO cannot supersede PSO. You have PSO#${psoConflict} on selected date(s).\nWill you continue? (Subject to PARPO's Approval)`)) return;
+                psoOverrideFlag = true;
+            }
+
+            // 3. CHECK TO OVERLAP (Python Rule)
+            const { data: toData } = await supabase
+                .from('travel_orders')
+                .select('to_no, status')
+                .eq('emp_id', currentUser.emp_id)
+                .not('status', 'ilike', '%CANCELLED%');
+            
+            if (toData && toData.length > 0) {
+                const toNumbers = toData.map(t => t.to_no);
+                const { data: itinData } = await supabase
+                    .from('itinerary')
+                    .select('to_no, travel_date')
+                    .in('to_no', toNumbers)
+                    .in('travel_date', datesToCheck);
+
+                if (itinData && itinData.length > 0) {
+                    const conflictTOs = [...new Set(itinData.map(i => i.to_no))];
+                    for (let cto of conflictTOs) {
+                        const stat = toData.find(t => t.to_no === cto).status;
+                        if(stat.includes("PENDING")) {
+                            if(!confirm(`Overwrite PENDING TO#${cto}?`)) return;
+                            toOverwriteSet.add(cto);
+                        } else if(stat.includes("APPROVED")) {
+                            if(!confirm(`Overwrite APPROVED TO#${cto}?\n(This will trigger cancellation/reissuance rules)`)) return;
+                            toOverwriteSet.add(cto);
+                        }
+                    }
                 }
             }
 
-            // 3. SAVE NEW APPLICATION
-            let newId = `TO-${Math.floor(Math.random() * 9000) + 1000}`;
-            applications.unshift({
-                id: newId,
-                type: 'TO',
-                start: startDate,
-                end: endDate,
-                status: 'PENDING',
-                route: routing,
-                notes: notes.join(' | ') || 'Standard Application'
+            // Add to draft UI
+            datesToCheck.forEach(d => {
+                itineraryDraft.push({ date: d, dest, purp });
             });
-
-            alert(`Application ${newId} Submitted Successfully!\nRouted to: ${routing}`);
-            event.target.reset();
-            document.getElementById('itineraryBody').innerHTML = `<tr><td><input type="date" class="itin-date" required></td><td><input type="text" placeholder="Location..." required></td><td><input type="text" placeholder="Purpose..." required></td><td><button type="button" class="btn btn-danger" onclick="removeRow(this)">X</button></td></tr>`;
-            
-            // Navigate to status
-            switchView('status-to-view', document.querySelectorAll('.nav-link')[1]);
+            renderItinerary();
+            document.getElementById('itin-dest').value = '';
+            document.getElementById('itin-purp').value = '';
         }
 
-        function renderStatusTable() {
-            const tbody = document.getElementById('statusBody');
-            tbody.innerHTML = '';
-            
-            if (applications.length === 0) {
-                 tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No records found.</td></tr>`;
-                 return;
-            }
+        window.removeItinRow = function(index) {
+            itineraryDraft.splice(index, 1);
+            renderItinerary();
+        }
 
-            applications.forEach(app => {
-                let dateDisplay = app.start === app.end ? app.start : `${app.start} to ${app.end}`;
+        function renderItinerary() {
+            const tbody = document.getElementById('itin-body');
+            tbody.innerHTML = '';
+            itineraryDraft.forEach((row, idx) => {
                 tbody.innerHTML += `
                     <tr>
-                        <td><strong>${app.id}</strong><br><small>${app.type}</small></td>
-                        <td>${dateDisplay}</td>
-                        <td><span class="status-badge">${app.route}</span></td>
-                        <td><small>${app.notes}</small></td>
-                    </tr>
-                `;
+                        <td>${row.date}</td>
+                        <td>${row.dest}</td>
+                        <td>${row.purp}</td>
+                        <td><button class="btn btn-danger" style="padding: 4px 8px;" onclick="removeItinRow(${idx})">X</button></td>
+                    </tr>`;
+            });
+        }
+
+        // --- SUBMIT TRAVEL ORDER LOGIC ---
+        window.submitTravelOrder = async function() {
+            if(itineraryDraft.length === 0) { alert("Please build an itinerary first."); return; }
+            
+            const transport = document.getElementById('to-transport').value;
+            const reportTo = document.getElementById('to-report').value.trim();
+            const year = new Date().getFullYear();
+            const divCode = (currentUser.division || 'GEN').substring(0, 5).toUpperCase();
+
+            try {
+                // 1. Generate TO Number (Mocking Python Sequence Logic)
+                const { data: maxTo } = await supabase
+                    .from('travel_orders')
+                    .select('to_no')
+                    .like('to_no', `${year}-${divCode}-%`)
+                    .order('to_no', { ascending: false })
+                    .limit(1);
+                
+                let nextSeq = 1;
+                if(maxTo && maxTo.length > 0) {
+                    nextSeq = parseInt(maxTo[0].to_no.split('-')[2]) + 1;
+                }
+                const newToId = `${year}-${divCode}-${String(nextSeq).padStart(5, '0')}`;
+
+                // 2. Determine Routing Status
+                let status = "PENDING_CHIEF";
+                let unit = (currentUser.unit || '').trim().toUpperCase();
+                
+                if (transport === "GOV'T VEHICLE") status = "PENDING_VEHICLE_APPROVER";
+                else if (unit === "PARPO") status = "PENDING_PARPO";
+                else if (unit) status = "PENDING_UNIT_HEAD";
+
+                let remarks = psoOverrideFlag ? "PSO_OVERRIDE" : "";
+
+                // 3. Process Overwrites (APPROVED TO Split logic)
+                for (let oldTo of toOverwriteSet) {
+                    const { data: oldToData } = await supabase.from('travel_orders').select('*').eq('to_no', oldTo).single();
+                    if(oldToData.status.includes("APPROVED")) {
+                        const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', oldTo);
+                        const draftDates = itineraryDraft.map(i => i.date);
+                        const remainingItin = oldItin.filter(it => !draftDates.includes(it.travel_date));
+                        
+                        await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', oldTo);
+                        
+                        if(remainingItin.length > 0) {
+                            const splitToId = `${year}-${divCode}-${String(nextSeq + 1).padStart(5, '0')}`;
+                            await supabase.from('travel_orders').insert({
+                                to_no: splitToId, emp_id: currentUser.emp_id, emp_name: currentUser.full_name,
+                                unit: currentUser.unit, division: currentUser.division, status: "APPROVED",
+                                transport: oldToData.transport, remarks: "REMAINING DAYS OF CANCELLED TO"
+                            });
+                            
+                            const splitItinInsert = remainingItin.map(ri => ({
+                                to_no: splitToId, travel_date: ri.travel_date, destination: ri.destination, purpose: ri.purpose
+                            }));
+                            await supabase.from('itinerary').insert(splitItinInsert);
+                            nextSeq++; // Increment for safety
+                        }
+                    } else {
+                        // Delete Pending entirely
+                        await supabase.from('itinerary').delete().eq('to_no', oldTo);
+                        await supabase.from('travel_orders').delete().eq('to_no', oldTo);
+                    }
+                }
+
+                // 4. Insert New TO
+                await supabase.from('travel_orders').insert({
+                    to_no: newToId, emp_id: currentUser.emp_id, emp_name: currentUser.full_name,
+                    unit: currentUser.unit, division: currentUser.division,
+                    status: status, transport: transport, report_to: reportTo, remarks: remarks
+                });
+
+                // 5. Insert New Itinerary
+                const itinInsertData = itineraryDraft.map(draft => ({
+                    to_no: newToId, travel_date: draft.date, destination: draft.dest, purpose: draft.purp
+                }));
+                await supabase.from('itinerary').insert(itinInsertData);
+
+                alert(`Application ${newToId} submitted successfully!\nRouted to: ${status}`);
+                
+                // Cleanup Form
+                itineraryDraft = [];
+                toOverwriteSet.clear();
+                psoOverrideFlag = false;
+                renderItinerary();
+                document.getElementById('to-report').value = '';
+                
+                switchView('status-view', document.querySelectorAll('.nav-btn')[1]);
+
+            } catch (err) {
+                alert("Error processing application: " + err.message);
+            }
+        }
+
+        // --- STATUS LOGIC ---
+        window.loadMyTOs = async function() {
+            const tbody = document.getElementById('status-body');
+            tbody.innerHTML = '<tr><td colspan="5">Loading data...</td></tr>';
+
+            const { data: toData, error } = await supabase
+                .from('travel_orders')
+                .select('to_no, status, remarks')
+                .eq('emp_id', currentUser.emp_id)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (error || !toData || toData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No applications found.</td></tr>';
+                return;
+            }
+
+            const toNumbers = toData.map(t => t.to_no);
+            const { data: itinData } = await supabase
+                .from('itinerary')
+                .select('to_no, travel_date, destination, purpose')
+                .in('to_no', toNumbers);
+
+            tbody.innerHTML = '';
+            
+            toData.forEach(to => {
+                const relatedItin = itinData ? itinData.filter(i => i.to_no === to.to_no) : [];
+                const dates = relatedItin.map(i => i.travel_date).sort();
+                const dests = [...new Set(relatedItin.map(i => i.destination))].join(', ');
+                
+                let dateStr = "N/A";
+                if(dates.length > 0) dateStr = dates.length > 1 ? `${dates[0]} to ${dates[dates.length-1]}` : dates[0];
+                
+                let badgeClass = "bg-pending";
+                if(to.status.includes("APPROVED")) badgeClass = "bg-approved";
+                else if(to.status.includes("CANCELLED")) badgeClass = "bg-cancelled";
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${to.to_no}</strong></td>
+                        <td><span class="badge ${badgeClass}">${to.status.replace(/_/g, ' ')}</span></td>
+                        <td>${dateStr}</td>
+                        <td>${dests}</td>
+                        <td style="font-size: 12px; color: var(--text-muted);">${to.remarks || 'Standard Routing'}</td>
+                    </tr>`;
             });
         }
 
         // --- PASSWORD LOGIC ---
-        function changePassword(event) {
-            event.preventDefault();
-            if(document.getElementById('newPass').value !== document.getElementById('confPass').value) {
-                alert("New passwords do not match!"); return;
-            }
-            alert("Password updated securely.");
-            event.target.reset();
-        }
+        window.changePassword = async function() {
+            const curr = document.getElementById('pwd-curr').value;
+            const nw = document.getElementById('pwd-new').value;
+            const conf = document.getElementById('pwd-conf').value;
 
-        // Initial render
-        renderStatusTable();
+            if(!curr || !nw || !conf) { alert("All fields required."); return; }
+            if(nw !== conf) { alert("New passwords do not match."); return; }
+            if(nw.length < 6) { alert("Password must be at least 6 characters."); return; }
+
+            // Plain text check matching Python logic
+            if(curr !== currentUser.pass) {
+                alert("Incorrect current password."); return;
+            }
+
+            const { error } = await supabase
+                .from('employees')
+                .update({ pass: nw })
+                .eq('emp_id', currentUser.emp_id);
+
+            if(error) {
+                alert("Failed to update password: " + error.message);
+            } else {
+                currentUser.pass = nw;
+                alert("Password updated securely!");
+                document.getElementById('pwd-curr').value = '';
+                document.getElementById('pwd-new').value = '';
+                document.getElementById('pwd-conf').value = '';
+            }
+        }
     </script>
 </body>
 </html>
