@@ -1,13 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAR CS I - Mobile Portal</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
 <style>
 :root {
     --dar-green: #003811;
@@ -36,20 +26,26 @@ body {
     margin: 0;
     background: linear-gradient(180deg, #f4f7f6, #e8eeec);
     color: var(--text-main);
+    -webkit-tap-highlight-color: transparent;
 }
 
-/* Screens */
+/* SCREENS */
 .screen { display: none; }
 .screen.active { display: block; animation: fadeIn 0.3s ease; }
-.view { display: none; padding: 16px; padding-bottom: 120px; }
+
+.view {
+    display: none;
+    padding: 16px;
+    padding-bottom: 120px;
+}
 .view.active { display: block; animation: fadeIn 0.2s ease; }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Header */
+/* HEADER */
 .app-header {
     background: linear-gradient(135deg, var(--dar-green), var(--dar-light));
     color: white;
@@ -57,21 +53,26 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
     border-bottom: 3px solid var(--dar-gold);
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
-/* Cards */
+/* CARDS */
 .card {
     background: var(--card-bg);
     padding: 16px;
     border-radius: var(--radius);
     box-shadow: 0 6px 18px rgba(0,0,0,0.06);
     margin-bottom: 16px;
+    border: none;
 }
 
-/* Titles */
+/* HEADINGS */
 h4 {
+    margin-top: 0;
     font-size: 13px;
     color: var(--dar-green);
     margin-bottom: 10px;
@@ -79,13 +80,23 @@ h4 {
     padding-left: 8px;
 }
 
-/* Inputs */
+/* LABELS */
+label {
+    display: block;
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+/* INPUTS */
 input, select, textarea {
     width: 100%;
     padding: 12px;
     border-radius: 10px;
     border: 1px solid #d1d5db;
     font-size: 14px;
+    margin-bottom: 12px;
     background: #fafafa;
 }
 
@@ -96,7 +107,7 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 2px rgba(0,56,17,0.1);
 }
 
-/* Buttons */
+/* BUTTONS */
 .btn {
     width: 100%;
     padding: 14px;
@@ -105,15 +116,20 @@ input:focus, select:focus, textarea:focus {
     font-weight: bold;
     cursor: pointer;
     border: none;
+    color: white;
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 6px;
+    transition: 0.2s;
+}
+
+.btn:active {
+    transform: scale(0.98);
 }
 
 .btn-primary {
     background: linear-gradient(135deg, var(--dar-green), var(--dar-light));
-    color: white;
 }
 
 .btn-gold {
@@ -124,17 +140,30 @@ input:focus, select:focus, textarea:focus {
 .btn-danger { background: var(--danger); }
 .btn-warning { background: var(--warning); }
 
+/* SMALL BUTTONS */
 .btn-small {
     padding: 8px;
     font-size: 11px;
     border-radius: 8px;
+    flex: 1;
 }
 
-/* Calendar */
+/* ACTION GROUP */
+.action-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* CALENDAR */
 .calendar-day {
-    border-radius: 10px;
     background: white;
+    border-radius: 10px;
     border: 1px solid #eee;
+}
+
+.calendar-day:hover {
+    background: #f9fafb;
 }
 
 .today {
@@ -142,13 +171,14 @@ input:focus, select:focus, textarea:focus {
     background: #fffbea;
 }
 
-/* Bottom Nav */
+/* NAVBAR */
 .bottom-nav {
     position: fixed;
     bottom: 0;
     width: 100%;
     background: #022c22;
     display: flex;
+    z-index: 1000;
 }
 
 .nav-item {
@@ -158,14 +188,16 @@ input:focus, select:focus, textarea:focus {
     color: #9ca3af;
     font-size: 11px;
     font-weight: bold;
+    cursor: pointer;
 }
 
 .nav-item.active {
     color: var(--dar-gold);
     border-top: 3px solid var(--dar-gold);
+    background: rgba(255,255,255,0.05);
 }
 
-/* Badge */
+/* BADGES */
 .badge {
     font-size: 10px;
     padding: 4px 10px;
@@ -176,6 +208,7 @@ input:focus, select:focus, textarea:focus {
 .bg-approved { background: #ecfdf5; color: #166534; }
 .bg-cancelled { background: #fef2f2; color: #991b1b; }
 
+/* SEARCH */
 .search-results {
     background: white;
     border-radius: 10px;
@@ -183,101 +216,9 @@ input:focus, select:focus, textarea:focus {
     overflow-y: auto;
 }
 
-.search-row:hover { background: #f3f4f6; }
+.search-row:hover {
+    background: #f3f4f6;
+}
 
-#qr-buffer { display:none; }
+#qr-buffer { display: none; }
 </style>
-</head>
-
-<body>
-
-<div id="qr-buffer"></div>
-
-<!-- LOGIN -->
-<div id="login-screen" class="screen active">
-    <div style="height:100vh; display:flex; justify-content:center; align-items:center; padding:20px;">
-        <div class="card" style="width:100%; max-width:350px;">
-            <h2 style="text-align:center; color:var(--dar-green); margin:0;">DAR PORTAL</h2>
-            <p style="text-align:center; font-size:12px; color:gray;">CAMARINES SUR I - MOBILE</p>
-
-            <input type="text" id="login-id" placeholder="Employee ID">
-            <input type="password" id="login-pass" placeholder="Password">
-            <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
-        </div>
-    </div>
-</div>
-
-<!-- APP -->
-<div id="app-screen" class="screen">
-
-<div class="app-header">
-    <div>
-        <div id="user-name">User</div>
-        <div id="user-info" style="font-size:11px; color:var(--dar-gold);"></div>
-    </div>
-    <button onclick="location.reload()">Logout</button>
-</div>
-
-<div id="apply-view" class="view active">
-<div class="card">
-<h4>Personnel</h4>
-<input id="emp-search" placeholder="Search">
-<button class="btn btn-primary" onclick="searchEmployees()">Find</button>
-<div id="search-results" class="search-results"></div>
-<div id="personnel-draft-list"></div>
-</div>
-
-<div class="card">
-<h4>Logistics</h4>
-<select id="to-transport">
-<option>LAND</option>
-<option>GOV'T VEHICLE</option>
-<option>AIR</option>
-<option>OTHERS</option>
-</select>
-</div>
-
-<div class="card">
-<h4>Itinerary</h4>
-<input type="date" id="itin-date">
-<input type="text" id="itin-dest" placeholder="Destination">
-<textarea id="itin-purp"></textarea>
-<input type="text" id="to-report" placeholder="Report To">
-<button class="btn btn-primary" onclick="addItinDraft()">Add</button>
-<div id="itin-draft-list"></div>
-</div>
-
-<button class="btn btn-gold" onclick="submitTO()">SUBMIT</button>
-</div>
-
-<div id="status-view" class="view">
-<div id="status-list"></div>
-</div>
-
-<div id="calendar-view" class="view">
-<div id="cal-body"></div>
-</div>
-
-<div id="security-view" class="view">
-<input id="pass-curr">
-<input id="pass-new">
-<input id="pass-conf">
-<button onclick="changePassword()">Update</button>
-</div>
-
-<div class="bottom-nav">
-<div class="nav-item active" onclick="switchTab('apply-view',this)">Apply</div>
-<div class="nav-item" onclick="switchTab('status-view',this)">Status</div>
-<div class="nav-item" onclick="switchTab('calendar-view',this)">Calendar</div>
-<div class="nav-item" onclick="switchTab('security-view',this)">Security</div>
-</div>
-
-</div>
-
-<script type="module">
-/* ALL YOUR ORIGINAL JAVASCRIPT REMAINS EXACTLY HERE */
-/* (UNCHANGED — paste your full script below this line if needed) */
-</script>
-
-</body>
-</html>
