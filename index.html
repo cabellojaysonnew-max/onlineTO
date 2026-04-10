@@ -16,6 +16,7 @@
             --text-muted: #6b7280;
             --danger: #dc2626;
             --success: #16a34a;
+            --warning: #f59e0b;
         }
 
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
@@ -23,7 +24,7 @@
 
         .screen { display: none; }
         .screen.active { display: block; animation: fadeIn 0.3s ease; }
-        .view { display: none; padding: 15px; padding-bottom: 110px; }
+        .view { display: none; padding: 15px; padding-bottom: 120px; }
         .view.active { display: block; animation: fadeIn 0.2s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -34,10 +35,15 @@
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); opacity: 0.8; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        .btn-danger { background: var(--danger); font-size: 11px; padding: 5px 10px; width: auto; border-radius: 4px; }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--warning); }
+        
+        .action-group { display: flex; gap: 8px; margin-top: 12px; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
         .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; font-weight: bold; }
@@ -118,8 +124,8 @@
                 <label>Detailed Purpose</label>
                 <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
                 
-                <label>Report To (Optional)</label>
-                <input type="text" id="to-report" placeholder="e.g. Division Chief">
+                <label>Report To (Required)</label>
+                <input type="text" id="to-report" placeholder="Required: e.g. Division Chief">
                 
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
                 <div id="itin-draft-list" style="margin-top: 15px;"></div>
@@ -280,8 +286,12 @@
 
         window.submitTO = async function() {
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
+            
+            // Mandatory Validation
+            const reportTo = document.getElementById('to-report').value.trim();
+            if (!reportTo) return alert("Report To is required.");
+            
             const transport = document.getElementById('to-transport').value;
-            const reportTo = document.getElementById('to-report').value;
             const draftDates = itineraryDraft.map(it => it.date);
             let remarks = "";
 
@@ -322,7 +332,7 @@
                     }
                 }
 
-                const finalToNo = await generateToNo();
+                const finalToNo = await generateToNo(); 
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
@@ -357,6 +367,39 @@
             }
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
+
+        // MANAGEMENT LOGIC
+        window.cancelApprovedTO = async function(toNo) {
+            if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
+            loadStatus();
+        };
+
+        window.deletePendingTO = async function(toNo) {
+            if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
+            await supabase.from('itinerary').delete().eq('to_no', toNo);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            loadStatus();
+        };
+
+        window.modifyPendingTO = async function(toNo) {
+            if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
+            const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo);
+            
+            // Populate Draft
+            itineraryDraft = itin.map(i => ({ date: i.travel_date, dest: i.destination, purp: i.purpose }));
+            document.getElementById('to-transport').value = to.transport;
+            document.getElementById('to-report').value = to.report_to;
+            
+            // Clean up old
+            await supabase.from('itinerary').delete().eq('to_no', toNo);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            
+            switchTab('apply-view', document.querySelector('.nav-item'));
+            renderItinerary();
+        };
 
         window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
 
@@ -401,7 +444,7 @@
             const { data: itins } = await supabase.from('itinerary').select('to_no, destination, purpose').in('to_no', myToNumbers).eq('travel_date', date);
             
             let html = `<strong>${date}</strong><hr style="border:none; border-top:1px solid #eee;">`;
-            if(hol) html += `<div style="color:red; margin-bottom:8px; font-weight:bold;">🚩 Holiday: ${hol}</div>`;
+            if(hol) html += `<div style="color:red; margin-bottom:8px; font-weight:bold;">🚩 Holiday: ${hol}</div>`; 
             if(itins?.length) itins.forEach(i => html += `<div style="margin-bottom:8px;">🛫 TO ${i.to_no}: ${i.destination}<br><small>"${i.purpose}"</small></div>`);
             else if(!hol) html += "No activities scheduled.";
             
@@ -415,18 +458,30 @@
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                const isPending = to.status.includes('PENDING');
+                const isApproved = to.status === 'APPROVED';
+
                 html += `
                     <div class="card">
                         <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
                         <div style="font-weight:bold; font-size:14px;">${to.to_no}</div>
                         <div style="font-size:11px; color:gray; margin-top:2px;">Division: ${to.division}</div>
+                        
                         <div style="margin-top:10px; border-top:1px dashed #eee; padding-top:8px;">
                             ${itin?.map(i => `
                                 <div style="font-size:11px; margin-bottom:8px;">
-                                    <strong>📅 ${i.travel_date}</strong><br>
-                                    📍 <strong>Dest:</strong> ${i.destination}<br>
-                                    💬 <strong>Purp:</strong> ${i.purpose}
+                                    <strong>📅 ${i.travel_date}</strong> | 📍 ${i.destination}
                                 </div>`).join('')}
+                        </div>
+
+                        <div class="action-group">
+                            ${isPending ? `
+                                <button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button>
+                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>
+                            ` : ''}
+                            ${isApproved ? `
+                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel Approved</button>
+                            ` : ''}
                         </div>
                     </div>`;
             }
