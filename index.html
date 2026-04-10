@@ -107,8 +107,6 @@
                     <option value="AIR">Air Travel</option>
                     <option value="OTHERS">Others</option>
                 </select>
-                <label>Report To (Optional)</label>
-                <input type="text" id="to-report" placeholder="e.g. Division Chief">
             </div>
 
             <div class="card">
@@ -119,6 +117,10 @@
                 <input type="text" id="itin-dest" placeholder="Where to?">
                 <label>Detailed Purpose</label>
                 <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
+                
+                <label>Report To (Optional)</label>
+                <input type="text" id="to-report" placeholder="e.g. Division Chief">
+                
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
                 <div id="itin-draft-list" style="margin-top: 15px;"></div>
             </div>
@@ -196,7 +198,7 @@
             if (data && data.pass === pass) {
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; [cite: 2026-02-14]
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 document.getElementById('itin-date').min = todayStr;
@@ -320,7 +322,6 @@
                     }
                 }
 
-                // CHECK TABLE FIRST TO ASSURE UNIQUE TO NO
                 const finalToNo = await generateToNo();
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
@@ -340,7 +341,6 @@
             } catch(e) { alert("Submission error: " + e.message); }
         };
 
-        // ENHANCED TO NO GENERATION (QUERIES TABLE FIRST)
         async function generateToNo() {
             const year = new Date().getFullYear();
             const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
@@ -394,7 +394,6 @@
             }
         }
 
-        // UPDATED: EXPLICITLY SHOW HOLIDAY REMARKS
         window.showDayInfo = async function(date, hol) {
             const info = document.getElementById('day-details');
             const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
