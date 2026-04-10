@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAR Portal Mobile</title>
+    <title>DAR CS I - Mobile Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -18,7 +18,7 @@
             --success: #16a34a;
         }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
 
         .screen { display: none; }
@@ -30,7 +30,7 @@
         .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
         .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
         
-        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 10px; }
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
 
@@ -60,6 +60,9 @@
         .bg-pending { background: #fefce8; color: #854d0e; }
         .bg-approved { background: #ecfdf5; color: #166534; }
         .bg-cancelled { background: #fef2f2; color: #991b1b; }
+        
+        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
+        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -68,7 +71,7 @@
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div style="background: white; padding: 35px 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 6px solid var(--dar-gold);">
                 <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">Mobile Attendance & Travel</p>
+                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
@@ -87,7 +90,17 @@
 
         <div id="apply-view" class="view active">
             <div class="card">
-                <h4>1. Logistics</h4>
+                <h4>1. Personnel (Max 5)</h4>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" style="width: 70px; padding:0;" onclick="searchEmployees()">Find</button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="card">
+                <h4>2. Logistics</h4>
                 <label>Means of Transportation</label>
                 <select id="to-transport">
                     <option value="LAND">Public Utility (LAND)</option>
@@ -100,17 +113,17 @@
             </div>
 
             <div class="card">
-                <h4>2. Itinerary Builder</h4>
-                <label>Date (Backdating Disabled)</label>
+                <h4>3. Itinerary Builder</h4>
+                <label>Date (No Backdating)</label>
                 <input type="date" id="itin-date" onkeydown="return false">
                 <label>Destination</label>
                 <input type="text" id="itin-dest" placeholder="Where to?">
-                <label>Purpose</label>
-                <textarea id="itin-purp" rows="2" placeholder="Specific official business..."></textarea>
+                <label>Detailed Purpose</label>
+                <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
                 <div id="itin-draft-list" style="margin-top: 15px;"></div>
             </div>
-            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT APPLICATION</button>
+            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
 
         <div id="status-view" class="view">
@@ -166,6 +179,7 @@
 
         let currentUser = null;
         let itineraryDraft = [];
+        let personnelDraft = [];
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
 
@@ -189,6 +203,8 @@
                 document.getElementById('app-screen').classList.add('active');
                 document.getElementById('itin-date').min = todayStr;
                 document.getElementById('itin-date').value = todayStr;
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                renderPersonnel();
             } else { alert("Invalid Credentials"); }
         };
 
@@ -201,6 +217,37 @@
             if (id === 'calendar-view') renderCalendar();
         };
 
+        // PERSONNEL LOGIC
+        window.searchEmployees = async function() {
+            const term = document.getElementById('emp-search').value;
+            if (term.length < 2) return;
+            const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
+            const resDiv = document.getElementById('search-results');
+            resDiv.innerHTML = ''; resDiv.style.display = 'block';
+            data.forEach(emp => {
+                const row = document.createElement('div'); row.className = 'search-row';
+                row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
+                row.onclick = () => {
+                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
+                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
+                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
+                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
+                };
+                resDiv.appendChild(row);
+            });
+        };
+
+        function renderPersonnel() {
+            const list = document.getElementById('personnel-draft-list');
+            list.innerHTML = personnelDraft.map((p, i) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
+                    <span>👤 ${p.name}</span>
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px;" onclick="removePersonnel(${i})">X</button>` : ''}
+                </div>`).join('');
+        }
+        window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
+
+        // ITINERARY LOGIC
         window.addItinDraft = async function() {
             const date = document.getElementById('itin-date').value;
             const dest = document.getElementById('itin-dest').value.trim();
@@ -233,6 +280,7 @@
         }
         window.removeItin = (i) => { itineraryDraft.splice(i,1); renderItinerary(); };
 
+        // SUBMISSION LOGIC
         window.submitTO = async function() {
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             const transport = document.getElementById('to-transport').value;
@@ -241,12 +289,14 @@
             let remarks = "";
 
             try {
+                // PSO Check
                 const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
                 if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
                     if(!confirm("Conflicts with PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
                     remarks = "WITH EXISTING PSO/RSO";
                 }
 
+                // Overwrite & Split Logic
                 const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
                 if(activeTOs?.length > 0) {
                     const toNos = activeTOs.map(t => t.to_no);
@@ -283,8 +333,14 @@
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit) routeStatus = "PENDING_UNIT_HEAD";
 
-                await supabase.from('travel_orders').insert({ to_no: newToNo, emp_id: currentUser.emp_id, emp_name: currentUser.full_name, unit: currentUser.unit, division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks });
-                await supabase.from('itinerary').insert(itineraryDraft.map(it => ({ to_no: newToNo, travel_date: it.date, destination: it.dest, purpose: it.purp })));
+                const batchPersonnel = personnelDraft.map(p => ({
+                    to_no: newToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
+                    division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks
+                }));
+                const batchItin = itineraryDraft.map(it => ({ to_no: newToNo, travel_date: it.date, destination: it.dest, purpose: it.purp }));
+
+                await supabase.from('travel_orders').insert(batchPersonnel);
+                await supabase.from('itinerary').insert(batchItin);
 
                 alert("Submitted: " + newToNo); location.reload();
             } catch(e) { alert("Submission error: " + e.message); }
@@ -298,11 +354,8 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // --- CALENDAR WITH NAVIGATION ---
-        window.changeCalMonth = function(delta) {
-            calDate.setMonth(calDate.getMonth() + delta);
-            renderCalendar();
-        };
+        // CALENDAR
+        window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
 
         async function renderCalendar() {
             const month = calDate.getMonth(), year = calDate.getFullYear();
@@ -349,6 +402,7 @@
             info.innerHTML = html; info.style.display = 'block';
         };
 
+        // STATUS & SECURITY
         async function loadStatus() {
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
             const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('to_no', {ascending: false}).limit(10);
