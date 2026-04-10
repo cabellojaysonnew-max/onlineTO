@@ -23,7 +23,7 @@
 
         .screen { display: none; }
         .screen.active { display: block; animation: fadeIn 0.3s ease; }
-        .view { display: none; padding: 15px; padding-bottom: 90px; }
+        .view { display: none; padding: 15px; padding-bottom: 110px; }
         .view.active { display: block; animation: fadeIn 0.2s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -39,13 +39,26 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); font-size: 11px; padding: 5px 10px; width: auto; border: none; border-radius: 4px; color: white; cursor: pointer;}
 
-        .list-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-bottom: 10px; display: none; }
-        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+        /* Calendar Styles */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 10px; }
+        .calendar-day { background: white; border-radius: 4px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; }
+        .calendar-header { font-weight: bold; color: var(--dar-green); font-size: 10px; text-transform: uppercase; padding: 5px 0; text-align: center; }
+        .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
+        .dot { width: 4px; height: 4px; border-radius: 50%; }
+        .dot-to { background: var(--dar-green); }
+        .dot-pso { background: var(--dar-gold); }
+        .dot-holiday { background: var(--danger); }
+        .today { border: 2px solid var(--dar-gold); font-weight: bold; }
+
+        /* Status Styles */
+        .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-bottom: 5px; display: inline-block; }
+        .bg-pending { background: #fefce8; color: #854d0e; }
+        .bg-approved { background: #ecfdf5; color: #16a34a; }
+        .bg-cancelled { background: #fef2f2; color: #991b1b; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 11px; font-weight: bold; cursor: pointer; }
-        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); }
+        .nav-item { flex: 1; padding: 12px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; }
+        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
     </style>
 </head>
 <body>
@@ -54,12 +67,10 @@
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 5px solid var(--dar-gold);">
                 <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px;">Camarines Sur I - Mobile</p>
-                <label>Employee ID</label>
-                <input type="text" id="login-id" placeholder="ID Number">
-                <label>Password</label>
+                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px;">Mobile Access</p>
+                <input type="text" id="login-id" placeholder="Employee ID">
                 <input type="password" id="login-pass" placeholder="Password">
-                <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
+                <button class="btn btn-primary" onclick="handleLogin()">LOGIN</button>
             </div>
         </div>
     </div>
@@ -75,51 +86,64 @@
 
         <div id="apply-view" class="view active">
             <div class="card">
-                <h4>1. Personnel (Max 5)</h4>
+                <h4>Personnel Involved</h4>
                 <div style="display: flex; gap: 5px;">
-                    <input type="text" id="emp-search" placeholder="Search Name/ID" style="margin-bottom: 0;">
+                    <input type="text" id="emp-search" placeholder="Search..." style="margin-bottom: 0;">
                     <button class="btn btn-primary" style="width: 80px;" onclick="searchEmployees()">Find</button>
                 </div>
                 <div id="search-results" class="search-results"></div>
                 <div id="personnel-draft-list" style="margin-top: 10px;"></div>
             </div>
-
             <div class="card">
-                <h4>2. Logistics</h4>
-                <label>Means of Transportation</label>
-                <select id="to-transport">
-                    <option value="LAND">LAND</option>
-                    <option value="GOV'T VEHICLE">GOV'T VEHICLE</option>
-                    <option value="AIR">AIR</option>
-                    <option value="OTHERS">OTHERS</option>
-                </select>
-                <label>Report To</label>
-                <input type="text" id="to-report" placeholder="e.g. Division Chief">
-            </div>
-
-            <div class="card">
-                <h4>3. Detailed Itinerary Builder</h4>
-                <label>Travel Date (No Backdating)</label>
-                <input type="date" id="itin-date">
-                <label>Destination</label>
-                <input type="text" id="itin-dest" placeholder="Specific Office/Barangay">
-                <label>Purpose of Travel</label>
-                <input type="text" id="itin-purp" placeholder="Required: Detailed Purpose">
-                <button class="btn btn-primary" onclick="addItinDraft()">+ Add to Itinerary</button>
+                <h4>Itinerary Builder</h4>
+                <input type="date" id="itin-date" onkeydown="return false">
+                <input type="text" id="itin-dest" placeholder="Destination">
+                <input type="text" id="itin-purp" placeholder="Purpose">
+                <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
                 <div id="itin-draft-list" style="margin-top: 10px;"></div>
             </div>
-
-            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT APPLICATION</button>
         </div>
 
         <div id="status-view" class="view">
-            <h3 style="color: var(--dar-green);">Application Status</h3>
+            <h3 style="color: var(--dar-green);">My Applications</h3>
             <div id="status-list"></div>
+        </div>
+
+        <div id="calendar-view" class="view">
+            <h3 style="color: var(--dar-green);">My Schedule</h3>
+            <div class="card">
+                <div id="calendar-month-year" style="font-weight: bold; color: var(--dar-green); text-align: center; margin-bottom: 10px;">April 2026</div>
+                <div class="calendar-grid" id="calendar-header-grid"></div>
+                <div class="calendar-grid" id="calendar-body-grid"></div>
+                <div style="margin-top: 15px; display: flex; gap: 10px; font-size: 10px; justify-content: center;">
+                    <span><span class="dot dot-to" style="display:inline-block; vertical-align:middle;"></span> TO</span>
+                    <span><span class="dot dot-pso" style="display:inline-block; vertical-align:middle;"></span> PSO</span>
+                    <span><span class="dot dot-holiday" style="display:inline-block; vertical-align:middle;"></span> Holiday</span>
+                </div>
+            </div>
+            <div id="day-details" style="margin-top: 10px; font-size: 12px; color: var(--text-muted); text-align: center;">Select a day to see details</div>
+        </div>
+
+        <div id="security-view" class="view">
+            <h3 style="color: var(--dar-green);">Security Settings</h3>
+            <div class="card">
+                <h4>Change Password</h4>
+                <label>Current Password</label>
+                <input type="password" id="current-pass">
+                <label>New Password</label>
+                <input type="password" id="new-pass">
+                <label>Confirm New Password</label>
+                <input type="password" id="confirm-pass">
+                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
+            </div>
         </div>
 
         <div class="bottom-nav">
             <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
             <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
+            <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Calendar</div>
+            <div class="nav-item" onclick="switchTab('security-view', this)">🔒 Security</div>
         </div>
     </div>
 
@@ -129,221 +153,116 @@
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
-        let personnelDraft = [];
         let itineraryDraft = [];
-
-        // Set Today as Min Date for entire app
+        let personnelDraft = [];
         const todayStr = new Date().toISOString().split('T')[0];
 
-        window.handleLogin = async function() {
-            const id = document.getElementById('login-id').value;
-            const pass = document.getElementById('login-pass').value;
-            const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).single();
-
-            if (data && data.pass === pass) {
-                currentUser = data;
-                document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-div').innerText = data.division;
-                document.getElementById('login-screen').classList.remove('active');
-                document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-date').min = todayStr; // Prevent backdating UI
-                
-                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                renderPersonnel();
-            } else {
-                alert("Invalid Credentials");
-            }
-        };
-
-        window.searchEmployees = async function() {
-            const term = document.getElementById('emp-search').value;
-            if (!term) return;
-            const { data } = await supabase.from('employees').select('emp_id, full_name, unit')
-                .or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(10);
-
-            const resDiv = document.getElementById('search-results');
-            resDiv.innerHTML = '';
-            resDiv.style.display = 'block';
-            
-            data.forEach(emp => {
-                const row = document.createElement('div');
-                row.className = 'search-row';
-                row.innerHTML = `<strong>${emp.full_name}</strong> (${emp.emp_id})`;
-                row.onclick = () => {
-                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
-                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
-                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
-                    resDiv.style.display = 'none';
-                    document.getElementById('emp-search').value = '';
-                    renderPersonnel();
-                };
-                resDiv.appendChild(row);
-            });
-        };
-
-        function renderPersonnel() {
-            const list = document.getElementById('personnel-draft-list');
-            list.innerHTML = personnelDraft.map((p, i) => `
-                <div class="list-item">
-                    <span>${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" onclick="removePersonnel(${i})">X</button>` : ''}
-                </div>
-            `).join('');
-        }
-
-        window.removePersonnel = function(index) {
-            personnelDraft.splice(index, 1);
-            renderPersonnel();
-        };
-
-        window.addItinDraft = function() {
-            const date = document.getElementById('itin-date').value;
-            const dest = document.getElementById('itin-dest').value.trim();
-            const purp = document.getElementById('itin-purp').value.trim();
-
-            if (!date || !dest || !purp) return alert("All itinerary fields (Date, Destination, Purpose) are required.");
-            if (date < todayStr) return alert("Backdating is not allowed. Please select a current or future date.");
-            if (itineraryDraft.some(i => i.date === date)) return alert("This date is already in your draft.");
-
-            itineraryDraft.push({ date, dest, purp });
-            document.getElementById('itin-dest').value = '';
-            document.getElementById('itin-purp').value = '';
-            renderItin();
-        };
-
-        function renderItin() {
-            const list = document.getElementById('itin-draft-list');
-            list.innerHTML = itineraryDraft.map((it, i) => `
-                <div class="list-item" style="font-size:12px; display:block;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div>
-                            <strong>📅 ${it.date}</strong><br>
-                            📍 ${it.dest}
-                        </div>
-                        <button class="btn-danger" onclick="removeItin(${i})">X</button>
-                    </div>
-                    <div style="margin-top:5px; padding-top:5px; border-top:1px dashed #ddd; color:var(--text-muted);">
-                        💬 ${it.purp}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.removeItin = function(index) {
-            itineraryDraft.splice(index, 1);
-            renderItin();
-        };
-
-        window.submitTO = async function() {
-            if (itineraryDraft.length === 0) return alert("Please build your itinerary first.");
-            
-            const transport = document.getElementById('to-transport').value;
-            const reportTo = document.getElementById('to-report').value;
-            const year = new Date().getFullYear();
-            const divCode = (currentUser.division || "GEN").substring(0, 5).toUpperCase(); // Matches YYYY-DIVISION-00000 logic
-            
-            try {
-                // 1. SCOPED OVERLAP CHECK: Only check for this employee
-                const draftDates = itineraryDraft.map(i => i.date);
-                
-                // Fetch existing active TOs for this employee ONLY
-                const { data: myTOs } = await supabase.from('travel_orders')
-                    .select('to_no')
-                    .eq('emp_id', currentUser.emp_id)
-                    .not('status', 'ilike', '%CANCELLED%');
-
-                if (myTOs && myTOs.length > 0) {
-                    const myToNumbers = myTOs.map(t => t.to_no);
-                    
-                    // Check if any of those specific TOs have clashing dates
-                    const { data: conflicts } = await supabase.from('itinerary')
-                        .select('to_no, travel_date')
-                        .in('to_no', myToNumbers)
-                        .in('travel_date', draftDates);
-
-                    if (conflicts && conflicts.length > 0) {
-                        const conflictNos = [...new Set(conflicts.map(c => c.to_no))];
-                        if (!confirm(`Overlap detected in your records: ${conflictNos.join(', ')}. Overwrite and Cancel those applications?`)) return;
-                        await supabase.from('travel_orders').update({ status: 'CANCELLED' }).in('to_no', conflictNos);
-                    }
-                }
-
-                // 2. Generate TO Number (YYYY-DIVISION-00000)
-                const { data: lastTO } = await supabase.from('travel_orders')
-                    .select('to_no')
-                    .like('to_no', `${year}-${divCode}-%`)
-                    .order('to_no', {ascending: false})
-                    .limit(1);
-
-                let seq = 1;
-                if (lastTO && lastTO[0]) {
-                    const parts = lastTO[0].to_no.split('-');
-                    seq = parseInt(parts[2]) + 1;
-                }
-                const toNo = `${year}-${divCode}-${String(seq).padStart(5, '0')}`;
-
-                // 3. Status Routing Logic
-                let status = "PENDING_CHIEF";
-                if (transport === "GOV'T VEHICLE") status = "PENDING_VEHICLE_APPROVER";
-                else if (currentUser.unit === "PARPO") status = "PENDING_PARPO";
-                else if (currentUser.unit) status = "PENDING_UNIT_HEAD";
-
-                // 4. Batch Inserts
-                const toEntries = personnelDraft.map(p => ({
-                    to_no: toNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit,
-                    division: currentUser.division, status: status, transport, report_to: reportTo
-                }));
-
-                const itinEntries = itineraryDraft.map(it => ({
-                    to_no: toNo, travel_date: it.date, destination: it.dest, purpose: it.purp
-                }));
-
-                await supabase.from('travel_orders').insert(toEntries);
-                await supabase.from('itinerary').insert(itinEntries);
-
-                alert(`Application ${toNo} submitted successfully!`);
-                location.reload();
-
-            } catch (err) {
-                alert("Submission Error: " + err.message);
-            }
-        };
-
+        // --- Navigation ---
         window.switchTab = function(id, el) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             el.classList.add('active');
             if (id === 'status-view') loadStatus();
+            if (id === 'calendar-view') renderCalendar();
         };
 
-        async function loadStatus() {
+        // --- Login ---
+        window.handleLogin = async function() {
+            const id = document.getElementById('login-id').value;
+            const pass = document.getElementById('login-pass').value;
+            const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
+            if (data && data.pass === pass) {
+                currentUser = data;
+                document.getElementById('user-name').innerText = data.full_name;
+                document.getElementById('user-div').innerText = data.division;
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('itin-date').min = todayStr;
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+            } else { alert("Invalid ID or Password"); }
+        };
+
+        // --- Status Details ---
+        window.loadStatus = async function() {
             const list = document.getElementById('status-list');
-            list.innerHTML = '<p style="text-align:center; color:gray;">Fetching records...</p>';
+            list.innerHTML = 'Loading...';
+            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
+            if (!tos) return;
             
-            const { data } = await supabase.from('travel_orders')
-                .select('*')
-                .eq('emp_id', currentUser.emp_id)
-                .order('created_at', {ascending: false})
-                .limit(10);
-
-            if (!data || data.length === 0) {
-                list.innerHTML = '<p style="text-align:center; color:gray;">No records found.</p>';
-                return;
+            let html = '';
+            for(let to of tos) {
+                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
+                const statusClass = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                
+                html += `
+                    <div class="card" style="padding:12px;">
+                        <span class="status-badge ${statusClass}">${to.status.replace(/_/g, ' ')}</span>
+                        <div style="font-weight:bold; font-size:14px; margin-bottom:5px;">${to.to_no}</div>
+                        <div style="font-size:11px; color:gray; margin-bottom:8px;">Issued: ${new Date(to.created_at).toLocaleDateString()}</div>
+                        <div style="border-top: 1px dashed #eee; padding-top:8px;">
+                            ${itin.map(i => `<div style="font-size:12px; margin-bottom:4px;">📅 ${i.travel_date} - 📍 ${i.destination}<br><span style="color:gray; font-style:italic;">"${i.purpose}"</span></div>`).join('')}
+                        </div>
+                    </div>`;
             }
+            list.innerHTML = html || '<p style="text-align:center;">No records.</p>';
+        };
 
-            list.innerHTML = data.map(to => `
-                <div class="list-item">
-                    <div>
-                        <strong style="font-size:14px;">${to.to_no}</strong><br>
-                        <span style="font-size:11px; color:${to.status.includes('CANCEL') ? 'red' : 'green'}">${to.status.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div style="font-size:10px; color:gray; text-align:right;">
-                        ${new Date(to.created_at).toLocaleDateString()}
-                    </div>
-                </div>
-            `).join('');
-        }
+        // --- Calendar Logic ---
+        window.renderCalendar = async function() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Fetch markers
+            const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no');
+            const { data: psos } = await supabase.from('pso_records').select('start_date, end_date').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('date');
+
+            const headerGrid = document.getElementById('calendar-header-grid');
+            const bodyGrid = document.getElementById('calendar-body-grid');
+            headerGrid.innerHTML = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div class="calendar-header">${d}</div>`).join('');
+            bodyGrid.innerHTML = '';
+
+            for (let i = 0; i < firstDay; i++) bodyGrid.innerHTML += '<div></div>';
+            
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const hasTO = itins?.some(i => i.travel_date === dateStr);
+                const hasPSO = psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                const isHoliday = holidays?.some(h => h.date === dateStr);
+                
+                bodyGrid.innerHTML += `
+                    <div class="calendar-day ${dateStr === todayStr ? 'today' : ''}">
+                        ${d}
+                        <div class="dot-container">
+                            ${hasTO ? '<div class="dot dot-to"></div>' : ''}
+                            ${hasPSO ? '<div class="dot dot-pso"></div>' : ''}
+                            ${isHoliday ? '<div class="dot dot-holiday"></div>' : ''}
+                        </div>
+                    </div>`;
+            }
+        };
+
+        // --- Password Logic ---
+        window.changePassword = async function() {
+            const curr = document.getElementById('current-pass').value;
+            const nw = document.getElementById('new-pass').value;
+            const conf = document.getElementById('confirm-pass').value;
+
+            if (curr !== currentUser.pass) return alert("Current password incorrect");
+            if (nw !== conf) return alert("New passwords do not match");
+            if (nw.length < 4) return alert("Password too short");
+
+            const { error } = await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            if (!error) {
+                currentUser.pass = nw;
+                alert("Password updated!");
+                location.reload();
+            } else { alert("Error updating password."); }
+        };
     </script>
 </body>
 </html>
