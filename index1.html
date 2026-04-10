@@ -8,78 +8,32 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
-            --dar-green: #003811;
-            --dar-light: #006400;
-            --dar-gold: #D4AF37;
-            --bg-main: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --danger: #dc2626;
-            --success: #16a34a;
-            --warning: #f59e0b;
+            --dar-green: #003811; --dar-gold: #D4AF37; --bg-main: #f4f7f6;
+            --card-bg: #ffffff; --text-main: #1f2937; --danger: #dc2626;
         }
-
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
-
-        .screen { display: none; }
-        .screen.active { display: block; animation: fadeIn 0.3s ease; }
-        .view { display: none; padding: 15px; padding-bottom: 120px; }
-        .view.active { display: block; animation: fadeIn 0.2s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
-        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
-        
-        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
-        label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); }
+        .screen { display: none; } .screen.active { display: block; }
+        .view { display: none; padding: 15px; padding-bottom: 120px; } .view.active { display: block; }
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--dar-gold); }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
-
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); opacity: 0.8; }
-        .btn-primary { background: var(--dar-green); }
-        .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        .btn-danger { background: var(--danger); }
-        .btn-warning { background: var(--warning); }
-        .btn-success { background: var(--success); }
-        
-        .action-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-        .btn-small { padding: 8px; font-size: 11px; flex: 1; min-width: 80px; }
-
-        .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
-        .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; font-weight: bold; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; }
-        .calendar-header { font-weight: bold; color: var(--dar-green); font-size: 10px; text-transform: uppercase; padding: 5px 0; text-align: center; }
-        .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
-        .dot { width: 5px; height: 5px; border-radius: 50%; }
-        .dot-to { background: var(--dar-green); }
-        .dot-pso { background: var(--dar-gold); }
-        .dot-holiday { background: var(--danger); }
-        .today { border: 2px solid var(--dar-gold); font-weight: bold; }
-
-        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
-
-        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
-        .bg-pending { background: #fefce8; color: #854d0e; }
-        .bg-approved { background: #ecfdf5; color: #166534; }
-        .bg-cancelled { background: #fef2f2; color: #991b1b; }
-        
-        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
-        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-primary { background: var(--dar-green); } .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; }
+        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; }
+        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); }
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; float: right; font-weight: bold; }
+        .bg-approved { background: #ecfdf5; color: #166534; } .bg-pending { background: #fefce8; color: #854d0e; }
     </style>
 </head>
 <body>
 
     <div id="login-screen" class="screen active">
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
-            <div style="background: white; padding: 35px 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 6px solid var(--dar-gold);">
-                <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
-                <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
+            <div class="card">
+                <h2 style="text-align: center; color: var(--dar-green);">DAR PORTAL</h2>
+                <input type="text" id="login-id" placeholder="Employee ID">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
             </div>
@@ -88,96 +42,29 @@
 
     <div id="app-screen" class="screen">
         <div class="app-header">
-            <div>
-                <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
-                <div id="user-info" style="font-size: 10px; color: var(--dar-gold); font-weight: bold;">Division | Position</div>
-            </div>
-            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            <div><div id="user-name" style="font-weight: bold;">User</div><div id="user-info" style="font-size: 10px; color: var(--dar-gold);">Info</div></div>
+            <button onclick="location.reload()" style="background:none; border:1px solid white; color:white; font-size:10px;">Logout</button>
         </div>
-
         <div id="apply-view" class="view active">
             <div class="card">
-                <h4>1. Personnel (Max 5)</h4>
-                <div style="display: flex; gap: 5px;">
-                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
-                    <button class="btn btn-primary" style="width: 70px; padding:0;" onclick="searchEmployees()">Find</button>
-                </div>
-                <div id="search-results" class="search-results"></div>
-                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
+                <h4>1. Logistics</h4>
+                <select id="to-transport"><option value="LAND">LAND</option><option value="GOV'T VEHICLE">GOV'T VEHICLE</option></select>
+                <input type="text" id="to-report" placeholder="Report To">
             </div>
-
             <div class="card">
-                <h4>2. Logistics</h4>
-                <label>Means of Transportation</label>
-                <select id="to-transport">
-                    <option value="LAND">Public Utility (LAND)</option>
-                    <option value="GOV'T VEHICLE">Gov't Vehicle</option>
-                    <option value="AIR">Air Travel</option>
-                    <option value="OTHERS">Others</option>
-                </select>
-            </div>
-
-            <div class="card">
-                <h4>3. Itinerary Builder</h4>
-                <label>Date (No Backdating)</label>
-                <input type="date" id="itin-date" onkeydown="return false">
-                <label>Destination</label>
-                <input type="text" id="itin-dest" placeholder="Where to?">
-                <label>Detailed Purpose</label>
-                <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
-                
-                <label>Report To (Required)</label>
-                <input type="text" id="to-report" placeholder="Required: e.g. Division Chief">
-                
+                <h4>2. Itinerary</h4>
+                <input type="date" id="itin-date">
+                <input type="text" id="itin-dest" placeholder="Destination">
+                <textarea id="itin-purp" placeholder="Purpose"></textarea>
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
-                <div id="itin-draft-list" style="margin-top: 15px;"></div>
+                <div id="itin-draft-list" style="margin-top:10px;"></div>
             </div>
-            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT REQUEST</button>
         </div>
-
-        <div id="status-view" class="view">
-            <h3 style="color: var(--dar-green);">My Applications</h3>
-            <div id="status-list"></div>
-        </div>
-
-        <div id="calendar-view" class="view">
-            <h3 style="color: var(--dar-green);">My Personal Schedule</h3>
-            <div class="card">
-                <div class="cal-nav">
-                    <button onclick="changeCalMonth(-1)">&lt;</button>
-                    <div id="cal-month-year" style="font-weight: bold; color: var(--dar-green);"></div>
-                    <button onclick="changeCalMonth(1)">&gt;</button>
-                </div>
-                <div class="calendar-grid" id="cal-header"></div>
-                <div class="calendar-grid" id="cal-body"></div>
-                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 12px; font-size: 10px;">
-                    <span><span class="dot dot-to" style="display:inline-block;"></span> My Travel</span>
-                    <span><span class="dot dot-pso" style="display:inline-block;"></span> My PSO</span>
-                    <span><span class="dot dot-holiday" style="display:inline-block;"></span> Holiday</span>
-                </div>
-            </div>
-            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold); font-size:12px;"></div>
-        </div>
-
-        <div id="security-view" class="view">
-            <h3 style="color: var(--dar-green);">Security</h3>
-            <div class="card">
-                <h4>Update Portal Password</h4>
-                <label>Current Password</label>
-                <input type="password" id="pass-curr">
-                <label>New Password</label>
-                <input type="password" id="pass-new">
-                <label>Confirm Password</label>
-                <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
-            </div>
-        </div>
-
+        <div id="status-view" class="view"><div id="status-list"></div></div>
         <div class="bottom-nav">
             <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
             <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
-            <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Calendar</div>
-            <div class="nav-item" onclick="switchTab('security-view', this)">🔒 Security</div>
         </div>
     </div>
 
@@ -186,358 +73,145 @@
         const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        let currentUser = null;
-        let itineraryDraft = [];
-        let personnelDraft = [];
-        const todayStr = new Date().toISOString().split('T')[0];
-        let calDate = new Date();
-
+        let currentUser = null; let itineraryDraft = [];
         const urlToBase64 = async (url) => {
             try {
-                const response = await fetch(url);
-                if (!response.ok) return null;
-                const blob = await response.blob();
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
-                });
+                const res = await fetch(url); if (!res.ok) return null;
+                const blob = await res.blob();
+                return new Promise(r => { const rd = new FileReader(); rd.onloadend = () => r(rd.result); rd.readAsDataURL(blob); });
             } catch (e) { return null; }
         };
 
         window.handleLogin = async function() {
-            const id = document.getElementById('login-id').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
+            const id = document.getElementById('login-id').value;
+            const pass = document.getElementById('login-pass').value;
             const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
             if (data && data.pass === pass) {
-                currentUser = data;
-                document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                document.getElementById('login-screen').classList.remove('active');
-                document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-date').min = todayStr;
-                document.getElementById('itin-date').value = todayStr;
-                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                renderPersonnel();
-            } else { alert("Invalid Credentials"); }
+                currentUser = data; document.getElementById('user-name').innerText = data.full_name;
+                document.getElementById('app-screen').classList.add('active'); document.getElementById('login-screen').classList.remove('active');
+            } else alert("Invalid Credentials");
         };
 
         window.switchTab = function(id, el) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            el.classList.add('active');
+            document.querySelectorAll('.view, .nav-item').forEach(v => v.classList.remove('active'));
+            document.getElementById(id).classList.add('active'); el.classList.add('active');
             if (id === 'status-view') loadStatus();
-            if (id === 'calendar-view') renderCalendar();
         };
 
-        window.searchEmployees = async function() {
-            const term = document.getElementById('emp-search').value;
-            if (term.length < 2) return;
-            const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
-            const resDiv = document.getElementById('search-results');
-            resDiv.innerHTML = ''; resDiv.style.display = 'block';
-            data.forEach(emp => {
-                const row = document.createElement('div'); row.className = 'search-row';
-                row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
-                row.onclick = () => {
-                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
-                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
-                    personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
-                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
-                };
-                resDiv.appendChild(row);
-            });
-        };
-
-        function renderPersonnel() {
-            const list = document.getElementById('personnel-draft-list');
-            list.innerHTML = personnelDraft.map((p, i) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
-                    <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px;" onclick="removePersonnel(${i})">X</button>` : ''}
-                </div>`).join('');
-        }
-        window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
-
-        window.addItinDraft = async function() {
+        window.addItinDraft = () => {
             const date = document.getElementById('itin-date').value;
-            const dest = document.getElementById('itin-dest').value.trim();
-            const purp = document.getElementById('itin-purp').value.trim();
-            if(!date || !dest || !purp) return alert("Fill all fields.");
-            if(date < todayStr) return alert("No backdating.");
-            if(itineraryDraft.some(i => i.date === date)) return alert("Duplicate date.");
-            itineraryDraft.push({ date, dest, purp });
-            document.getElementById('itin-dest').value = ''; document.getElementById('itin-purp').value = '';
-            renderItinerary();
+            const dest = document.getElementById('itin-dest').value;
+            const purp = document.getElementById('itin-purp').value;
+            if (date && dest && purp) { itineraryDraft.push({ date, dest, purp }); renderItin(); }
         };
 
-        function renderItinerary() {
-            const list = document.getElementById('itin-draft-list');
-            list.innerHTML = itineraryDraft.map((it, i) => `
-                <div class="card" style="padding:10px; font-size:12px; border-left: 4px solid var(--dar-green);">
-                    <div style="display:flex; justify-content:space-between;"><strong>📅 ${it.date}</strong><span style="color:red;" onclick="removeItin(${i})">Del</span></div>
-                    <div>📍 ${it.dest}</div>
-                </div>`).join('');
+        function renderItin() {
+            document.getElementById('itin-draft-list').innerHTML = itineraryDraft.map((it, i) => `<div class="card" style="font-size:12px;">${it.date} | ${it.dest}</div>`).join('');
         }
-        window.removeItin = (i) => { itineraryDraft.splice(i,1); renderItinerary(); };
 
         window.submitTO = async function() {
-            if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
-            const reportTo = document.getElementById('to-report').value.trim();
-            if (!reportTo) return alert("Report To is required.");
-            const transport = document.getElementById('to-transport').value;
-            const draftDates = itineraryDraft.map(it => it.date);
-            let remarks = "";
-
-            try {
-                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-                if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
-                    if(!confirm("Conflicts with PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
-                    remarks = "WITH EXISTING PSO/RSO";
-                }
-
-                const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-                if(activeTOs?.length > 0) {
-                    const toNos = activeTOs.map(t => t.to_no);
-                    const { data: conflicts } = await supabase.from('itinerary').select('*').in('to_no', toNos).in('travel_date', draftDates);
-                    if(conflicts?.length > 0) {
-                        const targetToNo = conflicts[0].to_no;
-                        const targetTO = activeTOs.find(t => t.to_no === targetToNo);
-                        if(targetTO.status !== "APPROVED") {
-                            if(!confirm(`Overwrite Pending TO ${targetToNo}?`)) return;
-                            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', targetToNo);
-                        } else {
-                            const { data: allItins } = await supabase.from('itinerary').select('*').eq('to_no', targetToNo);
-                            if(allItins.length === 1) {
-                                if(!confirm(`Overwrite Approved TO ${targetToNo}? Approver will be notified.`)) return;
-                                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', targetToNo);
-                                await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${targetToNo} overwritten by ${currentUser.full_name}`, to_no: targetToNo });
-                            } else {
-                                if(!confirm(`Split Multi-day Approved TO ${targetToNo}? Affected day will be re-routed.`)) return;
-                                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', targetToNo);
-                                const remainder = allItins.filter(i => !draftDates.includes(i.travel_date));
-                                if(remainder.length > 0) {
-                                    const splitToNo = await generateToNo();
-                                    await supabase.from('travel_orders').insert({ ...targetTO, id: undefined, to_no: splitToNo, status: 'APPROVED' });
-                                    await supabase.from('itinerary').insert(remainder.map(r => ({ ...r, id: undefined, to_no: splitToNo })));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                const finalToNo = await generateToNo(); 
-                let routeStatus = "PENDING_CHIEF";
-                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
-                else if (currentUser.unit) routeStatus = "PENDING_UNIT_HEAD";
-
-                const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks
-                }));
-                const batchItin = itineraryDraft.map(it => ({ to_no: finalToNo, travel_date: it.date, destination: it.dest, purpose: it.purp }));
-
-                await supabase.from('travel_orders').insert(batchPersonnel);
-                await supabase.from('itinerary').insert(batchItin);
-                alert("Submitted: " + finalToNo); location.reload();
-            } catch(e) { alert("Submission error: " + e.message); }
+            const to_no = `${new Date().getFullYear()}-TO-${Math.floor(Math.random()*10000)}`;
+            const payload = itineraryDraft.map(it => ({ to_no, travel_date: it.date, destination: it.dest, purpose: it.purp }));
+            await supabase.from('travel_orders').insert([{ to_no, emp_id: currentUser.emp_id, emp_name: currentUser.full_name, transport: document.getElementById('to-transport').value, report_to: document.getElementById('to-report').value, status: 'APPROVED' }]);
+            await supabase.from('itinerary').insert(payload);
+            alert("Submitted!"); location.reload();
         };
 
-        async function generateToNo() {
-            const year = new Date().getFullYear();
-            const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
-            let seq = 1;
-            if (data && data[0]) {
-                const parts = data[0].to_no.split('-');
-                seq = parseInt(parts[2]) + 1;
-            }
-            return `${year}-${div}-${String(seq).padStart(5, '0')}`;
-        }
-
+        // PDF GENERATION WITH AUTOMATIC FLEXIBLE SPACING & 2-INCH RIGHT BORDER
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
-            const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
+            const getAssetUrl = (f) => `${supabaseUrl}/storage/v1/object/public/e-sign/${f}`;
 
             try {
-                const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
-                const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
+                const { data: od_list } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+                const { data: emp } = await supabase.from('employees').select('*').eq('emp_id', od_list[0].emp_id).single();
 
-                const od = group_orders[0];
-                const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
-                const positions = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
-                const stations = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
-
-                const filingDate = new Date(od.created_at).toLocaleString('en-US', { 
-                    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
-                });
-
-                const sig_unit_url = od.unithead_signed && !od.unithead_signed.includes("___") ? 
-                    getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.unithead_signed).single()).data?.username}.png`) : null;
-                const sig_dc_url = od.dc_signed && !od.dc_signed.includes("___") ? 
-                    getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.dc_signed).single()).data?.username}.png`) : null;
-
-                const [img_bg, img_qr, img_p2, img_unit, img_dc] = await Promise.all([
-                    urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
-                    urlToBase64(getAssetUrl("P2.png")),
-                    sig_unit_url ? urlToBase64(sig_unit_url) : null,
-                    sig_dc_url ? urlToBase64(sig_dc_url) : null
-                ]);
+                const img_bg = await urlToBase64(getAssetUrl("bg_form.jpg"));
+                const img_p2 = await urlToBase64(getAssetUrl("P2.png"));
+                const img_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${toNo}`);
 
                 const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
                 for (let i = 0; i < copies.length; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
-                    
-                    doc.setFont("helvetica", "italic"); doc.setFontSize(7);
-                    doc.text(copies[i], 185, 8);
-                    if (img_qr) doc.addImage(img_qr, 'PNG', 170, 10, 25, 25);
+                    if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
+                    if (img_qr) doc.addImage(img_qr, 'PNG', 175, 10, 20, 20);
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+                    doc.setFontSize(16); doc.setFont("helvetica", "bold");
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    // 2 INCH RIGHT MARGIN (210mm - 51mm = 159mm)
-                    doc.text(`Date Filed: ${filingDate}`, 159, 52, { align: 'right' });
+                    const fDate = new Date(od_list[0].created_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                    // Strict 2-inch right border (159mm)
+                    doc.text(`Date Filed: ${fDate}`, 159, 52, { align: 'right' });
 
-                    let warningY = 58;
-                    doc.setTextColor(200, 0, 0); doc.setFont("helvetica", "bold");
-                    if (od.remarks?.includes("PSO")) { doc.text("WITH EXISTING PSO/RSO, SUBJECT FOR PARPO FINAL APPROVAL", 105, warningY, { align: 'center' }); warningY += 5; }
-                    if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
-                    doc.setTextColor(0,0,0);
+                    let currY = 75; // Starting flexible Y coordinate
+                    const rightLimit = 159; 
 
-                    // STRICT 6MM VERTICAL SPACING (SINGLE SPACING) & 159MM RIGHT BOUNDARY
-                    doc.setFontSize(11); doc.text("NAME:", 20, 75);
-                    doc.text(names, 45, 75); doc.line(45, 76, 159, 76);
-
-                    doc.text("POSITION:", 20, 81);
-                    doc.text(positions, 45, 81); doc.line(45, 82, 100, 82);
-                    doc.text("STATION:", 110, 81);
-                    doc.text(stations, 130, 81); doc.line(130, 82, 159, 82);
-
-                    doc.text("MEANS OF TRANSPORTATION:", 20, 87);
-                    const check = (x, y, label, val) => {
-                        doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5);
-                        doc.setFont("helvetica", "normal"); doc.text(label, x+6, y+3.5); doc.setFont("helvetica", "bold");
+                    // Flexible Row Function
+                    const drawRow = (label, value, xStart) => {
+                        doc.setFont("helvetica", "bold"); doc.text(label, 20, currY);
+                        doc.setFont("helvetica", "normal");
+                        const textLines = doc.splitTextToSize(value || "", rightLimit - xStart);
+                        doc.text(textLines, xStart, currY);
+                        
+                        // Underline each line of data
+                        textLines.forEach((line, idx) => {
+                            doc.line(xStart, currY + (idx * 5) + 1, rightLimit, currY + (idx * 5) + 1);
+                        });
+                        currY += (textLines.length * 5) + 2; // Flexible increment
                     };
-                    check(30, 91, "AIR", od.transport === "AIR");
-                    check(80, 91, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
-                    check(30, 97, "LAND", od.transport === "LAND");
-                    check(80, 97, "OTHERS", od.transport === "OTHERS");
 
-                    doc.text("DESTINATION:", 20, 105);
-                    const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
-                    doc.setFont("helvetica", "normal"); 
-                    doc.text(doc.splitTextToSize(dests, 109), 50, 105); // Width = 159 - 50 = 109
+                    drawRow("NAME:", emp.full_name.toUpperCase(), 45);
+                    
+                    // Combined Row
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, currY);
+                    doc.setFont("helvetica", "normal"); doc.text(emp.position.toUpperCase(), 45, currY);
+                    doc.line(45, currY+1, 100, currY+1);
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 110, currY);
+                    doc.setFont("helvetica", "normal"); doc.text(emp.station.toUpperCase(), 130, currY);
+                    doc.line(130, currY+1, rightLimit, currY+1);
+                    currY += 8;
+
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, currY); currY += 6;
+                    const tr = od_list[0].transport;
+                    const drawCheck = (x, y, lbl, active) => { doc.rect(x, y, 4, 4); if(active) doc.text("X", x+1, y+3.5); doc.text(lbl, x+6, y+3.5); };
+                    drawCheck(30, currY, "LAND", tr === "LAND"); drawCheck(80, currY, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
+                    currY += 12;
+
+                    const destStr = itin.map(it => `${it.destination} (${it.travel_date})`).join(", ");
+                    drawRow("DESTINATION:", destStr, 50);
+                    
+                    doc.setFont("helvetica", "bold"); doc.text("DEPARTURE:", 20, currY); 
+                    doc.setFont("helvetica", "normal"); doc.text(itin[0].travel_date, 50, currY); doc.line(50, currY+1, 100, currY+1);
+                    doc.setFont("helvetica", "bold"); doc.text("RETURN:", 110, currY); 
+                    doc.setFont("helvetica", "normal"); doc.text(itin[itin.length-1].travel_date, 135, currY); doc.line(135, currY+1, rightLimit, currY+1);
+                    currY += 8;
+
+                    drawRow("REPORT TO:", od_list[0].report_to, 50);
+
+                    // Purpose - Enforced on same line as label
+                    drawRow("PURPOSE:", itin[0].purpose, 45);
+
+                    // Final Signatures
+                    if (i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
                     doc.setFont("helvetica", "bold");
-                    doc.line(50, 106, 159, 106);
-
-                    doc.text("DEPARTURE:", 20, 111); doc.text(itin_list[0]?.travel_date || "", 50, 111);
-                    doc.text("RETURN:", 110, 111); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 135, 111);
-
-                    doc.text("REPORT TO:", 20, 117);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 117); doc.setFont("helvetica", "bold");
-
-                    doc.text("PURPOSE:", 20, 123);
-                    doc.setFont("helvetica", "normal"); 
-                    doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 139), 20, 129); // Width = 159 - 20 = 139
-
-                    const sy = 225;
-                    if(i > 0) {
-                        if(img_unit) doc.addImage(img_unit, 'PNG', 30, sy-15, 30, 15);
-                        if(img_dc) doc.addImage(img_dc, 'PNG', 130, sy-15, 30, 15);
-                        if(img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
-                    }
-
-                    doc.setFont("helvetica", "bold");
-                    doc.text(od.unithead_signed || "________________", 45, sy, { align: 'center' });
-                    doc.setFontSize(8); doc.text("UNIT HEAD", 45, sy+4, { align: 'center' });
-                    doc.setFontSize(11);
-                    doc.text(od.dc_signed || "________________", 145, sy, { align: 'center' });
-                    doc.setFontSize(8); doc.text("DIVISION CHIEF", 145, sy+4, { align: 'center' });
-                    doc.setFontSize(12); doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
+                    doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
                     doc.setFontSize(10); doc.text("PARPO II", 105, 280, { align: 'center' });
                 }
                 doc.save(`TO_${toNo}.pdf`);
-            } catch (e) { alert("PDF Error: Check if all asset files exist."); console.error(e); }
-        };
-
-        window.cancelApprovedTO = async function(toNo) {
-            if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
-            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
-            loadStatus();
-        };
-
-        window.deletePendingTO = async function(toNo) {
-            if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            loadStatus();
-        };
-
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft?")) return;
-            const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
-            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo);
-            itineraryDraft = itin.map(i => ({ date: i.travel_date, dest: i.destination, purp: i.purpose }));
-            document.getElementById('to-transport').value = to.transport;
-            document.getElementById('to-report').value = to.report_to;
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            switchTab('apply-view', document.querySelector('.nav-item'));
-            renderItinerary();
-        };
-
-        window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
-
-        async function renderCalendar() {
-            const month = calDate.getMonth(), year = calDate.getFullYear();
-            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const myToNos = myTOs?.map(t => t.to_no) || [];
-            const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no').in('to_no', myToNos);
-            const { data: psos } = await supabase.from('pso_records').select('start_date, end_date').eq('emp_id', currentUser.emp_id);
-            const { data: holidays } = await supabase.from('holidays').select('*');
-            const header = document.getElementById('cal-header'); const body = document.getElementById('cal-body');
-            header.innerHTML = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="calendar-header">${d}</div>`).join('');
-            body.innerHTML = '';
-            const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
-            for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
-            for(let d=1; d<=last; d++) {
-                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const hasTO = itins?.some(i => i.travel_date === ds);
-                const hasPSO = psos?.some(p => ds >= p.start_date && ds <= p.end_date);
-                const holiday = holidays?.find(h => h.date === ds);
-                body.innerHTML += `<div class="calendar-day ${ds === todayStr ? 'today' : ''}" onclick="showDayInfo('${ds}', '${holiday?.remarks || ''}')">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>' : ''}${hasPSO ? '<div class="dot dot-pso"></div>' : ''}${holiday ? '<div class="dot dot-holiday"></div>' : ''}</div></div>`;
-            }
-        }
-
-        window.showDayInfo = async function(date, hol) {
-            const info = document.getElementById('day-details');
-            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const { data: itins } = await supabase.from('itinerary').select('to_no, destination, purpose').in('to_no', myTOs?.map(t => t.to_no) || []).eq('travel_date', date);
-            let html = `<strong>${date}</strong><hr>`;
-            if(hol) html += `<div style="color:red; font-weight:bold;">🚩 ${hol}</div>`; 
-            itins?.forEach(i => html += `<div>🛫 TO ${i.to_no}: ${i.destination}</div>`);
-            info.innerHTML = html || "No activities."; info.style.display = 'block';
+            } catch (e) { console.error(e); }
         };
 
         async function loadStatus() {
-            const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
-            let html = '';
-            for(let to of tos || []) {
-                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
-                const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                html += `<div class="card"><span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span><div style="font-weight:bold;">${to.to_no}</div><div style="font-size:11px;">${itin?.map(i => `<div>📅 ${i.travel_date} | 📍 ${i.destination}</div>`).join('')}</div><div class="action-group">${to.status === 'APPROVED' ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">📄 Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>` : (to.status.includes('PENDING') ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>` : '')}</div></div>`;
-            }
-            list.innerHTML = html || "No records.";
+            const { data } = await supabase.from('travel_orders').select('*').order('created_at', { ascending: false });
+            document.getElementById('status-list').innerHTML = data.map(to => `
+                <div class="card">
+                    <span class="badge bg-approved">${to.status}</span>
+                    <b>${to.to_no}</b>
+                    <button class="btn btn-primary" style="padding:5px; margin-top:10px;" onclick="generateOfficialPDF('${to.to_no}')">Print PDF</button>
+                </div>`).join('');
         }
     </script>
 </body>
