@@ -1,454 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAR Portal Mobile</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root {
-            --dar-green: #003811;
-            --dar-light: #006400;
-            --dar-gold: #D4AF37;
-            --bg-main: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --danger: #dc2626;
-            --success: #16a34a;
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DAR Portal Mobile</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --dar-green: #003811;
+            --dar-light: #006400;
+            --dar-gold: #D4AF37;
+            --bg-main: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --danger: #dc2626;
+            --success: #16a34a;
+        }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
 
-        /* --- SCREEN TOGGLES --- */
-        .screen { display: none; }
-        .screen.active { display: block; animation: fadeIn 0.3s ease; }
-        .view { display: none; padding: 20px; padding-bottom: 90px; /* Space for bottom nav */ }
-        .view.active { display: block; animation: fadeIn 0.2s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* --- SCREEN TOGGLES --- */
+        /* Changed to ensure active screen is the only one visible */
+        .screen { display: none !important; }
+        .screen.active { display: flex !important; flex-direction: column; animation: fadeIn 0.3s ease; height: 100vh; }
+        
+        .view { display: none; padding: 20px; padding-bottom: 100px; }
+        .view.active { display: block; animation: fadeIn 0.2s ease; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- LOGIN SCREEN --- */
-        #login-screen { height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 20px; }
-        .login-box { background: var(--card-bg); padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 5px solid var(--dar-gold); }
-        .login-box h2 { color: var(--dar-green); margin: 0 0 5px 0; text-align: center; }
-        .login-box p { text-align: center; color: var(--text-muted); font-size: 14px; margin-bottom: 25px; }
+        /* --- LOGIN SCREEN --- */
+        #login-screen { justify-content: center; padding: 20px; background: var(--bg-main); }
+        .login-box { background: var(--card-bg); padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 5px solid var(--dar-gold); }
+        .login-box h2 { color: var(--dar-green); margin: 0 0 5px 0; text-align: center; }
 
-        /* --- MOBILE BOTTOM NAVIGATION --- */
-        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--dar-green); display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 12px; font-weight: bold; border-top: 3px solid transparent; cursor: pointer; transition: 0.2s; }
-        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
-        .nav-icon { display: block; font-size: 20px; margin-bottom: 3px; }
+        /* --- MOBILE BOTTOM NAVIGATION --- */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 12px; font-weight: bold; border-top: 3px solid transparent; cursor: pointer; }
+        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
+        .nav-icon { display: block; font-size: 20px; margin-bottom: 3px; }
 
-        /* --- APP HEADER --- */
-        .app-header { background: var(--dar-green); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .app-header h3 { margin: 0; font-size: 16px; color: var(--dar-gold); }
-        .logout-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
+        /* --- APP HEADER --- */
+        .app-header { background: var(--dar-green); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+        .app-header h3 { margin: 0; font-size: 16px; color: var(--dar-gold); }
+        .logout-btn { background: rgba(255,255,255,0.2); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; }
 
-        /* --- FORMS & CARDS --- */
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        h4 { margin-top: 0; color: var(--dar-green); font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        
-        label { display: block; font-size: 12px; font-weight: bold; color: var(--text-muted); margin-bottom: 5px; }
-        /* 16px font size on inputs prevents iOS auto-zoom */
-        input, select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 15px; background: #f9fafb; }
-        input:focus, select:focus { outline: none; border-color: var(--dar-green); background: white; }
+        /* --- CARDS & LISTS --- */
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 15px; }
+        
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--dar-green); }
+        .btn-success { background: var(--dar-gold); color: var(--dar-green); }
+        .btn-danger { background: var(--danger); padding: 8px; font-size: 11px; width: auto; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .btn-primary { background: var(--dar-green); }
-        .btn-primary:active { background: var(--dar-light); }
-        .btn-success { background: var(--dar-gold); color: var(--dar-green); }
-        .btn-danger { background: var(--danger); padding: 8px; font-size: 13px; }
-
-        /* --- MOBILE LISTS (Replaces Tables) --- */
-        .list-item { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 10px; position: relative; }
-        .list-item-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: flex; justify-content: space-between; }
-        .list-item-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
-        .badge { padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }
-        .bg-pending { background: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
-        .bg-approved { background: #ecfdf5; color: var(--success); border: 1px solid #a7f3d0; }
-    </style>
+        .list-item { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 10px; }
+        .list-item-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 10px; }
+        .bg-pending { background: #fefce8; color: #854d0e; }
+        .bg-approved { background: #ecfdf5; color: var(--success); }
+    </style>
 </head>
 <body>
 
-    <div id="login-screen" class="screen active">
-        <div class="login-box">
-            <h2>PERSONNEL MG'T</h2>
-            <p>DAR CS I - Mobile Portal</p>
-            
-            <label>Employee ID</label>
-            <input type="text" id="login-id" placeholder="Enter ID" inputmode="numeric">
-            
-            <label>Password</label>
-            <input type="password" id="login-pass" placeholder="Enter Password">
-            
-            <div id="login-error" style="color: var(--danger); font-size: 13px; text-align: center; margin-bottom: 10px; display: none;"></div>
-            
-            <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
-        </div>
-    </div>
+    <div id="login-screen" class="screen active">
+        <div class="login-box">
+            <h2>PERSONNEL MG'T</h2>
+            <p style="text-align: center; color: var(--text-muted); font-size: 14px;">DAR CS I - Mobile Portal</p>
+            <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
+            <input type="password" id="login-pass" placeholder="Password">
+            <div id="login-error" style="color: var(--danger); font-size: 13px; text-align: center; margin-bottom: 10px; display: none;"></div>
+            <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
+        </div>
+    </div>
 
-    <div id="app-screen" class="screen">
-        
-        <div class="app-header">
-            <div>
-                <h3>HR PORTAL</h3>
-                <div id="user-name" style="font-size: 12px; opacity: 0.9;">User Name</div>
-            </div>
-            <button class="logout-btn" onclick="logout()">Logout</button>
-        </div>
+    <div id="app-screen" class="screen">
+        <div class="app-header">
+            <div>
+                <h3 id="portal-title">HR PORTAL</h3>
+                <div id="user-display" style="font-size: 12px; opacity: 0.9;">User Name</div>
+            </div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
 
-        <div id="content-area">
-            
-            <div id="apply-view" class="view active">
-                <div class="card">
-                    <h4>1. Travel Details</h4>
-                    <label>Means of Transportation</label>
-                    <select id="to-transport">
-                        <option value="LAND">Public Utility (LAND)</option>
-                        <option value="GOV'T VEHICLE">Gov't Vehicle</option>
-                        <option value="OTHERS">Others</option>
-                    </select>
+        <div id="content-area" style="flex: 1; overflow-y: auto;">
+            <div id="apply-view" class="view active">
+                <div class="card">
+                    <h4>1. Travel Details</h4>
+                    <label style="font-size: 12px; font-weight: bold;">Transportation</label>
+                    <select id="to-transport">
+                        <option value="LAND">Public Utility (LAND)</option>
+                        <option value="GOV'T VEHICLE">Gov't Vehicle</option>
+                        <option value="OTHERS">Others</option>
+                    </select>
+                    <label style="font-size: 12px; font-weight: bold;">Report To</label>
+                    <input type="text" id="to-report" placeholder="e.g. Division Chief">
+                </div>
 
-                    <label>Report To (Optional)</label>
-                    <input type="text" id="to-report" placeholder="e.g. Division Chief">
-                </div>
+                <div class="card">
+                    <h4>2. Add Itinerary</h4>
+                    <input type="date" id="itin-date">
+                    <input type="text" id="itin-dest" placeholder="Destination">
+                    <input type="text" id="itin-purp" placeholder="Purpose">
+                    <button class="btn btn-primary" onclick="addDraftItem()">+ Add to List</button>
+                </div>
 
-                <div class="card">
-                    <h4>2. Add Itinerary</h4>
-                    <div style="display: flex; gap: 10px;">
-                        <div style="flex: 1;">
-                            <label>Date</label>
-                            <input type="date" id="itin-date">
-                        </div>
-                    </div>
-                    <label>Destination</label>
-                    <input type="text" id="itin-dest" placeholder="Where to?">
-                    
-                    <label>Purpose</label>
-                    <input type="text" id="itin-purp" placeholder="Why?">
-                    
-                    <button class="btn btn-primary" style="padding: 10px;" onclick="addDraftItem()">+ Add to Itinerary</button>
-                </div>
+                <div id="draft-container"></div>
+                <button class="btn btn-success" style="margin-top: 10px;" onclick="submitTO()">🚀 SUBMIT TO</button>
+            </div>
 
-                <div id="draft-container" style="margin-bottom: 20px;"></div>
+            <div id="status-view" class="view">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: var(--dar-green);">My Travel Orders</h3>
+                    <button class="btn btn-primary" style="width: auto; padding: 6px 12px;" onclick="loadStatus()">↻</button>
+                </div>
+                <div id="status-list"></div>
+            </div>
 
-                <button class="btn btn-success" onclick="submitTO()">🚀 SUBMIT APPLICATION</button>
-            </div>
+            <div id="password-view" class="view">
+                <div class="card">
+                    <h4>Change Password</h4>
+                    <input type="password" id="pwd-curr" placeholder="Current Password">
+                    <input type="password" id="pwd-new" placeholder="New Password">
+                    <input type="password" id="pwd-conf" placeholder="Confirm Password">
+                    <button class="btn btn-primary" onclick="changePassword()">Update</button>
+                </div>
+            </div>
+        </div>
 
-            <div id="status-view" class="view">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: var(--dar-green);">My Applications</h3>
-                    <button class="btn btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px;" onclick="loadStatus()">↻ Refresh</button>
-                </div>
-                
-                <div id="status-list">
-                    <p style="text-align: center; color: gray;">Loading...</p>
-                </div>
-            </div>
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('apply-view', this)">
+                <span class="nav-icon">📝</span>Apply
+            </div>
+            <div class="nav-item" onclick="switchTab('status-view', this)">
+                <span class="nav-icon">📋</span>Status
+            </div>
+            <div class="nav-item" onclick="switchTab('password-view', this)">
+                <span class="nav-icon">🔒</span>Security
+            </div>
+        </div>
+    </div>
 
-            <div id="password-view" class="view">
-                <div class="card">
-                    <h4>Change Password</h4>
-                    <label>Current Password</label>
-                    <input type="password" id="pwd-curr">
-                    
-                    <label>New Password</label>
-                    <input type="password" id="pwd-new">
-                    
-                    <label>Confirm New Password</label>
-                    <input type="password" id="pwd-conf">
-                    
-                    <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
-                </div>
-            </div>
+    <script type="module">
+        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        </div>
+        let currentUser = null;
+        let itineraryDraft = [];
 
-        <div class="bottom-nav">
-            <div class="nav-item active" onclick="switchTab('apply-view', this)">
-                <span class="nav-icon">📝</span>
-                Apply
-            </div>
-            <div class="nav-item" onclick="switchTab('status-view', this)">
-                <span class="nav-icon">📋</span>
-                Status
-            </div>
-            <div class="nav-item" onclick="switchTab('password-view', this)">
-                <span class="nav-icon">🔒</span>
-                Security
-            </div>
-        </div>
-    </div>
+        // --- AUTH & SCREEN SWITCHING ---
+        window.handleLogin = async function() {
+            const uid = document.getElementById('login-id').value.trim();
+            const pwd = document.getElementById('login-pass').value.trim();
+            const err = document.getElementById('login-error');
+            
+            if(!uid || !pwd) { err.innerText = "Fields required."; err.style.display = "block"; return; }
+            err.innerText = "Verifying..."; err.style.display = "block";
 
-    <script type="module">
-        // --- SUPABASE SETUP ---
-        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-        
-        // --- YOUR sb_publishable KEY IS HERE ---
-        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
-        
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            try {
+                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', uid).single();
+                
+                if (error || !data || data.pass !== pwd) {
+                    err.innerText = "Invalid credentials.";
+                } else {
+                    currentUser = data;
+                    document.getElementById('user-display').innerText = data.full_name;
+                    
+                    // Toggle Screens
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('app-screen').classList.add('active');
+                    err.style.display = "none";
+                }
+            } catch(e) { err.innerText = "Network Error."; }
+        }
 
-        let currentUser = null;
-        let itineraryDraft = [];
+        window.logout = function() {
+            currentUser = null;
+            document.getElementById('app-screen').classList.remove('active');
+            document.getElementById('login-screen').classList.add('active');
+            document.getElementById('login-pass').value = '';
+        }
 
-        // --- NAVIGATION LOGIC ---
-        window.switchTab = function(viewId, element) {
-            // Update Active View
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
-            
-            // Update Active Tab UI
-            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-            element.classList.add('active');
+        window.switchTab = function(viewId, element) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            element.classList.add('active');
+            if(viewId === 'status-view') loadStatus();
+        }
 
-            // Auto-load data if hitting status tab
-            if(viewId === 'status-view') loadStatus();
-            
-            // Scroll to top
-            window.scrollTo(0, 0);
-        }
+        // --- ITINERARY & SUBMISSION ---
+        window.addDraftItem = function() {
+            const date = document.getElementById('itin-date').value;
+            const dest = document.getElementById('itin-dest').value.trim();
+            const purp = document.getElementById('itin-purp').value.trim();
+            if(!date || !dest || !purp) return alert("Fill all fields");
+            
+            itineraryDraft.push({ date, dest, purp });
+            document.getElementById('itin-dest').value = '';
+            document.getElementById('itin-purp').value = '';
+            renderDraft();
+        }
 
-        // --- AUTH LOGIC ---
-        window.handleLogin = async function() {
-            const uid = document.getElementById('login-id').value.trim();
-            const pwd = document.getElementById('login-pass').value.trim();
-            const err = document.getElementById('login-error');
-            
-            if(!uid || !pwd) { err.innerText = "Please enter details."; err.style.display = "block"; return; }
-            err.innerText = "Connecting..."; err.style.display = "block";
+        function renderDraft() {
+            const container = document.getElementById('draft-container');
+            container.innerHTML = itineraryDraft.length ? '<h4>Planned Itinerary</h4>' : '';
+            itineraryDraft.forEach((item, index) => {
+                container.innerHTML += `
+                    <div class="list-item">
+                        <div class="list-item-title"><span>📅 ${item.date}</span> <button class="btn-danger" onclick="removeDraft(${index})">X</button></div>
+                        <div class="list-item-sub">📍 ${item.dest} | 💬 ${item.purp}</div>
+                    </div>`;
+            });
+        }
 
-            try {
-                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', uid).single();
-                
-                if (error || !data || data.pass !== pwd) {
-                    err.innerText = "Access Denied: Invalid Credentials or Network Error.";
-                } else {
-                    currentUser = data;
-                    document.getElementById('user-name').innerText = data.full_name;
-                    document.getElementById('login-screen').classList.remove('active');
-                    document.getElementById('app-screen').classList.add('active');
-                    err.style.display = "none";
-                }
-            } catch(e) {
-                err.innerText = "Network Error. Check connection.";
-            }
-        }
+        window.removeDraft = function(i) { itineraryDraft.splice(i, 1); renderDraft(); }
 
-        window.logout = function() {
-            currentUser = null;
-            document.getElementById('app-screen').classList.remove('active');
-            document.getElementById('login-screen').classList.add('active');
-            document.getElementById('login-pass').value = '';
-        }
+        window.submitTO = async function() {
+            if(!itineraryDraft.length) return alert("Add itinerary first");
+            
+            try {
+                // 1. Generate TO Number: YYYY-DIVISION-00000
+                const year = new Date().getFullYear();
+                const div = (currentUser.division || 'GEN').toUpperCase().substring(0, 5);
+                const { data: max } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
+                let seq = (max && max.length > 0) ? parseInt(max[0].to_no.split('-')[2]) + 1 : 1;
+                const newToId = `${year}-${div}-${String(seq).padStart(5, '0')}`;
 
-        // --- DRAFT BUILDER ---
-        window.addDraftItem = function() {
-            const date = document.getElementById('itin-date').value;
-            const dest = document.getElementById('itin-dest').value.trim();
-            const purp = document.getElementById('itin-purp').value.trim();
+                // 2. Determine Status (Routing Rules)
+                let transport = document.getElementById('to-transport').value;
+                let status = "PENDING_CHIEF";
+                if (transport === "GOV'T VEHICLE") status = "PENDING_VEHICLE_APPROVER";
+                else if (currentUser.unit === "PARPO") status = "PENDING_PARPO";
+                else if (currentUser.unit) status = "PENDING_UNIT_HEAD";
 
-            if(!date || !dest || !purp) { alert("Please fill out all fields."); return; }
-            
-            // Prevent exact same date in draft
-            if(itineraryDraft.some(i => i.date === date)) { alert("Date already in draft."); return; }
+                // 3. Insert TO
+                await supabase.from('travel_orders').insert({
+                    to_no: newToId, emp_id: currentUser.emp_id, emp_name: currentUser.full_name,
+                    unit: currentUser.unit, division: currentUser.division, status: status,
+                    transport: transport, report_to: document.getElementById('to-report').value
+                });
 
-            itineraryDraft.push({ date, dest, purp });
-            
-            // Clear inputs for next entry, but keep date for convenience
-            document.getElementById('itin-dest').value = '';
-            document.getElementById('itin-purp').value = '';
-            
-            renderDraft();
-        }
+                // 4. Insert Multi-Date Itinerary
+                const inserts = itineraryDraft.map(i => ({ to_no: newToId, travel_date: i.date, destination: i.dest, purpose: i.purp }));
+                await supabase.from('itinerary').insert(inserts);
 
-        window.removeDraft = function(index) {
-            itineraryDraft.splice(index, 1);
-            renderDraft();
-        }
+                alert("Submitted: " + newToId);
+                itineraryDraft = []; renderDraft();
+                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
+            } catch(e) { alert("Error submitting: " + e.message); }
+        }
 
-        function renderDraft() {
-            const container = document.getElementById('draft-container');
-            container.innerHTML = '';
-            
-            if(itineraryDraft.length > 0) {
-                let html = '<h4 style="margin-top: 15px;">Pending Itinerary</h4>';
-                itineraryDraft.forEach((item, index) => {
-                    html += `
-                    <div class="list-item">
-                        <div class="list-item-title">
-                            <span>📅 ${item.date}</span>
-                            <button class="btn-danger" style="border:none; border-radius:4px;" onclick="removeDraft(${index})">Del</button>
-                        </div>
-                        <div class="list-item-sub">📍 <strong>Dest:</strong> ${item.dest}</div>
-                        <div class="list-item-sub">💬 <strong>Purp:</strong> ${item.purp}</div>
-                    </div>`;
-                });
-                container.innerHTML = html;
-            }
-        }
+        // --- FETCH DATA ---
+        window.loadStatus = async function() {
+            const container = document.getElementById('status-list');
+            container.innerHTML = '<p style="text-align:center;">Loading...</p>';
 
-        // --- SUBMIT LOGIC (WITH OVERRIDE CHECK) ---
-        window.submitTO = async function() {
-            if(itineraryDraft.length === 0) { alert("Add at least one itinerary date."); return; }
-            
-            const draftDates = itineraryDraft.map(i => i.date);
-            let psoOverrideTriggered = false;
+            try {
+                // Querying 'travel_orders' table
+                const { data: tos, error } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', { ascending: false }).limit(10);
+                
+                if(error) throw error;
+                if(!tos || tos.length === 0) { container.innerHTML = '<p style="text-align:center;">No records found.</p>'; return; }
 
-            try {
-                // 1. Check PSO Overlap
-                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-                if (psos) {
-                    for(let pso of psos) {
-                        for(let d of draftDates) {
-                            if(d >= pso.start_date && d <= pso.end_date) {
-                                if(!confirm(`Conflict with PSO #${pso.pso_no}. Proceed subject to PARPO approval?`)) return;
-                                psoOverrideTriggered = true;
-                                break;
-                            }
-                        }
-                        if(psoOverrideTriggered) break;
-                    }
-                }
+                const ids = tos.map(t => t.to_no);
+                const { data: itins } = await supabase.from('itinerary').select('*').in('to_no', ids);
 
-                // 2. SIMPLIFIED TO OVERRIDE LOGIC
-                const { data: existingTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-                if (existingTOs && existingTOs.length > 0) {
-                    const toNums = existingTOs.map(t => t.to_no);
-                    const { data: existingItins } = await supabase.from('itinerary').select('to_no, travel_date').in('to_no', toNums).in('travel_date', draftDates);
-                    
-                    if (existingItins && existingItins.length > 0) {
-                        const conflictingTOs = [...new Set(existingItins.map(i => i.to_no))];
-                        
-                        // Mobile simplified override: Ask once, delete old ones entirely.
-                        if(confirm(`Existing applications found on these dates:\n${conflictingTOs.join(', ')}\n\nDo you want to DELETE the old applications and override them with this new one?`)) {
-                            // User clicked Yes -> Delete old records to make way for new one
-                            await supabase.from('itinerary').delete().in('to_no', conflictingTOs);
-                            await supabase.from('travel_orders').delete().in('to_no', conflictingTOs);
-                        } else {
-                            // User cancelled
-                            return; 
-                        }
-                    }
-                }
-
-                // 3. Create New TO Number
-                const year = new Date().getFullYear();
-                const divCode = (currentUser.division || 'GEN').substring(0, 5).toUpperCase();
-                const { data: maxTo } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${divCode}-%`).order('to_no', { ascending: false }).limit(1);
-                
-                let seq = maxTo && maxTo.length > 0 ? parseInt(maxTo[0].to_no.split('-')[2]) + 1 : 1;
-                const newToId = `${year}-${divCode}-${String(seq).padStart(5, '0')}`;
-
-                // 4. Route Status
-                let transport = document.getElementById('to-transport').value;
-                let unit = (currentUser.unit || '').toUpperCase();
-                let status = "PENDING_CHIEF";
-                
-                if (transport === "GOV'T VEHICLE") status = "PENDING_VEHICLE_APPROVER";
-                else if (unit === "PARPO") status = "PENDING_PARPO";
-                else if (unit) status = "PENDING_UNIT_HEAD";
-
-                // 5. Insert to Database
-                await supabase.from('travel_orders').insert({
-                    to_no: newToId, emp_id: currentUser.emp_id, emp_name: currentUser.full_name,
-                    unit: currentUser.unit, division: currentUser.division,
-                    status: status, transport: transport, 
-                    report_to: document.getElementById('to-report').value,
-                    remarks: psoOverrideTriggered ? "PSO_OVERRIDE" : ""
-                });
-
-                const inserts = itineraryDraft.map(i => ({
-                    to_no: newToId, travel_date: i.date, destination: i.dest, purpose: i.purp
-                }));
-                await supabase.from('itinerary').insert(inserts);
-
-                alert(`Success! Application ${newToId} submitted.\nStatus: ${status.replace(/_/g, ' ')}`);
-                
-                // Reset Form
-                itineraryDraft = [];
-                renderDraft();
-                document.getElementById('to-report').value = '';
-                
-                // Jump to Status view
-                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
-
-            } catch(e) {
-                alert("Database Error: " + e.message);
-            }
-        }
-
-        // --- FETCH STATUS LOGIC ---
-        window.loadStatus = async function() {
-            const container = document.getElementById('status-list');
-            container.innerHTML = '<p style="text-align: center; color: gray;">Loading...</p>';
-
-            try {
-                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', { ascending: false }).limit(15);
-                
-                if(!tos || tos.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: gray;">No applications found.</p>';
-                    return;
-                }
-
-                const toNums = tos.map(t => t.to_no);
-                const { data: itins } = await supabase.from('itinerary').select('*').in('to_no', toNums);
-
-                let html = '';
-                tos.forEach(to => {
-                    const related = (itins || []).filter(i => i.to_no === to.to_no);
-                    const dates = related.map(i => i.travel_date).sort();
-                    const dests = [...new Set(related.map(i => i.destination))].join(', ');
-                    
-                    let dateDisplay = dates.length > 0 ? (dates.length > 1 ? `${dates[0]} to ${dates[dates.length-1]}` : dates[0]) : "N/A";
-                    
-                    let badge = "bg-pending";
-                    if(to.status.includes("APPROVED")) badge = "bg-approved";
-                    
-                    html += `
-                    <div class="list-item">
-                        <div class="list-item-title">
-                            ${to.to_no}
-                            <span class="badge ${badge}">${to.status.replace(/_/g, ' ')}</span>
-                        </div>
-                        <div class="list-item-sub">📅 ${dateDisplay}</div>
-                        <div class="list-item-sub">📍 ${dests || 'N/A'}</div>
-                        <div class="list-item-sub" style="margin-top:5px; font-style:italic;">
-                            Route Info: ${to.remarks || 'Standard'}
-                        </div>
-                    </div>`;
-                });
-                container.innerHTML = html;
-
-            } catch(e) {
-                container.innerHTML = '<p style="text-align: center; color: red;">Failed to load data.</p>';
-            }
-        }
-
-        // --- PASSWORD CHANGE LOGIC ---
-        window.changePassword = async function() {
-            const curr = document.getElementById('pwd-curr').value;
-            const nw = document.getElementById('pwd-new').value;
-            const conf = document.getElementById('pwd-conf').value;
-
-            if(!curr || !nw || !conf) { alert("All fields required."); return; }
-            if(nw !== conf) { alert("New passwords do not match."); return; }
-            if(curr !== currentUser.pass) { alert("Incorrect current password."); return; }
-
-            try {
-                const { error } = await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-                if(error) throw error;
-                
-                currentUser.pass = nw;
-                alert("Password updated securely!");
-                document.getElementById('pwd-curr').value = '';
-                document.getElementById('pwd-new').value = '';
-                document.getElementById('pwd-conf').value = '';
-            } catch(e) {
-                alert("Error updating password.");
-            }
-        }
-    </script>
+                container.innerHTML = tos.map(to => {
+                    const related = itins?.filter(i => i.to_no === to.to_no) || [];
+                    const dates = related.map(r => r.travel_date).sort();
+                    const badge = to.status.includes('APPROVED') ? 'bg-approved' : 'bg-pending';
+                    return `
+                        <div class="list-item">
+                            <div class="list-item-title">${to.to_no} <span class="badge ${badge}">${to.status}</span></div>
+                            <div class="list-item-sub">📅 ${dates[0] || 'N/A'} ${dates.length > 1 ? ' to ' + dates[dates.length-1] : ''}</div>
+                            <div class="list-item-sub">📍 ${[...new Set(related.map(r => r.destination))].join(', ')}</div>
+                        </div>`;
+                }).join('');
+            } catch(e) { 
+                container.innerHTML = `<p style="color:red; text-align:center;">Failed to load: ${e.message}</p>`;
+            }
+        }
+    </script>
 </body>
 </html>
