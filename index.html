@@ -39,7 +39,7 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); font-size: 11px; padding: 5px 10px; width: auto; border-radius: 4px; }
 
-        /* Calendar Controls */
+        /* Calendar */
         .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #f0f4f8; padding: 8px; border-radius: 8px; }
         .cal-nav button { background: var(--dar-green); color: white; border: none; border-radius: 4px; padding: 5px 15px; font-weight: bold; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
@@ -83,7 +83,7 @@
         <div class="app-header">
             <div>
                 <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
-                <div id="user-div" style="font-size: 11px; color: var(--dar-gold); font-weight: bold;">Division</div>
+                <div id="user-info" style="font-size: 10px; color: var(--dar-gold); font-weight: bold;">Division | Position</div>
             </div>
             <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
         </div>
@@ -118,7 +118,7 @@
                 <input type="date" id="itin-date" onkeydown="return false">
                 <label>Destination</label>
                 <input type="text" id="itin-dest" placeholder="Where to?">
-                <label>Detailed Purpose</label>
+                <label>Purpose</label>
                 <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
                 <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
                 <div id="itin-draft-list" style="margin-top: 15px;"></div>
@@ -194,11 +194,13 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
+            // Fetching all columns including division and position [cite: 2026-02-14]
             const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
             if (data && data.pass === pass) {
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-div').innerText = data.division || 'DAR';
+                // Header updated with Division and Position [cite: 2026-02-14]
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`;
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 document.getElementById('itin-date').min = todayStr;
@@ -354,7 +356,7 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // CALENDAR
+        // CALENDAR LOGIC
         window.changeCalMonth = function(delta) { calDate.setMonth(calDate.getMonth() + delta); renderCalendar(); };
 
         async function renderCalendar() {
@@ -402,7 +404,7 @@
             info.innerHTML = html; info.style.display = 'block';
         };
 
-        // STATUS & SECURITY
+        // APPLICATION STATUS LOGIC [cite: 2026-02-14]
         async function loadStatus() {
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
             const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('to_no', {ascending: false}).limit(10);
@@ -410,7 +412,21 @@
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                html += `<div class="card"><span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span><div style="font-weight:bold; font-size:14px;">${to.to_no}</div>${itin?.map(i => `<div style="font-size:11px; margin-top:5px;">📅 ${i.travel_date} - ${i.destination}</div>`).join('')}</div>`;
+                // Status card updated with Division, Destination, and Purpose [cite: 2026-02-14]
+                html += `
+                    <div class="card">
+                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                        <div style="font-weight:bold; font-size:14px;">${to.to_no}</div>
+                        <div style="font-size:11px; color:gray; margin-top:2px;">Division: ${to.division}</div>
+                        <div style="margin-top:10px; border-top:1px dashed #eee; padding-top:8px;">
+                            ${itin?.map(i => `
+                                <div style="font-size:11px; margin-bottom:8px;">
+                                    <strong>📅 ${i.travel_date}</strong><br>
+                                    📍 <strong>Dest:</strong> ${i.destination}<br>
+                                    💬 <strong>Purp:</strong> ${i.purpose}
+                                </div>`).join('')}
+                        </div>
+                    </div>`;
             }
             list.innerHTML = html || "No records.";
         }
