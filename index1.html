@@ -402,7 +402,6 @@
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    // 2 INCH RIGHT MARGIN (210mm - 51mm = 159mm)
                     doc.text(`Date Filed: ${filingDate}`, 159, 52, { align: 'right' });
 
                     let warningY = 58;
@@ -411,50 +410,63 @@
                     if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
                     doc.setTextColor(0,0,0);
 
-                    // STRICT 6MM VERTICAL SPACING (SINGLE SPACING) & 159MM RIGHT BOUNDARY
-                    doc.setFontSize(11); doc.text("NAME:", 20, 75);
-                    doc.text(names, 45, 75); doc.line(45, 76, 159, 76);
+                    // Dynamic Y Content Mapping
+                    let curY = 75;
+                    doc.setFontSize(11); doc.text("NAME:", 20, curY);
+                    doc.text(names, 45, curY); doc.line(45, curY+1, 159, curY+1);
 
-                    doc.text("POSITION:", 20, 81);
-                    doc.text(positions, 45, 81); doc.line(45, 82, 100, 82);
-                    doc.text("STATION:", 110, 81);
-                    doc.text(stations, 130, 81); doc.line(130, 82, 159, 82);
+                    curY += 6;
+                    doc.text("POSITION:", 20, curY);
+                    doc.text(positions, 45, curY); doc.line(45, curY+1, 100, curY+1);
+                    doc.text("STATION:", 110, curY);
+                    doc.text(stations, 130, curY); doc.line(130, curY+1, 159, curY+1);
 
-                    doc.text("MEANS OF TRANSPORTATION:", 20, 87);
+                    curY += 6;
+                    doc.text("MEANS OF TRANSPORTATION:", 20, curY);
                     const check = (x, y, label, val) => {
                         doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5);
                         doc.setFont("helvetica", "normal"); doc.text(label, x+6, y+3.5); doc.setFont("helvetica", "bold");
                     };
-                    check(30, 91, "AIR", od.transport === "AIR");
-                    check(80, 91, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
-                    check(30, 97, "LAND", od.transport === "LAND");
-                    check(80, 97, "OTHERS", od.transport === "OTHERS");
+                    check(30, curY+4, "AIR", od.transport === "AIR");
+                    check(80, curY+4, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
+                    check(30, curY+10, "LAND", od.transport === "LAND");
+                    check(80, curY+10, "OTHERS", od.transport === "OTHERS");
 
-                    doc.text("DESTINATION:", 20, 105);
+                    curY += 18;
+                    doc.text("DESTINATION:", 20, curY);
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
                     doc.setFont("helvetica", "normal"); 
-                    doc.text(doc.splitTextToSize(dests, 109), 50, 105); // Width = 159 - 50 = 109
-                    doc.setFont("helvetica", "bold");
-                    doc.line(50, 106, 159, 106);
+                    doc.setFontSize(8); // Smaller font for data
+                    const destLines = doc.splitTextToSize(dests, 109);
+                    doc.text(destLines, 50, curY); 
+                    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+                    doc.line(50, curY+1, 159, curY+1);
+                    
+                    // Increment Y based on Destination length
+                    curY += Math.max(6, destLines.length * 4);
 
-                    doc.text("DEPARTURE:", 20, 111); doc.text(itin_list[0]?.travel_date || "", 50, 111);
-                    doc.text("RETURN:", 110, 111); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 135, 111);
+                    doc.text("DEPARTURE:", 20, curY); doc.text(itin_list[0]?.travel_date || "", 50, curY);
+                    doc.text("RETURN:", 110, curY); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 135, curY);
 
-                    doc.text("REPORT TO:", 20, 117);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 117); doc.setFont("helvetica", "bold");
+                    curY += 6;
+                    doc.text("REPORT TO:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.setFont("helvetica", "bold");
 
-                    doc.text("PURPOSE:", 20, 123);
+                    curY += 6;
+                    doc.text("PURPOSE:", 20, curY);
                     doc.setFont("helvetica", "normal"); 
-                    doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 139), 20, 129); // Width = 159 - 20 = 139
+                    doc.setFontSize(8); // Smaller font for data
+                    const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 139);
+                    doc.text(purpLines, 20, curY + 6); // Offset below label
 
-                    const sy = 225;
+                    const sy = 225; // Keep signatures at original position
                     if(i > 0) {
                         if(img_unit) doc.addImage(img_unit, 'PNG', 30, sy-15, 30, 15);
                         if(img_dc) doc.addImage(img_dc, 'PNG', 130, sy-15, 30, 15);
                         if(img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
                     }
 
-                    doc.setFont("helvetica", "bold");
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text(od.unithead_signed || "________________", 45, sy, { align: 'center' });
                     doc.setFontSize(8); doc.text("UNIT HEAD", 45, sy+4, { align: 'center' });
                     doc.setFontSize(11);
