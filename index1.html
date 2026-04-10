@@ -192,6 +192,23 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
 
+        // HELPER: Pre-loads images and converts to Base64 to prevent "Corrupt PNG" crashes
+        const urlToBase64 = async (url) => {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return null; // Skip if file is missing (404)
+                const blob = await response.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+            } catch (e) {
+                console.error("Image load failed:", url);
+                return null;
+            }
+        };
+
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -353,7 +370,7 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // CORRECTED PDF LOGIC (PRECISE COORDINATES & 12H TIME)
+        // INTEGRATED ROBUST PDF GENERATION
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -364,36 +381,39 @@
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
 
+                const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
                 const positions = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
                 const stations = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
-                const od = group_orders[0];
-                // 12-Hour format for filing date
                 const filingDate = new Date(od.created_at).toLocaleString('en-US', { 
                     month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
                 });
 
-                const getSignatureUrl = async (fullName) => {
-                    if (!fullName || fullName.includes("____")) return null;
-                    const { data } = await supabase.from('employees').select('username').eq('full_name', fullName).single();
-                    return data ? getAssetUrl(`${data.username}.png`) : null;
-                };
+                // Fetch Sig URLs (Check if they exist)
+                const sig_unit_url = od.unithead_signed && !od.unithead_signed.includes("___") ? 
+                    getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.unithead_signed).single()).data?.username}.png`) : null;
+                
+                const sig_dc_url = od.dc_signed && !od.dc_signed.includes("___") ? 
+                    getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.dc_signed).single()).data?.username}.png`) : null;
 
-                const sig_unit = await getSignatureUrl(od.unithead_signed);
-                const sig_dc = await getSignatureUrl(od.dc_signed);
-                const sig_p2 = getAssetUrl("P2.png");
-                const bg_img = getAssetUrl("bg_form.jpg");
-                const qr_img = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`;
+                // PRE-LOAD ALL ASSETS
+                const [img_bg, img_qr, img_p2, img_unit, img_dc] = await Promise.all([
+                    urlToBase64(getAssetUrl("bg_form.jpg")),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
+                    urlToBase64(getAssetUrl("P2.png")),
+                    sig_unit_url ? urlToBase64(sig_unit_url) : null,
+                    sig_dc_url ? urlToBase64(sig_dc_url) : null
+                ]);
 
                 const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
                 for (let i = 0; i < copies.length; i++) {
                     if (i > 0) doc.addPage();
-                    try { doc.addImage(bg_img, 'JPEG', 0, 0, 210, 297); } catch(e) {}
+                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     
                     doc.setFont("helvetica", "italic"); doc.setFontSize(7);
                     doc.text(copies[i], 185, 8);
-                    doc.addImage(qr_img, 'PNG', 170, 10, 25, 25);
+                    if (img_qr) doc.addImage(img_qr, 'PNG', 170, 10, 25, 25);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(16);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
@@ -408,7 +428,7 @@
                     if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
                     doc.setTextColor(0,0,0);
 
-                    // Fields - Precise Coordinates
+                    // Content Drawing
                     doc.setFontSize(11); doc.text("NAME:", 20, 75);
                     doc.text(names, 45, 75); doc.line(45, 76, 190, 76);
 
@@ -418,15 +438,14 @@
                     doc.text(stations, 130, 85); doc.line(130, 86, 190, 86);
 
                     doc.text("MEANS OF TRANSPORTATION:", 20, 95);
-                    const tr = od.transport;
                     const check = (x, y, label, val) => {
                         doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5);
                         doc.setFont("helvetica", "normal"); doc.text(label, x+6, y+3.5); doc.setFont("helvetica", "bold");
                     };
-                    check(30, 100, "AIR", tr === "AIR");
-                    check(80, 100, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
-                    check(30, 107, "LAND", tr === "LAND");
-                    check(80, 107, "OTHERS", tr === "OTHERS");
+                    check(30, 100, "AIR", od.transport === "AIR");
+                    check(80, 100, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
+                    check(30, 107, "LAND", od.transport === "LAND");
+                    check(80, 107, "OTHERS", od.transport === "OTHERS");
 
                     doc.text("DESTINATION:", 20, 120);
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
@@ -442,22 +461,25 @@
                     doc.text("PURPOSE:", 20, 155);
                     doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 170), 20, 162);
 
-                    // Signatures
+                    // Signatures (Duplicate/Triplicate Only)
                     const sy = 225;
-                    if(sig_unit && i > 0) doc.addImage(sig_unit, 'PNG', 30, sy-15, 30, 15);
+                    if(i > 0) {
+                        if(img_unit) doc.addImage(img_unit, 'PNG', 30, sy-15, 30, 15);
+                        if(img_dc) doc.addImage(img_dc, 'PNG', 130, sy-15, 30, 15);
+                        if(img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
+                    }
+
+                    doc.setFont("helvetica", "bold");
                     doc.text(od.unithead_signed || "________________", 45, sy, { align: 'center' });
                     doc.setFontSize(8); doc.text("UNIT HEAD", 45, sy+4, { align: 'center' });
-
-                    if(sig_dc && i > 0) doc.addImage(sig_dc, 'PNG', 130, sy-15, 30, 15);
-                    doc.setFontSize(11); doc.text(od.dc_signed || "________________", 145, sy, { align: 'center' });
+                    doc.setFontSize(11);
+                    doc.text(od.dc_signed || "________________", 145, sy, { align: 'center' });
                     doc.setFontSize(8); doc.text("DIVISION CHIEF", 145, sy+4, { align: 'center' });
-
-                    if(i > 0) doc.addImage(sig_p2, 'PNG', 85, 250, 40, 20);
                     doc.setFontSize(12); doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
                     doc.setFontSize(10); doc.text("PARPO II", 105, 280, { align: 'center' });
                 }
                 doc.save(`TO_${toNo}.pdf`);
-            } catch (e) { alert("PDF Error: " + e.message); }
+            } catch (e) { alert("PDF Error: Check if all asset files exist."); console.error(e); }
         };
 
         window.cancelApprovedTO = async function(toNo) {
