@@ -192,21 +192,17 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
 
-        // HELPER: Pre-loads images and converts to Base64 to prevent "Corrupt PNG" crashes
         const urlToBase64 = async (url) => {
             try {
                 const response = await fetch(url);
-                if (!response.ok) return null; // Skip if file is missing (404)
+                if (!response.ok) return null;
                 const blob = await response.blob();
                 return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onloadend = () => resolve(reader.result);
                     reader.readAsDataURL(blob);
                 });
-            } catch (e) {
-                console.error("Image load failed:", url);
-                return null;
-            }
+            } catch (e) { return null; }
         };
 
         window.handleLogin = async function() {
@@ -268,11 +264,9 @@
             const date = document.getElementById('itin-date').value;
             const dest = document.getElementById('itin-dest').value.trim();
             const purp = document.getElementById('itin-purp').value.trim();
-
             if(!date || !dest || !purp) return alert("Fill all fields.");
             if(date < todayStr) return alert("No backdating.");
             if(itineraryDraft.some(i => i.date === date)) return alert("Duplicate date.");
-
             itineraryDraft.push({ date, dest, purp });
             document.getElementById('itin-dest').value = ''; document.getElementById('itin-purp').value = '';
             renderItinerary();
@@ -292,34 +286,28 @@
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             const reportTo = document.getElementById('to-report').value.trim();
             if (!reportTo) return alert("Report To is required.");
-            
             const transport = document.getElementById('to-transport').value;
             const draftDates = itineraryDraft.map(it => it.date);
             let remarks = "";
 
             try {
-                // PSO Conflict Check
                 const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
                 if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
                     if(!confirm("Conflicts with PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
                     remarks = "WITH EXISTING PSO/RSO";
                 }
 
-                // Overwrite Logic (Pending & Approved)
                 const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
                 if(activeTOs?.length > 0) {
                     const toNos = activeTOs.map(t => t.to_no);
                     const { data: conflicts } = await supabase.from('itinerary').select('*').in('to_no', toNos).in('travel_date', draftDates);
-                    
                     if(conflicts?.length > 0) {
                         const targetToNo = conflicts[0].to_no;
                         const targetTO = activeTOs.find(t => t.to_no === targetToNo);
-                        
                         if(targetTO.status !== "APPROVED") {
                             if(!confirm(`Overwrite Pending TO ${targetToNo}?`)) return;
                             await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', targetToNo);
                         } else {
-                            // Multi-day Split Logic for Approved TO
                             const { data: allItins } = await supabase.from('itinerary').select('*').eq('to_no', targetToNo);
                             if(allItins.length === 1) {
                                 if(!confirm(`Overwrite Approved TO ${targetToNo}? Approver will be notified.`)) return;
@@ -353,7 +341,6 @@
 
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
-
                 alert("Submitted: " + finalToNo); location.reload();
             } catch(e) { alert("Submission error: " + e.message); }
         };
@@ -370,7 +357,6 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // INTEGRATED ROBUST PDF GENERATION
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -390,14 +376,11 @@
                     month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
                 });
 
-                // Fetch Sig URLs (Check if they exist)
                 const sig_unit_url = od.unithead_signed && !od.unithead_signed.includes("___") ? 
                     getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.unithead_signed).single()).data?.username}.png`) : null;
-                
                 const sig_dc_url = od.dc_signed && !od.dc_signed.includes("___") ? 
                     getAssetUrl(`${(await supabase.from('employees').select('username').eq('full_name', od.dc_signed).single()).data?.username}.png`) : null;
 
-                // PRE-LOAD ALL ASSETS
                 const [img_bg, img_qr, img_p2, img_unit, img_dc] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
                     urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
@@ -419,50 +402,48 @@
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    doc.text(`Date Filed: ${filingDate}`, 144, 52, { align: 'right' });
+                    // 2 INCH RIGHT MARGIN (210mm - 50.8mm = 159.2mm)
+                    doc.text(`Date Filed: ${filingDate}`, 159, 52, { align: 'right' });
 
-                    // Warnings
                     let warningY = 58;
                     doc.setTextColor(200, 0, 0); doc.setFont("helvetica", "bold");
                     if (od.remarks?.includes("PSO")) { doc.text("WITH EXISTING PSO/RSO, SUBJECT FOR PARPO FINAL APPROVAL", 105, warningY, { align: 'center' }); warningY += 5; }
                     if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
                     doc.setTextColor(0,0,0);
 
-                    // Content Drawing with Compressed Row Spacing
+                    // SINGLE SPACING LOGIC (APPROX 6mm GAPS)
                     doc.setFontSize(11); doc.text("NAME:", 20, 75);
                     doc.text(names, 45, 75); doc.line(45, 76, 190, 76);
 
-                    // Reduced spacing from 10mm to 8mm
-                    doc.text("POSITION:", 20, 83);
-                    doc.text(positions, 45, 83); doc.line(45, 84, 100, 84);
-                    doc.text("STATION:", 110, 83);
-                    doc.text(stations, 130, 83); doc.line(130, 84, 190, 84);
+                    doc.text("POSITION:", 20, 81);
+                    doc.text(positions, 45, 81); doc.line(45, 82, 100, 82);
+                    doc.text("STATION:", 110, 81);
+                    doc.text(stations, 130, 81); doc.line(130, 82, 190, 82);
 
-                    doc.text("MEANS OF TRANSPORTATION:", 20, 91);
+                    doc.text("MEANS OF TRANSPORTATION:", 20, 87);
                     const check = (x, y, label, val) => {
                         doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5);
                         doc.setFont("helvetica", "normal"); doc.text(label, x+6, y+3.5); doc.setFont("helvetica", "bold");
                     };
-                    check(30, 96, "AIR", od.transport === "AIR");
-                    check(80, 96, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
-                    check(30, 103, "LAND", od.transport === "LAND");
-                    check(80, 103, "OTHERS", od.transport === "OTHERS");
+                    check(30, 91, "AIR", od.transport === "AIR");
+                    check(80, 91, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
+                    check(30, 98, "LAND", od.transport === "LAND");
+                    check(80, 98, "OTHERS", od.transport === "OTHERS");
 
-                    doc.text("DESTINATION:", 20, 115);
+                    doc.text("DESTINATION:", 20, 108);
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
-                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(dests, 140), 50, 115); doc.setFont("helvetica", "bold");
-                    doc.line(50, 116, 190, 116);
+                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(dests, 140), 50, 108); doc.setFont("helvetica", "bold");
+                    doc.line(50, 109, 190, 109);
 
-                    doc.text("DEPARTURE:", 20, 125); doc.text(itin_list[0]?.travel_date || "", 50, 125);
-                    doc.text("RETURN:", 110, 125); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 140, 125);
+                    doc.text("DEPARTURE:", 20, 114); doc.text(itin_list[0]?.travel_date || "", 50, 114);
+                    doc.text("RETURN:", 110, 114); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 140, 114);
 
-                    doc.text("REPORT TO:", 20, 133);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 133); doc.setFont("helvetica", "bold");
+                    doc.text("REPORT TO:", 20, 120);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 120); doc.setFont("helvetica", "bold");
 
-                    doc.text("PURPOSE:", 20, 141);
-                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 170), 20, 147);
+                    doc.text("PURPOSE:", 20, 126);
+                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 170), 20, 132);
 
-                    // Signatures (Duplicate/Triplicate Only)
                     const sy = 225;
                     if(i > 0) {
                         if(img_unit) doc.addImage(img_unit, 'PNG', 30, sy-15, 30, 15);
@@ -515,17 +496,14 @@
         async function renderCalendar() {
             const month = calDate.getMonth(), year = calDate.getFullYear();
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-            
             const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             const myToNos = myTOs?.map(t => t.to_no) || [];
             const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no').in('to_no', myToNos);
             const { data: psos } = await supabase.from('pso_records').select('start_date, end_date').eq('emp_id', currentUser.emp_id);
             const { data: holidays } = await supabase.from('holidays').select('*');
-
             const header = document.getElementById('cal-header'); const body = document.getElementById('cal-body');
             header.innerHTML = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => `<div class="calendar-header">${d}</div>`).join('');
             body.innerHTML = '';
-
             const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
             for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
             for(let d=1; d<=last; d++) {
