@@ -267,6 +267,24 @@
             if(!date || !dest || !purp) return alert("Fill all fields.");
             if(date < todayStr) return alert("No backdating.");
             if(itineraryDraft.some(i => i.date === date)) return alert("Duplicate date.");
+
+            // REAL-TIME CONFLICT CHECK: PSO & TOs
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            if(psos?.some(p => date >= p.start_date && date <= p.end_date)) {
+                if(!confirm(`ALERT: Existing PSO found for ${date}. Continue adding? (Requires PARPO Final Approval)`)) return;
+            }
+
+            const { data: myTOs } = await supabase.from('travel_orders').select('to_no, status').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            if(myTOs?.length > 0) {
+                const toNos = myTOs.map(t => t.to_no);
+                const { data: conflicts } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', date);
+                if(conflicts?.length > 0) {
+                    const targetToNo = conflicts[0].to_no;
+                    const status = myTOs.find(t => t.to_no === targetToNo).status;
+                    if(!confirm(`ALERT: Conflicting ${status} TO (${targetToNo}) found for ${date}. Continue adding? (Will prompt to overwrite/split on submit)`)) return;
+                }
+            }
+
             itineraryDraft.push({ date, dest, purp });
             document.getElementById('itin-dest').value = ''; document.getElementById('itin-purp').value = '';
             renderItinerary();
@@ -436,13 +454,12 @@
                     doc.text("DESTINATION:", 20, curY);
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
                     doc.setFont("helvetica", "normal"); 
-                    doc.setFontSize(8); // Smaller font for data
+                    doc.setFontSize(8); 
                     const destLines = doc.splitTextToSize(dests, 109);
                     doc.text(destLines, 50, curY); 
                     doc.setFontSize(11); doc.setFont("helvetica", "bold");
                     doc.line(50, curY+1, 159, curY+1);
                     
-                    // Increment Y based on Destination length
                     curY += Math.max(6, destLines.length * 4);
 
                     doc.text("DEPARTURE:", 20, curY); doc.text(itin_list[0]?.travel_date || "", 50, curY);
@@ -455,15 +472,20 @@
                     curY += 6;
                     doc.text("PURPOSE:", 20, curY);
                     doc.setFont("helvetica", "normal"); 
-                    doc.setFontSize(8); // Smaller font for data
+                    doc.setFontSize(8); 
                     const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 139);
-                    doc.text(purpLines, 20, curY + 6); // Offset below label
+                    doc.text(purpLines, 20, curY + 6); 
 
-                    const sy = 225; // Keep signatures at original position
+                    const sy = 225; 
                     if(i > 0) {
                         if(img_unit) doc.addImage(img_unit, 'PNG', 30, sy-15, 30, 15);
                         if(img_dc) doc.addImage(img_dc, 'PNG', 130, sy-15, 30, 15);
-                        if(img_p2) doc.addImage(img_p2, 'PNG', 85, 250, 40, 20);
+                        
+                        // Ricardo C. Garcia Coordinate Mapping (mm conversion assuming input was pt)
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+                        doc.text("RICARDO C. GARCIA", 323, 254);
+                        if(img_p2) doc.addImage(img_p2, 'PNG', 358, 272 - 15, 40, 20); // Adjusted for 'on top' look
+                        doc.setFontSize(10); doc.text("PARPO II", 323, 254 + 5);
                     }
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
@@ -472,8 +494,6 @@
                     doc.setFontSize(11);
                     doc.text(od.dc_signed || "________________", 145, sy, { align: 'center' });
                     doc.setFontSize(8); doc.text("DIVISION CHIEF", 145, sy+4, { align: 'center' });
-                    doc.setFontSize(12); doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
-                    doc.setFontSize(10); doc.text("PARPO II", 105, 280, { align: 'center' });
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: Check if all asset files exist."); console.error(e); }
