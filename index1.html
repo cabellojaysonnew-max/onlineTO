@@ -14,23 +14,17 @@
     --dar-green: #003811;
     --dar-light: #006400;
     --dar-gold: #D4AF37;
-
     --bg-main: #eef3f1;
     --card-bg: #ffffff;
-
     --text-main: #1f2937;
     --text-muted: #6b7280;
-
     --danger: #dc2626;
     --success: #16a34a;
     --warning: #f59e0b;
 }
 
 /* BASE */
-* {
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-}
+* { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
 
 body {
     margin: 0;
@@ -39,7 +33,7 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* SCREENS */
+/* SCREEN */
 .screen { display: none; }
 .screen.active { display: block; animation: fadeIn 0.3s ease; }
 
@@ -81,9 +75,7 @@ body {
     transition: 0.2s;
 }
 
-.card:hover {
-    transform: translateY(-2px);
-}
+.card:hover { transform: translateY(-2px); }
 
 /* HEADINGS */
 h4 {
@@ -95,13 +87,14 @@ h4 {
     padding-left: 8px;
 }
 
-/* INPUTS */
+/* LABEL */
 label {
     font-size: 11px;
     font-weight: bold;
     color: var(--text-muted);
 }
 
+/* INPUTS */
 input, select, textarea {
     width: 100%;
     padding: 12px;
@@ -136,9 +129,7 @@ input:focus, select:focus, textarea:focus {
     transition: 0.15s;
 }
 
-.btn:active {
-    transform: scale(0.97);
-}
+.btn:active { transform: scale(0.97); }
 
 .btn-primary {
     background: linear-gradient(135deg, var(--dar-green), #025928);
@@ -160,35 +151,27 @@ input:focus, select:focus, textarea:focus {
     flex: 1;
 }
 
-/* PERSONNEL LIST */
+/* ACTION GROUP */
+.action-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* SEARCH */
+.search-results { border-radius: 10px; }
+.search-row:hover { background: #f3f4f6; }
+
+/* PERSONNEL */
 #personnel-draft-list div {
     background: #ecfdf5 !important;
     border: 1px solid #bbf7d0;
 }
 
-/* SEARCH */
-.search-results {
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.search-row:hover {
-    background: #f3f4f6;
-}
-
 /* CALENDAR */
-.calendar-day {
-    border-radius: 10px;
-    transition: 0.2s;
-}
-
-.calendar-day:hover {
-    background: #f9fafb;
-}
-
-.today {
-    background: #fffbea;
-}
+.calendar-day { border-radius: 10px; }
+.calendar-day:hover { background: #f9fafb; }
+.today { background: #fffbea; }
 
 /* NAV */
 .bottom-nav {
@@ -197,6 +180,7 @@ input:focus, select:focus, textarea:focus {
     width: 100%;
     background: #022c22;
     display: flex;
+    z-index: 1000;
     box-shadow: 0 -5px 15px rgba(0,0,0,0.25);
 }
 
@@ -226,16 +210,13 @@ input:focus, select:focus, textarea:focus {
 .bg-cancelled { background: #fef2f2; color: #991b1b; }
 
 #qr-buffer { display:none; }
-
 </style>
 </head>
 
-<!-- ✅ BODY + SCRIPT BELOW IS EXACTLY YOUR ORIGINAL CODE (UNCHANGED) -->
-
 <body>
 
-<!-- KEEP YOUR ORIGINAL BODY AND SCRIPT HERE EXACTLY -->
-<!-- DO NOT MODIFY ANYTHING BELOW -->
+<!-- ⚠️ ORIGINAL BODY + SCRIPT UNCHANGED -->
+<!-- PASTE YOUR EXISTING BODY AND SCRIPT HERE EXACTLY -->
 
 </body>
 </html>
