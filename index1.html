@@ -402,7 +402,7 @@
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    // 2 INCH RIGHT MARGIN (210mm - 50.8mm = 159.2mm)
+                    // 2 INCH RIGHT MARGIN (210mm - 51mm = 159mm)
                     doc.text(`Date Filed: ${filingDate}`, 159, 52, { align: 'right' });
 
                     let warningY = 58;
@@ -411,14 +411,14 @@
                     if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
                     doc.setTextColor(0,0,0);
 
-                    // SINGLE SPACING LOGIC (APPROX 6mm GAPS)
+                    // STRICT 6MM VERTICAL SPACING (SINGLE SPACING) & 159MM RIGHT BOUNDARY
                     doc.setFontSize(11); doc.text("NAME:", 20, 75);
-                    doc.text(names, 45, 75); doc.line(45, 76, 190, 76);
+                    doc.text(names, 45, 75); doc.line(45, 76, 159, 76);
 
                     doc.text("POSITION:", 20, 81);
                     doc.text(positions, 45, 81); doc.line(45, 82, 100, 82);
                     doc.text("STATION:", 110, 81);
-                    doc.text(stations, 130, 81); doc.line(130, 82, 190, 82);
+                    doc.text(stations, 130, 81); doc.line(130, 82, 159, 82);
 
                     doc.text("MEANS OF TRANSPORTATION:", 20, 87);
                     const check = (x, y, label, val) => {
@@ -427,22 +427,25 @@
                     };
                     check(30, 91, "AIR", od.transport === "AIR");
                     check(80, 91, "GOV'T VEHICLE", od.transport === "GOV'T VEHICLE");
-                    check(30, 98, "LAND", od.transport === "LAND");
-                    check(80, 98, "OTHERS", od.transport === "OTHERS");
+                    check(30, 97, "LAND", od.transport === "LAND");
+                    check(80, 97, "OTHERS", od.transport === "OTHERS");
 
-                    doc.text("DESTINATION:", 20, 108);
+                    doc.text("DESTINATION:", 20, 105);
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
-                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(dests, 140), 50, 108); doc.setFont("helvetica", "bold");
-                    doc.line(50, 109, 190, 109);
+                    doc.setFont("helvetica", "normal"); 
+                    doc.text(doc.splitTextToSize(dests, 109), 50, 105); // Width = 159 - 50 = 109
+                    doc.setFont("helvetica", "bold");
+                    doc.line(50, 106, 159, 106);
 
-                    doc.text("DEPARTURE:", 20, 114); doc.text(itin_list[0]?.travel_date || "", 50, 114);
-                    doc.text("RETURN:", 110, 114); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 140, 114);
+                    doc.text("DEPARTURE:", 20, 111); doc.text(itin_list[0]?.travel_date || "", 50, 111);
+                    doc.text("RETURN:", 110, 111); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 135, 111);
 
-                    doc.text("REPORT TO:", 20, 120);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 120); doc.setFont("helvetica", "bold");
+                    doc.text("REPORT TO:", 20, 117);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 117); doc.setFont("helvetica", "bold");
 
-                    doc.text("PURPOSE:", 20, 126);
-                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 170), 20, 132);
+                    doc.text("PURPOSE:", 20, 123);
+                    doc.setFont("helvetica", "normal"); 
+                    doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 139), 20, 129); // Width = 159 - 20 = 139
 
                     const sy = 225;
                     if(i > 0) {
