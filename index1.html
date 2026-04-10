@@ -192,13 +192,6 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
 
-        document.getElementById('itin-date').addEventListener('change', function() {
-            if(this.value < todayStr) {
-                alert("Backdating is prohibited.");
-                this.value = todayStr;
-            }
-        });
-
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -263,14 +256,6 @@
             if(date < todayStr) return alert("No backdating.");
             if(itineraryDraft.some(i => i.date === date)) return alert("Duplicate date.");
 
-            const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            if(active?.length > 0) {
-                const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', active.map(a => a.to_no)).eq('travel_date', date);
-                if(conf?.length > 0) {
-                    if(!confirm(`Conflict on ${date} with TO ${conf[0].to_no}. Add anyway? Overwrite rules will apply at submission.`)) return;
-                }
-            }
-
             itineraryDraft.push({ date, dest, purp });
             document.getElementById('itin-dest').value = ''; document.getElementById('itin-purp').value = '';
             renderItinerary();
@@ -288,7 +273,6 @@
 
         window.submitTO = async function() {
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
-            
             const reportTo = document.getElementById('to-report').value.trim();
             if (!reportTo) return alert("Report To is required.");
             
@@ -297,23 +281,28 @@
             let remarks = "";
 
             try {
+                // PSO Conflict Check
                 const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
                 if(psos?.some(p => draftDates.some(d => d >= p.start_date && d <= p.end_date))) {
                     if(!confirm("Conflicts with PSO. Mark as 'SUBJECT FOR PARPO FINAL APPROVAL'?")) return;
                     remarks = "WITH EXISTING PSO/RSO";
                 }
 
+                // Overwrite Logic (Pending & Approved)
                 const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
                 if(activeTOs?.length > 0) {
                     const toNos = activeTOs.map(t => t.to_no);
                     const { data: conflicts } = await supabase.from('itinerary').select('*').in('to_no', toNos).in('travel_date', draftDates);
+                    
                     if(conflicts?.length > 0) {
                         const targetToNo = conflicts[0].to_no;
                         const targetTO = activeTOs.find(t => t.to_no === targetToNo);
+                        
                         if(targetTO.status !== "APPROVED") {
                             if(!confirm(`Overwrite Pending TO ${targetToNo}?`)) return;
                             await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', targetToNo);
                         } else {
+                            // Multi-day Split Logic for Approved TO
                             const { data: allItins } = await supabase.from('itinerary').select('*').eq('to_no', targetToNo);
                             if(allItins.length === 1) {
                                 if(!confirm(`Overwrite Approved TO ${targetToNo}? Approver will be notified.`)) return;
@@ -355,12 +344,7 @@
         async function generateToNo() {
             const year = new Date().getFullYear();
             const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders')
-                .select('to_no')
-                .like('to_no', `${year}-${div}-%`)
-                .order('to_no', { ascending: false })
-                .limit(1);
-
+            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
             let seq = 1;
             if (data && data[0]) {
                 const parts = data[0].to_no.split('-');
@@ -369,7 +353,7 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // PDF GENERATION LOGIC (Ported from Python FPDF)
+        // CORRECTED PDF LOGIC (PRECISE COORDINATES & 12H TIME)
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -378,130 +362,99 @@
             try {
                 const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                
-                // Fetch employee details for lookup
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
 
-                const names_list = [], positions_list = [], stations_list = [];
-                group_orders.forEach(member => {
-                    const emp = emp_details.find(e => String(e.emp_id) === String(member.emp_id));
-                    names_list.push(String(member.emp_name || emp?.full_name || '').toUpperCase());
-                    if (emp) {
-                        positions_list.push(String(emp.position || '').toUpperCase());
-                        stations_list.push(String(emp.station || '').toUpperCase());
-                    }
-                });
+                const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
+                const positions = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
+                const stations = [...new Set(group_orders.map(m => emp_details.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
                 const od = group_orders[0];
-                const filingDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                const departure_date = itin_list[0]?.travel_date || "N/A";
-                const return_date = itin_list[itin_list.length - 1]?.travel_date || "N/A";
+                // 12-Hour format for filing date
+                const filingDate = new Date(od.created_at).toLocaleString('en-US', { 
+                    month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
+                });
 
                 const getSignatureUrl = async (fullName) => {
                     if (!fullName || fullName.includes("____")) return null;
-                    const { data } = await supabase.from('users').select('username').eq('full_name', fullName).single();
+                    const { data } = await supabase.from('employees').select('username').eq('full_name', fullName).single();
                     return data ? getAssetUrl(`${data.username}.png`) : null;
                 };
 
-                const t_unit = await getSignatureUrl(od.unithead_signed);
-                const t_dc = await getSignatureUrl(od.dc_signed);
-                const t_p2 = getAssetUrl("P2.png");
+                const sig_unit = await getSignatureUrl(od.unithead_signed);
+                const sig_dc = await getSignatureUrl(od.dc_signed);
+                const sig_p2 = getAssetUrl("P2.png");
                 const bg_img = getAssetUrl("bg_form.jpg");
                 const qr_img = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`;
 
-                const copies = [];
-                group_orders.forEach(() => copies.push({ label: "ORIGINAL", esign: false }));
-                copies.push({ label: "DUPLICATE", esign: true });
-                copies.push({ label: "TRIPLICATE", esign: true });
-
-                for (let idx = 0; idx < copies.length; idx++) {
-                    const copy = copies[idx];
-                    if (idx > 0) doc.addPage();
+                const copies = ["ORIGINAL", "DUPLICATE", "TRIPLICATE"];
+                for (let i = 0; i < copies.length; i++) {
+                    if (i > 0) doc.addPage();
                     try { doc.addImage(bg_img, 'JPEG', 0, 0, 210, 297); } catch(e) {}
                     
                     doc.setFont("helvetica", "italic"); doc.setFontSize(7);
-                    doc.text(copy.label, 187, 8, { align: 'center' });
-                    doc.addImage(qr_img, 'PNG', 175, 10, 25, 25);
+                    doc.text(copies[i], 185, 8);
+                    doc.addImage(qr_img, 'PNG', 170, 10, 25, 25);
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(17);
-                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 43, { align: 'center' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
-                    doc.text(`Date: ${filingDate}`, 195, 48, { align: 'right' });
-
-                    let warningY = 55;
-                    doc.setTextColor(192, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                    if (od.remarks?.includes("PSO")) {
-                        doc.text("WITH EXISTING PSO/RSO, SUBJECT FOR PARPO FINAL APPROVAL", 105, warningY, { align: 'center' });
-                        warningY += 5;
-                    }
-                    if (String(od.transport).toUpperCase() === "GOV'T VEHICLE") {
-                        doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' });
-                    }
-                    doc.setTextColor(0, 0, 0);
-
-                    doc.setFontSize(11); doc.text("NAME:", 15, 75);
-                    doc.text(names_list.join(", "), 35, 75); doc.line(35, 76, 195, 76);
-
-                    doc.setFontSize(10); doc.text("POSITION:", 15, 85);
-                    doc.text([...new Set(positions_list)].join(", "), 40, 85); doc.line(40, 86, 100, 86);
-                    doc.text("STATION:", 105, 85);
-                    doc.text([...new Set(stations_list)].join(", "), 125, 85); doc.line(125, 86, 195, 86);
-
-                    doc.text("MEANS OF TRANSPORTATION:", 15, 95);
-                    const tr = String(od.transport).toUpperCase();
-                    const drawCheck = (x, y, label, isChecked) => {
-                        doc.rect(x, y, 4, 4);
-                        if (isChecked) doc.text("X", x + 1, y + 3.2);
-                        doc.setFont("helvetica", "normal"); doc.text(label, x + 6, y + 3.5);
-                        doc.setFont("helvetica", "bold");
-                    };
-                    drawCheck(20, 100, "AIR", tr.includes("AIR"));
-                    drawCheck(80, 100, "GOV'T VEHICLE", tr.includes("GOV'T"));
-                    drawCheck(20, 107, "LAND", tr.includes("LAND"));
-                    drawCheck(80, 107, "OTHERS", tr.includes("OTHERS"));
-
-                    doc.text("DESTINATION:", 15, 120);
-                    const destStr = itin_list.map(i => `${i.destination} - ${i.travel_date}`).join(", ");
-                    doc.setFont("helvetica", "normal");
-                    doc.text(doc.splitTextToSize(destStr, 150), 45, 120);
-                    doc.line(45, 121, 195, 121);
-
-                    doc.setFont("helvetica", "bold"); doc.text("DEPARTURE DATE:", 15, 135);
-                    doc.setFont("helvetica", "normal"); doc.text(departure_date, 55, 135); doc.line(55, 136, 100, 136);
-                    doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 110, 135);
-                    doc.setFont("helvetica", "normal"); doc.text(return_date, 140, 135); doc.line(140, 136, 195, 136);
-
-                    doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 15, 145);
-                    doc.setFont("helvetica", "normal"); doc.text(String(od.report_to || "N/A"), 45, 145); doc.line(45, 146, 195, 146);
-
-                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 15, 155);
-                    const purp_str = itin_list[0]?.purpose || "N/A";
-                    doc.setFont("helvetica", "normal");
-                    doc.text(doc.splitTextToSize(purp_str, 180), 15, 162);
-
-                    doc.setFontSize(8); doc.setFont("helvetica", "italic");
-                    doc.text("In case of seminar/workshop, indicate:", 15, 180);
-                    drawCheck(80, 177, "LIVE IN", purp_str.toUpperCase().includes("LIVE IN"));
-                    drawCheck(110, 177, "LIVE OUT", purp_str.toUpperCase().includes("LIVE OUT"));
-
-                    doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                    doc.text("Recommended by:", 15, 195);
-                    const sy = 220;
-                    if (copy.esign && t_unit) { try { doc.addImage(t_unit, 'PNG', 25, sy - 20, 35, 25); } catch(e){} }
-                    doc.text(String(od.unithead_signed || "").toUpperCase(), 45, sy, { align: 'center' });
-                    doc.line(20, sy + 1, 70, sy + 1);
-                    doc.setFontSize(8); doc.text("UNIT HEAD", 45, sy + 5, { align: 'center' });
-
-                    if (copy.esign && t_dc) { try { doc.addImage(t_dc, 'PNG', 125, sy - 20, 35, 25); } catch(e){} }
-                    doc.setFontSize(10); doc.text(String(od.dc_signed || "").toUpperCase(), 145, sy, { align: 'center' });
-                    doc.line(120, sy + 1, 170, sy + 1);
-                    doc.setFontSize(8); doc.text("DIVISION CHIEF", 145, sy + 5, { align: 'center' });
-
-                    if (copy.esign && t_p2) { try { doc.addImage(t_p2, 'PNG', 85, 245, 35, 25); } catch(e){} }
-                    doc.setFontSize(11); doc.setFont("helvetica", "bold");
-                    doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
+                    
                     doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    doc.text("PARPO II", 105, 280, { align: 'center' });
+                    doc.text(`Date Filed: ${filingDate}`, 195, 52, { align: 'right' });
+
+                    // Warnings
+                    let warningY = 58;
+                    doc.setTextColor(200, 0, 0); doc.setFont("helvetica", "bold");
+                    if (od.remarks?.includes("PSO")) { doc.text("WITH EXISTING PSO/RSO, SUBJECT FOR PARPO FINAL APPROVAL", 105, warningY, { align: 'center' }); warningY += 5; }
+                    if (od.transport === "GOV'T VEHICLE") { doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, warningY, { align: 'center' }); }
+                    doc.setTextColor(0,0,0);
+
+                    // Fields - Precise Coordinates
+                    doc.setFontSize(11); doc.text("NAME:", 20, 75);
+                    doc.text(names, 45, 75); doc.line(45, 76, 190, 76);
+
+                    doc.text("POSITION:", 20, 85);
+                    doc.text(positions, 45, 85); doc.line(45, 86, 100, 86);
+                    doc.text("STATION:", 110, 85);
+                    doc.text(stations, 130, 85); doc.line(130, 86, 190, 86);
+
+                    doc.text("MEANS OF TRANSPORTATION:", 20, 95);
+                    const tr = od.transport;
+                    const check = (x, y, label, val) => {
+                        doc.rect(x, y, 4, 4); if(val) doc.text("X", x+1, y+3.5);
+                        doc.setFont("helvetica", "normal"); doc.text(label, x+6, y+3.5); doc.setFont("helvetica", "bold");
+                    };
+                    check(30, 100, "AIR", tr === "AIR");
+                    check(80, 100, "GOV'T VEHICLE", tr === "GOV'T VEHICLE");
+                    check(30, 107, "LAND", tr === "LAND");
+                    check(80, 107, "OTHERS", tr === "OTHERS");
+
+                    doc.text("DESTINATION:", 20, 120);
+                    const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
+                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(dests, 140), 50, 120); doc.setFont("helvetica", "bold");
+                    doc.line(50, 121, 190, 121);
+
+                    doc.text("DEPARTURE:", 20, 135); doc.text(itin_list[0]?.travel_date || "", 50, 135);
+                    doc.text("RETURN:", 110, 135); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 140, 135);
+
+                    doc.text("REPORT TO:", 20, 145);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, 145); doc.setFont("helvetica", "bold");
+
+                    doc.text("PURPOSE:", 20, 155);
+                    doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(itin_list[0]?.purpose || "", 170), 20, 162);
+
+                    // Signatures
+                    const sy = 225;
+                    if(sig_unit && i > 0) doc.addImage(sig_unit, 'PNG', 30, sy-15, 30, 15);
+                    doc.text(od.unithead_signed || "________________", 45, sy, { align: 'center' });
+                    doc.setFontSize(8); doc.text("UNIT HEAD", 45, sy+4, { align: 'center' });
+
+                    if(sig_dc && i > 0) doc.addImage(sig_dc, 'PNG', 130, sy-15, 30, 15);
+                    doc.setFontSize(11); doc.text(od.dc_signed || "________________", 145, sy, { align: 'center' });
+                    doc.setFontSize(8); doc.text("DIVISION CHIEF", 145, sy+4, { align: 'center' });
+
+                    if(i > 0) doc.addImage(sig_p2, 'PNG', 85, 250, 40, 20);
+                    doc.setFontSize(12); doc.text("RICARDO C. GARCIA", 105, 275, { align: 'center' });
+                    doc.setFontSize(10); doc.text("PARPO II", 105, 280, { align: 'center' });
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -522,17 +475,14 @@
         };
 
         window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
+            if(!confirm("Load this TO back into draft?")) return;
             const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo);
-            
             itineraryDraft = itin.map(i => ({ date: i.travel_date, dest: i.destination, purp: i.purpose }));
             document.getElementById('to-transport').value = to.transport;
             document.getElementById('to-report').value = to.report_to;
-            
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            
             switchTab('apply-view', document.querySelector('.nav-item'));
             renderItinerary();
         };
@@ -560,78 +510,31 @@
                 const hasTO = itins?.some(i => i.travel_date === ds);
                 const hasPSO = psos?.some(p => ds >= p.start_date && ds <= p.end_date);
                 const holiday = holidays?.find(h => h.date === ds);
-
-                body.innerHTML += `
-                    <div class="calendar-day ${ds === todayStr ? 'today' : ''}" onclick="showDayInfo('${ds}', '${holiday?.remarks || ''}')">
-                        ${d}
-                        <div class="dot-container">
-                            ${hasTO ? '<div class="dot dot-to"></div>' : ''}
-                            ${hasPSO ? '<div class="dot dot-pso"></div>' : ''}
-                            ${holiday ? '<div class="dot dot-holiday"></div>' : ''}
-                        </div>
-                    </div>`;
+                body.innerHTML += `<div class="calendar-day ${ds === todayStr ? 'today' : ''}" onclick="showDayInfo('${ds}', '${holiday?.remarks || ''}')">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>' : ''}${hasPSO ? '<div class="dot dot-pso"></div>' : ''}${holiday ? '<div class="dot dot-holiday"></div>' : ''}</div></div>`;
             }
         }
 
         window.showDayInfo = async function(date, hol) {
             const info = document.getElementById('day-details');
             const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const myToNumbers = myTOs?.map(t => t.to_no) || [];
-            const { data: itins } = await supabase.from('itinerary').select('to_no, destination, purpose').in('to_no', myToNumbers).eq('travel_date', date);
-            
-            let html = `<strong>${date}</strong><hr style="border:none; border-top:1px solid #eee;">`;
-            if(hol) html += `<div style="color:red; margin-bottom:8px; font-weight:bold;">🚩 Holiday: ${hol}</div>`; 
-            if(itins?.length) itins.forEach(i => html += `<div style="margin-bottom:8px;">🛫 TO ${i.to_no}: ${i.destination}<br><small>"${i.purpose}"</small></div>`);
-            else if(!hol) html += "No activities scheduled.";
-            
-            info.innerHTML = html; info.style.display = 'block';
+            const { data: itins } = await supabase.from('itinerary').select('to_no, destination, purpose').in('to_no', myTOs?.map(t => t.to_no) || []).eq('travel_date', date);
+            let html = `<strong>${date}</strong><hr>`;
+            if(hol) html += `<div style="color:red; font-weight:bold;">🚩 ${hol}</div>`; 
+            itins?.forEach(i => html += `<div>🛫 TO ${i.to_no}: ${i.destination}</div>`);
+            info.innerHTML = html || "No activities."; info.style.display = 'block';
         };
 
         async function loadStatus() {
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('to_no', {ascending: false}).limit(10);
+            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
             let html = '';
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no);
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                const isPending = to.status.includes('PENDING');
-                const isApproved = to.status === 'APPROVED';
-
-                html += `
-                    <div class="card">
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                        <div style="font-weight:bold; font-size:14px;">${to.to_no}</div>
-                        <div style="font-size:11px; color:gray; margin-top:2px;">Division: ${to.division}</div>
-                        
-                        <div style="margin-top:10px; border-top:1px dashed #eee; padding-top:8px;">
-                            ${itin?.map(i => `
-                                <div style="font-size:11px; margin-bottom:8px;">
-                                    <strong>📅 ${i.travel_date}</strong> | 📍 ${i.destination}
-                                </div>`).join('')}
-                        </div>
-
-                        <div class="action-group">
-                            ${isApproved ? `
-                                <button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">📄 Print PDF</button>
-                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>
-                            ` : ''}
-                            ${isPending ? `
-                                <button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button>
-                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>
-                            ` : ''}
-                        </div>
-                    </div>`;
+                html += `<div class="card"><span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span><div style="font-weight:bold;">${to.to_no}</div><div style="font-size:11px;">${itin?.map(i => `<div>📅 ${i.travel_date} | 📍 ${i.destination}</div>`).join('')}</div><div class="action-group">${to.status === 'APPROVED' ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">📄 Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>` : (to.status.includes('PENDING') ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>` : '')}</div></div>`;
             }
             list.innerHTML = html || "No records.";
         }
-
-        window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value;
-            const nw = document.getElementById('pass-new').value;
-            if(curr !== currentUser.pass) return alert("Wrong password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
-        };
     </script>
 </body>
 </html>
