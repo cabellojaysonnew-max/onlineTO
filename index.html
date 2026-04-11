@@ -178,7 +178,7 @@
 
     <script type="module">
         const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
@@ -187,7 +187,7 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
         let isSubmitting = false;
-        let psoConflictFlag = false;
+        let psoConflictFlag = false; // Personal Context: Track PSO conflicts for PDF warning
 
         const urlToBase64 = async (url) => {
             try {
@@ -209,7 +209,7 @@
             if (data && data.pass === pass) {
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 document.getElementById('itin-from').min = todayStr;
@@ -321,7 +321,7 @@
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
         };
 
-        // RULE: Handle Conflicts with Approved TOs (Split Logic)
+        // Personal Context: Approved TO Split Logic
         async function handleApprovedSplit(oldToNo, newDates) {
             const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', oldToNo);
             const { data: oldTO } = await supabase.from('travel_orders').select('*').eq('to_no', oldToNo).single();
@@ -332,22 +332,16 @@
                 if (remainingItin.length > 0) {
                     const splitToNo = await generateToNo();
                     const newApprovedTO = { ...oldTO };
-                    delete newApprovedTO.id;
-                    newApprovedTO.to_no = splitToNo;
-                    newApprovedTO.status = 'APPROVED';
+                    delete newApprovedTO.id; newApprovedTO.to_no = splitToNo; newApprovedTO.status = 'APPROVED';
                     await supabase.from('travel_orders').insert(newApprovedTO);
                     await supabase.from('itinerary').insert(remainingItin.map(i => {
-                        const ni = { ...i };
-                        delete ni.id;
-                        ni.to_no = splitToNo;
-                        return ni;
+                        const ni = { ...i }; delete ni.id; ni.to_no = splitToNo; return ni;
                     }));
                 }
             } else {
                 await supabase.from('hr_notifications').insert({
-                    emp_id: oldTO.emp_id,
-                    message: `Notice: Approved TO ${oldToNo} was modified by ${currentUser.full_name}.`,
-                    sender: "System Alert"
+                    emp_id: oldTO.emp_id, sender: "System Alert",
+                    message: `Approved TO ${oldToNo} has been overwritten by ${currentUser.full_name}.`
                 });
             }
         }
@@ -367,16 +361,17 @@
                 reportTos.add(rep);
             }
 
-            const { data: conflicts } = await supabase.from('itinerary').select('to_no, travel_date').in('travel_date', affectedDates);
+            // Conflict Check for Split Logic
+            const { data: conflicts } = await supabase.from('itinerary').select('to_no').in('travel_date', affectedDates);
             if (conflicts && conflicts.length > 0) {
-                const approvedConflicts = [];
+                const approvedSet = new Set();
                 for (const c of conflicts) {
-                    const { data: toVal } = await supabase.from('travel_orders').select('status, to_no').eq('to_no', c.to_no).single();
-                    if (toVal && toVal.status === 'APPROVED') approvedConflicts.push(c);
+                    const { data: toVal } = await supabase.from('travel_orders').select('status').eq('to_no', c.to_no).single();
+                    if (toVal && toVal.status === 'APPROVED') approvedSet.add(c.to_no);
                 }
-                if (approvedConflicts.length > 0) {
+                if (approvedSet.size > 0) {
                     if (confirm("Overlap with APPROVED TO. Overwrite and trigger split?")) {
-                        for (const conflict of approvedConflicts) await handleApprovedSplit(conflict.to_no, affectedDates);
+                        for (const toNo of approvedSet) await handleApprovedSplit(toNo, affectedDates);
                     } else return;
                 }
             }
@@ -386,25 +381,25 @@
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
 
             try {
-                const finalToNo = await generateToNo(); 
+                const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 const isMARPO = currentUser.position.toUpperCase().includes("MARPO");
                 
-                // RULE: MARPO Bypass and Unit Routing
+                // MARPO Bypass and Personal Context Routing
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (isMARPO) routeStatus = "PENDING_CHIEF"; 
+                else if (isMARPO) routeStatus = "PENDING_CHIEF"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 let remarksArr = [];
                 if (psoConflictFlag) remarksArr.push("WITH EXISTING PSO/RSO");
                 if (transport === "GOV'T VEHICLE") remarksArr.push("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM");
-                const finalRemarks = remarksArr.join(" | ");
 
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", "), remarks: finalRemarks
+                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
+                    division: currentUser.division, status: routeStatus, transport, 
+                    report_to: Array.from(reportTos).join(", "), remarks: remarksArr.join(" | ")
                 }));
                 batchItin.forEach(it => it.to_no = finalToNo);
                 await supabase.from('travel_orders').insert(batchPersonnel);
@@ -426,30 +421,69 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
+        window.deletePendingTO = async function(toNo) {
+            if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
+            await supabase.from('itinerary').delete().eq('to_no', toNo);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            loadStatus();
+        };
+
+        window.cancelApprovedTO = async function(toNo) {
+            if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
+            loadStatus();
+        };
+
+        window.modifyPendingTO = async function(toNo) {
+            if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
+            const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            document.getElementById('to-transport').value = to.transport;
+            if (itin.length > 0) {
+                document.getElementById('itin-from').value = itin[0].travel_date;
+                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date;
+            }
+            const container = document.getElementById('dynamic-itin-fields');
+            container.innerHTML = ''; itineraryDraft = [];
+            itin.forEach((i, idx) => {
+                const cardId = `itin-card-${idx}`;
+                container.innerHTML += `
+                    <div class="card" id="${cardId}" style="padding:10px; border-left: 4px solid var(--dar-green);">
+                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
+                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
+                        </div>
+                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                    </div>`;
+                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
+            });
+            await supabase.from('itinerary').delete().eq('to_no', toNo);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            switchTab('apply-view', document.querySelector('.nav-item'));
+        };
+
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
-
             try {
                 const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                const { data: emp_details } = await supabase.from('employees').select('emp_id, position, station');
-                
+                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
                 const od = group_orders[0];
-                const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
-                const posArr = group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || "");
-                const isMARPO = posArr.some(p => p.includes("MARPO"));
+                const isMARPO = od.position?.toUpperCase().includes("MARPO");
 
-                // RULE: Signatory Lookup based on profile
+                // Personal Context: Signatory Lookups
                 let uh_data = null;
-                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
-                    const { data: res } = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
+                if (!isMARPO && od.unit && od.unit !== "PARPO") {
+                    const { data: res } = await supabase.from('users').select('full_name, username').eq('unit', od.unit).eq('role', 'Unit Head').maybeSingle();
                     uh_data = res;
                 }
-
                 let dc_data = null;
-                const divToFetch = isMARPO ? "LTSP" : currentUser.division;
+                const divToFetch = isMARPO ? "LTSP" : od.division;
                 if (divToFetch) {
                     const { data: res } = await supabase.from('users').select('full_name, username').eq('division', divToFetch).eq('role', 'Division Chief').maybeSingle();
                     dc_data = res;
@@ -477,38 +511,17 @@
                         doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
                     }
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-                    doc.text(`Date: ${new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 105, 42, { align: 'center' });
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+                    doc.setFontSize(10); doc.text("NAME:", 20, 55); doc.text(group_orders.map(m => m.emp_name.toUpperCase()).join(", "), 40, 55);
+                    doc.text("STATION:", 90, 62); doc.setFont("helvetica", "normal"); doc.text(od.station?.toUpperCase() || "", 110, 62);
 
-                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); doc.text(names, 40, 55); 
-                    doc.text("STATION:", 90, 62); doc.setFont("helvetica", "normal"); 
-                    doc.text(currentUser.station.toUpperCase(), 110, 62);
-
-                    const drawCheck = (label, x, y, isChecked) => {
-                        doc.rect(x, y - 3, 3, 3);
-                        if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
-                        doc.text(label, x + 5, y);
-                    };
-                    drawCheck("AIR", 20, 78, od.transport === "AIR");
-                    drawCheck("GOV'T VEHICLE", 70, 78, od.transport === "GOV'T VEHICLE");
-                    drawCheck("LAND", 20, 84, od.transport === "LAND");
-                    drawCheck("OTHERS", 70, 84, od.transport === "OTHERS");
-
-                    doc.setFont("helvetica", "bold"); doc.text("DESTINATION:", 20, 94);
-                    const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                    doc.text(doc.splitTextToSize(dests, 110), 50, 94);
-
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("Recommended by:", 20, 157);
-                    
+                    doc.setFont("helvetica", "bold"); doc.text("Recommended by:", 20, 157);
                     if (uh_data && !isMARPO) {
-                        if(img_uh) doc.addImage(img_uh, 'PNG', 34, 142, 35, 15);
+                        if(img_uh) doc.addImage(img_uh, 'PNG', 34, 145, 35, 15);
                         doc.text(uh_data.full_name.toUpperCase(), 34, 165);
                     }
                     if (dc_data) {
-                        if(img_dc) doc.addImage(img_dc, 'PNG', 113, 142, 35, 15);
+                        if(img_dc) doc.addImage(img_dc, 'PNG', 113, 145, 35, 15);
                         doc.text(dc_data.full_name.toUpperCase(), 113, 165);
                     }
 
@@ -516,9 +529,7 @@
                     doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
                     if(img_p2) doc.addImage(img_p2, 'PNG', 130, 189, 20, 20); 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 121, 204);
-                    doc.text("PARPO II", 135, 209);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("RICARDO C. GARCIA", 121, 204); doc.text("PARPO II", 135, 209);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -550,22 +561,24 @@
             list.innerHTML = html || "No records found.";
         }
 
-        window.renderCalendar = async function() {
+        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
+        async function renderCalendar() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
-            const tbody = document.getElementById('cal-table-body'); tbody.innerHTML = "";
             const month = calDate.getMonth(), year = calDate.getFullYear();
+            const tbody = document.getElementById('cal-table-body');
+            tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
             const daysInMonth = new Date(year, month + 1, 0).getDate();
+            tbody.innerHTML = "";
             for(let d=1; d<=daysInMonth; d++) {
                 tbody.innerHTML += `<tr><td><span class="day-num">${d}</span></td><td>--</td></tr>`;
             }
-        };
+        }
 
         window.changePassword = async function() {
             if(document.getElementById('pass-curr').value !== currentUser.pass) return alert("Wrong current password.");
             await supabase.from('employees').update({ pass: document.getElementById('pass-new').value }).eq('emp_id', currentUser.emp_id);
             alert("Updated."); location.reload();
         };
-
     </script>
 </body>
 </html>
