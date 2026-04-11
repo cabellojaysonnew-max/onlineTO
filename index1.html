@@ -118,16 +118,12 @@
 
             <div class="card">
                 <h4>3. Itinerary Builder</h4>
-                <label>Date (No Backdating)</label>
-                <input type="date" id="itin-date" onkeydown="return false">
-                <label>Destination</label>
-                <input type="text" id="itin-dest" placeholder="Where to?">
-                <label>Detailed Purpose</label>
-                <textarea id="itin-purp" rows="2" placeholder="Official business description..."></textarea>
-                <label>Report To (Required)</label>
-                <input type="text" id="to-report" placeholder="Required: e.g. Division Chief">
-                <button class="btn btn-primary" onclick="addItinDraft()">+ Add Date</button>
-                <div id="itin-draft-list" style="margin-top: 15px;"></div>
+                <label>Date Range (From - To, Max 5 days)</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="date" id="itin-from" onchange="generateItinFields()" onkeydown="return false">
+                    <input type="date" id="itin-to" onchange="generateItinFields()" onkeydown="return false">
+                </div>
+                <div id="dynamic-itin-fields" style="margin-top: 15px;"></div>
             </div>
             <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
@@ -204,7 +200,10 @@
                 document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-date').min = todayStr;
+                
+                document.getElementById('itin-from').min = todayStr;
+                document.getElementById('itin-to').min = todayStr;
+
                 personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                 renderPersonnel();
             } else { alert("Invalid Credentials"); }
@@ -248,52 +247,99 @@
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
 
-        window.addItinDraft = async function() {
-            const date = document.getElementById('itin-date').value;
-            const dest = document.getElementById('itin-dest').value.trim();
-            const purp = document.getElementById('itin-purp').value.trim();
-            if(!date || !dest || !purp) return alert("Fill all fields.");
-            if(date < todayStr) return alert("No backdating.");
-            if(itineraryDraft.some(i => i.date === date)) return alert("Duplicate date.");
+        window.generateItinFields = async function() {
+            const fromDate = document.getElementById('itin-from').value;
+            const toDate = document.getElementById('itin-to').value;
+            const container = document.getElementById('dynamic-itin-fields');
+            container.innerHTML = '';
+            itineraryDraft = [];
 
-            // AUTOMATIC CONFLICT CHECK ON ADD - Preserved and Enforced
+            if (!fromDate || !toDate) return;
+            
+            if (fromDate < todayStr) {
+                alert("No backdating allowed.");
+                document.getElementById('itin-from').value = '';
+                return;
+            }
+            if (toDate < fromDate) {
+                alert("End date cannot be before Start date.");
+                document.getElementById('itin-to').value = '';
+                return;
+            }
+
+            const start = new Date(fromDate);
+            const end = new Date(toDate);
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+            if (diffDays > 5) {
+                alert("Maximum of 5 days allowed per Travel Order.");
+                document.getElementById('itin-to').value = '';
+                return;
+            }
+
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            if(psos?.some(p => date >= p.start_date && date <= p.end_date)) {
-                if(!confirm(`ALERT: Existing PSO found for ${date}. Continue adding? (Requires PARPO Final Approval)`)) return;
-            }
-
             const { data: myTOs } = await supabase.from('travel_orders').select('to_no, status').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            if(myTOs?.length > 0) {
-                const toNos = myTOs.map(t => t.to_no);
-                const { data: conflicts } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', date);
-                if(conflicts?.length > 0) {
-                    const targetToNo = conflicts[0].to_no;
-                    const status = myTOs.find(t => t.to_no === targetToNo).status;
-                    if(!confirm(`ALERT: Conflicting ${status} TO (${targetToNo}) found for ${date}. Continue adding? (Will prompt to overwrite/split on submit)`)) return;
-                }
-            }
+            let toNos = myTOs?.map(t => t.to_no) || [];
 
-            itineraryDraft.push({ date, dest, purp });
-            document.getElementById('itin-dest').value = ''; document.getElementById('itin-purp').value = '';
-            renderItinerary();
+            let currentDt = new Date(start);
+            for (let i = 0; i < diffDays; i++) {
+                const dateStr = currentDt.toISOString().split('T')[0];
+
+                // AUTOMATIC CONFLICT CHECK
+                if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
+                    if(!confirm(`ALERT: Existing PSO found for ${dateStr}. Continue adding? (Requires PARPO Final Approval)`)) {
+                        document.getElementById('itin-to').value = '';
+                        return;
+                    }
+                }
+
+                if(toNos.length > 0) {
+                    const { data: conflicts } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
+                    if(conflicts?.length > 0) {
+                        const targetToNo = conflicts[0].to_no;
+                        const status = myTOs.find(t => t.to_no === targetToNo).status;
+                        if(!confirm(`ALERT: Conflicting ${status} TO (${targetToNo}) found for ${dateStr}. Continue adding? (Will prompt to overwrite/split on submit)`)) {
+                            document.getElementById('itin-to').value = '';
+                            return;
+                        }
+                    }
+                }
+
+                container.innerHTML += `
+                    <div class="card" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
+                        <h5 style="margin: 0 0 8px 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5>
+                        <input type="text" id="dest-${i}" placeholder="Destination" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <textarea id="purp-${i}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;"></textarea>
+                        <input type="text" id="rep-${i}" placeholder="Report To (e.g. Division Chief)" style="padding:8px; font-size:13px; margin-bottom:0;">
+                    </div>
+                `;
+
+                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}` });
+                currentDt.setDate(currentDt.getDate() + 1);
+            }
         };
 
-        function renderItinerary() {
-            const list = document.getElementById('itin-draft-list');
-            list.innerHTML = itineraryDraft.map((it, i) => `
-                <div class="card" style="padding:10px; font-size:12px; border-left: 4px solid var(--dar-green);">
-                    <div style="display:flex; justify-content:space-between;"><strong>📅 ${it.date}</strong><span style="color:red;" onclick="removeItin(${i})">Del</span></div>
-                    <div>📍 ${it.dest}</div>
-                </div>`).join('');
-        }
-        window.removeItin = (i) => { itineraryDraft.splice(i,1); renderItinerary(); };
-
         window.submitTO = async function() {
-            if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
-            const reportTo = document.getElementById('to-report').value.trim();
-            if (!reportTo) return alert("Report To is required.");
+            if (itineraryDraft.length === 0) return alert("Please select a date range and fill out the itinerary.");
+            
+            const batchItin = [];
+            const reportTos = new Set();
+
+            for (let it of itineraryDraft) {
+                const dest = document.getElementById(it.destId).value.trim();
+                const purp = document.getElementById(it.purpId).value.trim();
+                const rep = document.getElementById(it.repId).value.trim();
+                
+                if (!dest || !purp || !rep) return alert(`Please fill all fields (Destination, Purpose, Report To) for ${it.date}.`);
+                
+                batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
+                reportTos.add(rep);
+            }
+
+            // Concatenate all unique "Report To" inputs to fit the existing schema column
+            const reportTo = Array.from(reportTos).join(", ");
             const transport = document.getElementById('to-transport').value;
-            const draftDates = itineraryDraft.map(it => it.date);
             let remarks = "";
 
             try {
@@ -307,7 +353,8 @@
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
                     division: currentUser.division, status: routeStatus, transport, report_to: reportTo, remarks
                 }));
-                const batchItin = itineraryDraft.map(it => ({ to_no: finalToNo, travel_date: it.date, destination: it.dest, purpose: it.purp }));
+                
+                batchItin.forEach(it => it.to_no = finalToNo);
 
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
@@ -370,8 +417,7 @@
                     const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 139);
                     doc.text(purpLines, 20, curY + 6); 
 
-                    // PARPO Signature Coordinate Mapping updated per request
-                    if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20); // y-15 for visual alignment relative to text
+                    if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20);
                     doc.setFont("helvetica", "bold"); doc.setFontSize(12);
                     doc.text("RICARDO C. GARCIA", 121, 204);
                     doc.setFontSize(10); doc.text("PARPO II", 121, 209);
@@ -385,7 +431,6 @@
             const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
             
             list.innerHTML = tos?.map(to => {
-                // Formatting implemented to enforce strictly allowing APPROVED records to be printed.
                 const isApproved = to.status && to.status.toUpperCase().includes('APPROVED');
                 return `<div class="card">
                     <div style="font-weight:bold; margin-bottom: 5px;">${to.to_no} <span style="font-size: 11px; color: var(--text-muted);">(${to.status})</span></div>
@@ -401,7 +446,6 @@
         async function renderCalendar() {
             const month = calDate.getMonth(), year = calDate.getFullYear();
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-            // Simplified calendar logic maintained from previous stable versions
         }
     </script>
 </body>
