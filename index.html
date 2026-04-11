@@ -178,7 +178,7 @@
 
     <script type="module">
         const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
@@ -209,7 +209,7 @@
             if (data && data.pass === pass) {
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 document.getElementById('itin-from').min = todayStr;
@@ -321,6 +321,7 @@
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
         };
 
+        // RULE: Handle Conflicts with Approved TOs (Split Logic)
         async function handleApprovedSplit(oldToNo, newDates) {
             const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', oldToNo);
             const { data: oldTO } = await supabase.from('travel_orders').select('*').eq('to_no', oldToNo).single();
@@ -345,7 +346,7 @@
             } else {
                 await supabase.from('hr_notifications').insert({
                     emp_id: oldTO.emp_id,
-                    message: `Notice: Approved TO ${oldToNo} has been modified by ${currentUser.full_name}.`,
+                    message: `Notice: Approved TO ${oldToNo} was modified by ${currentUser.full_name}.`,
                     sender: "System Alert"
                 });
             }
@@ -376,7 +377,7 @@
                 if (approvedConflicts.length > 0) {
                     if (confirm("Overlap with APPROVED TO. Overwrite and trigger split?")) {
                         for (const conflict of approvedConflicts) await handleApprovedSplit(conflict.to_no, affectedDates);
-                    } else { return; }
+                    } else return;
                 }
             }
 
@@ -385,13 +386,14 @@
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
 
             try {
-                const finalToNo = await generateToNo(); 
+                const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 const isMARPO = currentUser.position.toUpperCase().includes("MARPO");
                 
+                // RULE: MARPO Bypass and Unit Routing
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (isMARPO) routeStatus = "PENDING_CHIEF"; 
+                else if (isMARPO) routeStatus = "PENDING_CHIEF"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
@@ -401,7 +403,7 @@
                 const finalRemarks = remarksArr.join(" | ");
 
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
+                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
                     division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", "), remarks: finalRemarks
                 }));
                 batchItin.forEach(it => it.to_no = finalToNo);
@@ -409,7 +411,7 @@
                 await supabase.from('itinerary').insert(batchItin);
                 alert("Submitted: " + finalToNo);
                 location.reload();
-            } catch(e) { alert("Error: " + e.message); isSubmitting = false; submitBtn.disabled = false; submitBtn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
+            } catch(e) { alert("Error: " + e.message); isSubmitting = false; submitBtn.disabled = false; }
         };
 
         async function generateToNo() {
@@ -432,26 +434,25 @@
             try {
                 const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
+                const { data: emp_details } = await supabase.from('employees').select('emp_id, position, station');
                 
                 const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
-                const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
-                const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
-                const isMARPO = positions.includes("MARPO");
+                const posArr = group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || "");
+                const isMARPO = posArr.some(p => p.includes("MARPO"));
 
-                // Signatory Logic based on Employee Profile
+                // RULE: Signatory Lookup based on profile
                 let uh_data = null;
-                if (!isMARPO && currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "PARPO") {
-                    const res = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
-                    uh_data = res.data;
+                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
+                    const { data: res } = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
+                    uh_data = res;
                 }
 
                 let dc_data = null;
                 const divToFetch = isMARPO ? "LTSP" : currentUser.division;
                 if (divToFetch) {
-                    const res = await supabase.from('users').select('full_name, username').eq('division', divToFetch).eq('role', 'CHIEF').maybeSingle();
-                    dc_data = res.data;
+                    const { data: res } = await supabase.from('users').select('full_name, username').eq('division', divToFetch).eq('role', 'Division Chief').maybeSingle();
+                    dc_data = res;
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
@@ -481,9 +482,9 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 105, 42, { align: 'center' });
 
-                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); doc.text(names, 40, 55); doc.line(40, 56, 160, 56);
-                    doc.text("POSITION:", 20, 62); doc.setFont("helvetica", "normal"); doc.text(positions, 40, 62); doc.line(40, 63, 85, 63);
-                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 62); doc.setFont("helvetica", "normal"); doc.text(stations, 110, 62); doc.line(110, 63, 160, 63);
+                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); doc.text(names, 40, 55); 
+                    doc.text("STATION:", 90, 62); doc.setFont("helvetica", "normal"); 
+                    doc.text(currentUser.station.toUpperCase(), 110, 62);
 
                     const drawCheck = (label, x, y, isChecked) => {
                         doc.rect(x, y - 3, 3, 3);
@@ -530,13 +531,15 @@
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                const timeStr = new Date(to.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
                 html += `<div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
                         <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
                     </div>
                     <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                        ${itin?.map(i => `<div style="font-size: 11px; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}</div>`).join('')}
+                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS (${timeStr}):</div>
+                        ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}</div>`).join('')}
                     </div>
                     <div class="action-group">
                         ${to.status.includes('PENDING') ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button>` : ''}
@@ -558,9 +561,8 @@
         };
 
         window.changePassword = async function() {
-            const nw = document.getElementById('pass-new').value;
             if(document.getElementById('pass-curr').value !== currentUser.pass) return alert("Wrong current password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            await supabase.from('employees').update({ pass: document.getElementById('pass-new').value }).eq('emp_id', currentUser.emp_id);
             alert("Updated."); location.reload();
         };
 
