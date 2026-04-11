@@ -42,7 +42,6 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); }
-        .btn-warning { background: var(--warning); }
         
         /* Table Calendar Styling */
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
@@ -54,9 +53,6 @@
         .entry-to { background: var(--dar-green); }
         .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
-
-        .action-group { display: flex; gap: 8px; margin-top: 10px; }
-        .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -270,6 +266,7 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
+            // EARLY CONFLICT CHECK (PSO & Active TO)
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let toNos = active?.map(a => a.to_no) || [];
@@ -326,6 +323,7 @@
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 
+                // ROUTING LOGIC FROM PERSONAL CONTEXT
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
@@ -532,6 +530,7 @@
                     doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                    doc.text("APPROVED:", 85, 185);
 
                     if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
@@ -561,25 +560,29 @@
                         </div>
                         
                         <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                            <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">MAXIMUM ITINERARY DETAILS:</div>
+                            <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div>
                             ${itin?.map(i => `
                                 <div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;">
                                     <strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br>
                                     <span style="color: gray; font-style: italic;">"${i.purpose}"</span>
                                 </div>`).join('')}
-                        </div>
+                        </div>`;
 
-                        <div class="action-group">
-                            ${isPending ? `
-                                <button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button>
-                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>
-                            ` : ''}
-                            ${isApproved ? `
-                                <button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">📄 Print</button>
-                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>
-                            ` : ''}
-                        </div>
-                    </div>`;
+                if (isApproved) {
+                    html += `
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-success" style="margin: 0;" onclick="generateOfficialPDF('${to.to_no}')">Print Official TO</button>
+                            <button class="btn btn-danger" style="margin: 0;" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>
+                        </div>`;
+                } else if (isPending) {
+                     html += `
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-warning" style="margin: 0;" onclick="modifyPendingTO('${to.to_no}')">Modify</button>
+                            <button class="btn btn-danger" style="margin: 0;" onclick="deletePendingTO('${to.to_no}')">Delete</button>
+                        </div>`;
+                }
+
+                html += `</div>`;
             }
             list.innerHTML = html || "No records found.";
         }
