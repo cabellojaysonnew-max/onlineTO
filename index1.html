@@ -124,7 +124,7 @@
                 </div>
                 <div id="dynamic-itin-fields" style="margin-top: 15px;"></div>
             </div>
-            <button class="btn btn-gold" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            <button class="btn btn-gold" id="btn-submit-to" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
         </div>
 
         <div id="status-view" class="view">
@@ -186,6 +186,7 @@
         let personnelDraft = [];
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
+        let isSubmitting = false; // Anti-double click flag
 
         const urlToBase64 = async (url) => {
             try {
@@ -318,7 +319,9 @@
         };
 
         window.submitTO = async function() {
+            if (isSubmitting) return; // Lock to prevent double-click submissions
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
+            
             const batchItin = []; const reportTos = new Set();
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
@@ -328,6 +331,10 @@
                 batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
                 reportTos.add(rep);
             }
+
+            isSubmitting = true;
+            const submitBtn = document.getElementById('btn-submit-to');
+            if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
 
             try {
                 const finalToNo = await generateToNo(); 
@@ -348,7 +355,6 @@
                 
                 alert("Submitted: " + finalToNo);
                 
-                // FIXED LOG-OUT ISSUE: Reset form and switch tab instead of location.reload()
                 document.getElementById('itin-from').value = '';
                 document.getElementById('itin-to').value = '';
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
@@ -357,14 +363,32 @@
                 renderPersonnel();
                 switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
                 
-            } catch(e) { alert("Error: " + e.message); }
+            } catch(e) { 
+                alert("Error: " + e.message); 
+            } finally {
+                isSubmitting = false;
+                if(submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
+            }
         };
 
         async function generateToNo() {
             const year = new Date().getFullYear();
-            const div = (currentUser.division || "GEN").substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
-            let seq = data && data[0] ? parseInt(data[0].to_no.split('-')[2]) + 1 : 1;
+            // Robust parsing of division
+            const div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
+            const { data } = await supabase.from('travel_orders')
+                .select('to_no')
+                .like('to_no', `${year}-${div}-%`)
+                .order('to_no', { ascending: false })
+                .limit(1);
+            
+            let seq = 1;
+            if (data && data.length > 0 && data[0].to_no) {
+                const parts = data[0].to_no.split('-');
+                if (parts.length >= 3) {
+                    const parsed = parseInt(parts[2], 10);
+                    if (!isNaN(parsed)) seq = parsed + 1;
+                }
+            }
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
@@ -514,8 +538,8 @@
                     doc.text("Recommended by:", 20, 157);
                     
                     if (i > 0) {
-                        if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 165 - 12, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 165 - 12, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                        if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
                     } else {
                         if(uh_data) { doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
                         if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
@@ -524,7 +548,7 @@
                     doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("UNIT HEAD", 52, 171, {align: 'center'});
                     doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 25, 20); 
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 121, 189, 40, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 121, 204);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -581,7 +605,7 @@
                 const dayItins = itins?.filter(i => i.travel_date === dateStr), dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date), holiday = holidays?.find(h => h.date === dateStr);
 
                 let activityHtml = "";
-                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
+                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || holiday.name || 'Holiday'}</div>`;
                 if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO: ${p.remarks || 'Duty'}</div>`);
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.destination} (${i.purpose})</div>`);
 
