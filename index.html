@@ -187,6 +187,7 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
         let isSubmitting = false;
+        let psoConflictFlag = false;
 
         const urlToBase64 = async (url) => {
             try {
@@ -268,7 +269,7 @@
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = [];
+            container.innerHTML = ''; itineraryDraft = []; psoConflictFlag = false;
             if (!fromDate || !toDate) return;
             if (fromDate < todayStr) return alert("No backdating allowed.");
             if (toDate < fromDate) return alert("End date cannot be before Start date.");
@@ -287,6 +288,7 @@
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    psoConflictFlag = true;
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
@@ -314,14 +316,51 @@
 
         window.removeItinCard = (cardId, date) => {
             if(!confirm(`Remove ${date}?`)) return;
-            document.getElementById(cardId).remove();
+            const el = document.getElementById(cardId);
+            if(el) el.remove();
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
         };
+
+        async function handleApprovedSplit(oldToNo, newDates) {
+            const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', oldToNo);
+            const { data: oldTO } = await supabase.from('travel_orders').select('*').eq('to_no', oldToNo).single();
+            
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', oldToNo);
+
+            if (oldItin.length > 1) {
+                const remainingItin = oldItin.filter(i => !newDates.includes(i.travel_date));
+                if (remainingItin.length > 0) {
+                    const splitToNo = await generateToNo();
+                    const newApprovedTO = { ...oldTO };
+                    delete newApprovedTO.id;
+                    newApprovedTO.to_no = splitToNo;
+                    newApprovedTO.status = 'APPROVED';
+                    
+                    await supabase.from('travel_orders').insert(newApprovedTO);
+                    await supabase.from('itinerary').insert(remainingItin.map(i => {
+                        const ni = { ...i };
+                        delete ni.id;
+                        ni.to_no = splitToNo;
+                        return ni;
+                    }));
+                }
+            } else {
+                const officer = (oldTO.status.includes('UNIT')) ? 'Unit Head' : 'Division Chief';
+                await supabase.from('hr_notifications').insert({
+                    emp_id: oldTO.emp_id,
+                    message: `Notice: Approved TO ${oldToNo} has been modified/overwritten by ${currentUser.full_name}.`,
+                    sender: "System Alert"
+                });
+            }
+        }
 
         window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
+            
             const batchItin = []; const reportTos = new Set();
+            const affectedDates = itineraryDraft.map(it => it.date);
+
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
                 const purp = document.getElementById(it.purpId).value.trim();
@@ -331,6 +370,23 @@
                 reportTos.add(rep);
             }
 
+            const { data: conflicts } = await supabase.from('itinerary').select('to_no, travel_date').in('travel_date', affectedDates);
+            if (conflicts && conflicts.length > 0) {
+                const approvedConflicts = [];
+                for (const c of conflicts) {
+                    const { data: toVal } = await supabase.from('travel_orders').select('status, to_no').eq('to_no', c.to_no).single();
+                    if (toVal && toVal.status === 'APPROVED') approvedConflicts.push(c);
+                }
+
+                if (approvedConflicts.length > 0) {
+                    if (confirm("This overlaps with an APPROVED Travel Order. Overwrite? (This will trigger the Split/Notification logic)")) {
+                        for (const conflict of approvedConflicts) {
+                            await handleApprovedSplit(conflict.to_no, affectedDates);
+                        }
+                    } else { return; }
+                }
+            }
+
             isSubmitting = true;
             const submitBtn = document.getElementById('btn-submit-to');
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
@@ -338,15 +394,22 @@
             try {
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
+                const isMARPO = currentUser.position.toUpperCase().includes("MARPO");
                 
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
+                else if (isMARPO) routeStatus = "PENDING_CHIEF"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
+                let remarksArr = [];
+                if (psoConflictFlag) remarksArr.push("WITH EXISTING PSO/RSO");
+                if (transport === "GOV'T VEHICLE") remarksArr.push("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM");
+                const finalRemarks = remarksArr.join(" | ");
+
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", ")
+                    division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", "), remarks: finalRemarks
                 }));
                 batchItin.forEach(it => it.to_no = finalToNo);
                 await supabase.from('travel_orders').insert(batchPersonnel);
@@ -416,7 +479,7 @@
             }
 
             const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = [];
+            container.innerHTML = ''; itineraryDraft = []; psoConflictFlag = to.remarks?.includes("WITH EXISTING PSO/RSO");
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
@@ -455,15 +518,18 @@
                 const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
                 const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
+                const isMARPO = positions.includes("MARPO");
+
                 let uh_data = null;
-                if (currentUser.unit && currentUser.unit.trim() !== "") {
+                if (!isMARPO && currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "PARPO") {
                     const res = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
                     uh_data = res.data;
                 }
 
                 let dc_data = null;
-                if (currentUser.division && currentUser.division.trim() !== "") {
-                    const res = await supabase.from('users').select('full_name, username').eq('division', currentUser.division).eq('role', 'Division Chief').maybeSingle();
+                const divToFetch = isMARPO ? "LTSP" : currentUser.division;
+                if (divToFetch) {
+                    const res = await supabase.from('users').select('full_name, username').eq('division', divToFetch).eq('role', 'Division Chief').maybeSingle();
                     dc_data = res.data;
                 }
 
@@ -479,6 +545,15 @@
                     if (i > 0) doc.addPage();
                     if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+
+                    if (od.transport === "GOV'T VEHICLE" || (od.remarks && od.remarks.includes("NOT VALID"))) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                        doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' });
+                    }
+                    if (od.remarks && od.remarks.includes("EXISTING PSO")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+                    }
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
@@ -508,7 +583,7 @@
                     drawCheck("AIR", 20, 78, od.transport === "AIR");
                     drawCheck("GOV'T VEHICLE", 70, 78, od.transport === "GOV'T VEHICLE");
                     drawCheck("LAND", 20, 84, od.transport === "LAND");
-                    drawCheck("OTHERS, PLEASE SPECIFY", 70, 84, od.transport === "OTHERS");
+                    drawCheck("OTHERS", 70, 84, od.transport === "OTHERS");
 
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
                     doc.text("DESTINATION:", 20, 94);
@@ -544,22 +619,26 @@
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 157);
                     
-                    if (i > 0) {
-                        if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
-                    } else {
-                        if(uh_data) { doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                    if (uh_data && !isMARPO) {
+                        if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15);
+                        doc.text(uh_data.full_name.toUpperCase(), 34, 165);
+                    }
+                    if (dc_data) {
+                        if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15);
+                        doc.text(dc_data.full_name.toUpperCase(), 113, 165);
+                    } else if (isMARPO) {
+                         doc.text("CHIEF, LTSP", 113, 165);
                     }
 
-                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("UNIT HEAD", 52, 171, {align: 'center'});
+                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
+                    doc.text(isMARPO ? "" : "UNIT HEAD", 52, 171, {align: 'center'});
                     doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
                     if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, 189, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 121, 204);
+                    doc.text("RENE B. BACHO", 121, 204);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 135, 209);
+                    doc.text("OIC-PARPO II", 135, 209);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -574,13 +653,16 @@
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
+                const timeOpts = { hour: '2-digit', minute: '2-digit', hour12: true };
+                const timeStr = new Date(to.created_at).toLocaleTimeString([], timeOpts);
+
                 html += `<div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
                         <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
                     </div>
                     <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div>
+                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS (Applied: ${timeStr}):</div>
                         ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br><span style="color: gray; font-style: italic;">"${i.purpose}"</span></div>`).join('')}
                     </div>
                     <div class="action-group">
