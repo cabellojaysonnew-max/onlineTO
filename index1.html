@@ -42,6 +42,7 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); }
+        .btn-warning { background: var(--warning); }
         
         /* Table Calendar Styling */
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
@@ -53,6 +54,9 @@
         .entry-to { background: var(--dar-green); }
         .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
+
+        .action-group { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -125,7 +129,7 @@
         </div>
 
         <div id="status-view" class="view">
-            <h3 style="color: var(--dar-green);">My Applications</h3>
+            <h3 style="color: var(--dar-green);">APPLICATIONS</h3>
             <div id="status-list"></div>
         </div>
 
@@ -274,7 +278,7 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`Conflict: Existing PSO on ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`ALERT: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
@@ -530,10 +534,6 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text("APPROVED:", 85, 185);
 
-                    doc.setFontSize(9);
-                    const certText = "I hereby certify that the travel is\nnecessary; that a report of the previous\ntravel had already been submitted; and\nthat there are no other party than those\nstated in this T.O.";
-                    doc.text(certText, 25, 195);
-
                     if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 121, 204);
@@ -568,23 +568,19 @@
                                     <strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br>
                                     <span style="color: gray; font-style: italic;">"${i.purpose}"</span>
                                 </div>`).join('')}
-                        </div>`;
+                        </div>
 
-                if (isApproved) {
-                    html += `
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-success" style="margin: 0;" onclick="generateOfficialPDF('${to.to_no}')">Print Official TO</button>
-                            <button class="btn btn-danger" style="margin: 0;" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>
-                        </div>`;
-                } else if (isPending) {
-                     html += `
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-warning" style="margin: 0;" onclick="modifyPendingTO('${to.to_no}')">Modify</button>
-                            <button class="btn btn-danger" style="margin: 0;" onclick="deletePendingTO('${to.to_no}')">Delete</button>
-                        </div>`;
-                }
-
-                html += `</div>`;
+                        <div class="action-group">
+                            ${isPending ? `
+                                <button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">✏️ Modify</button>
+                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">🗑️ Delete</button>
+                            ` : ''}
+                            ${isApproved ? `
+                                <button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">📄 Print</button>
+                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">🚫 Cancel</button>
+                            ` : ''}
+                        </div>
+                    </div>`;
             }
             list.innerHTML = html || "No records found.";
         }
