@@ -316,10 +316,10 @@
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 
-                // MARPO FLOW: Skipping Unit Head to PENDING_CHIEF
+                // MARPO Logic
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (currentUser.position === "MARPO") routeStatus = "PENDING_CHIEF";
+                else if (currentUser.position === "MARPO") routeStatus = "PENDING_CHIEF"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
@@ -333,12 +333,10 @@
                 
                 alert("Submitted: " + finalToNo);
                 location.reload();
-                
             } catch(e) { 
                 alert("Error: " + e.message); 
             } finally {
                 isSubmitting = false;
-                if(submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
             }
         };
 
@@ -362,56 +360,6 @@
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        window.deletePendingTO = async function(toNo) {
-            if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            loadStatus();
-        };
-
-        window.cancelApprovedTO = async function(toNo) {
-            if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
-            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
-            loadStatus();
-        };
-
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
-            const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
-            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-            
-            document.getElementById('to-transport').value = to.transport;
-            if (itin.length > 0) {
-                document.getElementById('itin-from').value = itin[0].travel_date;
-                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date;
-            }
-
-            const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = [];
-
-            itin.forEach((i, idx) => {
-                const cardId = `itin-card-${idx}`;
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
-                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
-                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
-                        </div>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
-                    </div>
-                `;
-                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
-            });
-            
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            switchTab('apply-view', document.querySelector('.nav-item'));
-        };
-
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
@@ -424,19 +372,15 @@
                 
                 const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
-                const posList = group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || "");
-                const positions = [...new Set(posList)].join(", ").toUpperCase();
+                const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
                 const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
-                // MARPO / ARPT / SARPT SIGNATORY: Automatic Division LTSP Chief
-                let pdfDiv = od.division;
-                const posUpper = posList.map(p => p.toUpperCase());
-                if (posUpper.some(p => p.includes("MARPO") || p.includes("ARPT") || p.includes("SARPT"))) {
-                    pdfDiv = "LTSP";
-                }
+                // MARPO Signatory logic
+                let chiefDiv = od.division;
+                if (currentUser.position === "MARPO") chiefDiv = "LTSP";
 
                 const { data: uh_data } = await supabase.from('users').select('full_name, username').eq('unit', od.unit).eq('role', 'Unit Head').maybeSingle();
-                const { data: dc_data } = await supabase.from('users').select('full_name, username').eq('division', pdfDiv).eq('role', 'Division Chief').maybeSingle();
+                const { data: dc_data } = await supabase.from('users').select('full_name, username').eq('division', chiefDiv).eq('role', 'Division Chief').maybeSingle();
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
@@ -467,20 +411,18 @@
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 62);
                     doc.setFont("helvetica", "normal"); doc.text(stations, 110, 62); doc.line(110, 63, 160, 63);
 
-                    // UNDERLINE DESTINATION logic
+                    // UNDERLINE DESTINATION
                     doc.setFont("helvetica", "bold"); doc.text("DESTINATION:", 20, 72);
                     const destText = itin_list.map(it => `${it.destination} - ${new Date(it.travel_date).toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'})}`).join(", ");
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const destLines = doc.splitTextToSize(destText, 140);
                     doc.text(destLines, 50, 72);
-                    const destLineWidth = doc.getTextWidth(destLines[destLines.length - 1]);
-                    doc.line(50, 73, 190, 73); // Add underline
+                    doc.line(50, 73, 190, 73); 
 
-                    // Centering Signatures
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 157);
                     
-                    // Left Sig (Unit Head)
+                    // CENTERED SIGNATURES
                     if(uh_data) {
                         if(i > 0 && img_uh) doc.addImage(img_uh, 'PNG', 25, 148, 35, 12);
                         doc.text(uh_data.full_name.toUpperCase(), 42.5, 162, { align: 'center' });
@@ -489,7 +431,6 @@
                         doc.text("UNIT HEAD", 42.5, 167, { align: 'center' });
                     }
 
-                    // Right Sig (Division Chief)
                     if(dc_data) {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                         if(i > 0 && img_dc) doc.addImage(img_dc, 'PNG', 125, 148, 35, 12);
@@ -499,7 +440,6 @@
                         doc.text("DIVISION CHIEF", 142.5, 167, { align: 'center' });
                     }
 
-                    // Final Sig (PARPO II) - Centered
                     if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 85, 185, 35, 15);
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 105, 205, { align: 'center' });
@@ -552,11 +492,10 @@
             const { data: itins } = await supabase.from('itinerary').select('to_no, travel_date, destination').in('to_no', tosRes.data?.map(t => t.to_no) || []);
             
             tbody.innerHTML = "";
-            const month = calDate.getMonth(), year = calDate.getFullYear();
+            const year = calDate.getFullYear(), month = calDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             for(let d=1; d<=daysInMonth; d++) {
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d), isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
                 const dayItins = itins?.filter(i => i.travel_date === dateStr);
                 const holiday = holRes.data?.find(h => h.date === dateStr);
 
@@ -564,8 +503,7 @@
                 if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.holiday || holiday.name}</div>`;
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.destination}</div>`);
 
-                let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
-                tbody.innerHTML += `<tr style="${rowStyle}"><td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td><td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td></tr>`;
+                tbody.innerHTML += `<tr><td class="day-num">${d}</td><td>${activityHtml || '--'}</td></tr>`;
             }
         }
 
