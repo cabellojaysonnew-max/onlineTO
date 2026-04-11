@@ -44,7 +44,9 @@
         .btn-success { background: var(--success); }
         .btn-warning { background: var(--warning); }
         
-        /* Table Calendar Styling */
+        .action-group { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
+
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; }
@@ -54,9 +56,6 @@
         .entry-to { background: var(--dar-green); }
         .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
-
-        .action-group { display: flex; gap: 8px; margin-top: 10px; }
-        .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -278,7 +277,6 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
-            // Early Conflict Check
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let toNos = active?.map(a => a.to_no) || [];
@@ -304,7 +302,7 @@
                             <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
                         </div>
                         <input type="text" id="dest-${i}" placeholder="Destination">
-                        ${i > 0 ? `<label style="font-size:11px; display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; width:100%; white-space:nowrap; cursor:pointer;"><input type="checkbox" style="width:auto; margin:0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
+                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
                         <input type="text" id="rep-${i}" placeholder="Report To">
                     </div>`;
@@ -385,8 +383,7 @@
             }
 
             const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = '';
-            itineraryDraft = [];
+            container.innerHTML = ''; itineraryDraft = [];
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
@@ -397,7 +394,7 @@
                              <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
                         </div>
                         <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); white-space:nowrap; cursor: pointer;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
+                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
                         <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
                     </div>
@@ -441,16 +438,13 @@
                     if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
 
-                    // TO Header (y=35)
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
                     
-                    // Plain Date (y=42)
                     const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
-                    // Details block starts y=55
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); 
                     doc.text(names, 40, 55); doc.line(40, 56, 160, 56);
@@ -460,15 +454,12 @@
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 62);
                     doc.setFont("helvetica", "normal"); doc.text(stations, 110, 62); doc.line(110, 63, 160, 63);
 
-                    // Transportation
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 72);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     
                     const drawCheck = (label, x, y, isChecked) => {
                         doc.rect(x, y - 3, 3, 3);
-                        if (isChecked) {
-                            doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal");
-                        }
+                        if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
                         doc.text(label, x + 5, y);
                     };
 
@@ -479,10 +470,7 @@
 
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
                     doc.text("DESTINATION:", 20, 94);
-                    
-                    const formatDestDate = (dateStr) => {
-                        return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    };
+                    const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     const dests = itin_list.map(it => `${it.destination} - ${formatDestDate(it.travel_date)}`).join(", ");
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const destLines = doc.splitTextToSize(dests, 110);
@@ -492,48 +480,31 @@
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
-                    
                     doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
 
                     curY += 8;
                     doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
-
                     curY += 8;
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 5;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const purpText = itin_list[0]?.purpose || "";
-                    const purpLines = doc.splitTextToSize(purpText, 140);
+                    const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
                     doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
                     curY += Math.max(6, purpLines.length * 4);
 
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
-                    doc.setFont("helvetica", "normal");
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    // SIGNATURES (APPROVED label removed)
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 157);
-                    
-                    if(uh_data) {
-                        if(img_uh) doc.addImage(img_uh, 'PNG', 34, 165 - 12, 35, 15);
-                        doc.text(uh_data.full_name.toUpperCase(), 34, 165);
-                    }
-                    if(dc_data) {
-                        if(img_dc) doc.addImage(img_dc, 'PNG', 113, 165 - 12, 35, 15);
-                        doc.text(dc_data.full_name.toUpperCase(), 113, 165);
-                    }
-
-                    doc.line(25, 167, 80, 167);
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                    doc.text("UNIT HEAD", 52, 171, {align: 'center'});
-
-                    doc.line(100, 167, 155, 167);
-                    doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
+                    if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 165 - 12, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                    if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 165 - 12, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("UNIT HEAD", 52, 171, {align: 'center'});
+                    doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
                     if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
@@ -552,42 +523,27 @@
             for(let to of tos || []) {
                 const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                const isApproved = to.status === 'APPROVED';
-                const isPending = to.status.includes('PENDING');
+                const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                html += `
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
-                            <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                        </div>
-                        
-                        <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                            <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div>
-                            ${itin?.map(i => `
-                                <div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;">
-                                    <strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br>
-                                    <span style="color: gray; font-style: italic;">"${i.purpose}"</span>
-                                </div>`).join('')}
-                        </div>
-
-                        <div class="action-group">
-                            ${isPending ? `
-                                <button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button>
-                                <button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>
-                            ` : ''}
-                            ${isApproved ? `
-                                <button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button>
-                                <button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>
-                            ` : ''}
-                        </div>
-                    </div>`;
+                html += `<div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
+                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
+                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div>
+                        ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br><span style="color: gray; font-style: italic;">"${i.purpose}"</span></div>`).join('')}
+                    </div>
+                    <div class="action-group">
+                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}
+                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                    </div>
+                </div>`;
             }
             list.innerHTML = html || "No records found.";
         }
 
         window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
-        
         async function renderCalendar() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
             const month = calDate.getMonth(), year = calDate.getFullYear();
@@ -595,45 +551,29 @@
             tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
 
             const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
-            const toNos = tos?.map(t => t.to_no) || [];
-            const { data: itins } = await supabase.from('itinerary').select('travel_date, destination, purpose').in('to_no', toNos);
+            const { data: itins } = await supabase.from('itinerary').select('travel_date, destination, purpose').in('to_no', tos?.map(t => t.to_no) || []);
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: holidays } = await supabase.from('holidays').select('*');
 
             tbody.innerHTML = "";
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            
             for(let d=1; d<=daysInMonth; d++) {
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d);
-                const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-                
+                const dateObj = new Date(year, month, d), isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                const dayItins = itins?.filter(i => i.travel_date === dateStr), dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date), holiday = holidays?.find(h => h.date === dateStr);
+
                 let activityHtml = "";
-                const dayItins = itins?.filter(i => i.travel_date === dateStr);
-                const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                const holiday = holidays?.find(h => h.date === dateStr);
+                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
+                if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO: ${p.remarks || 'Duty'}</div>`);
+                if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.destination} (${i.purpose})</div>`);
 
-                let holDetails = holiday ? (holiday.description || holiday.type || holiday.name || 'Holiday') : '';
-                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holDetails}</div>`;
-                if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO: ${p.remarks || 'Official Duty'}</div>`);
-                if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.to_no} - ${i.destination} (${i.purpose})</div>`);
-
-                let rowBg = '';
-                if(dateStr === todayStr) rowBg = 'background:#fffbeb; border-left: 3px solid var(--dar-gold);';
-                else if(isWeekend) rowBg = 'background:#f9fafb;';
-
-                tbody.innerHTML += `
-                    <tr style="${rowBg}">
-                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dayName}</span></td>
-                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
-                    </tr>`;
+                let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
+                tbody.innerHTML += `<tr style="${rowStyle}"><td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td><td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td></tr>`;
             }
         }
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value;
-            const nw = document.getElementById('pass-new').value;
+            const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
             if(curr !== currentUser.pass) return alert("Wrong current password.");
             await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
             alert("Updated."); location.reload();
