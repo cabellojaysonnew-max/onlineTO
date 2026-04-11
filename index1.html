@@ -42,6 +42,7 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); }
+        .btn-warning { background: var(--warning); }
         
         /* Table Calendar Styling */
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
@@ -53,6 +54,9 @@
         .entry-to { background: var(--dar-green); }
         .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
+
+        .action-group { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -266,7 +270,6 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
-            // EARLY CONFLICT CHECK (PSO & Active TO)
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let toNos = active?.map(a => a.to_no) || [];
@@ -275,7 +278,7 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`ALERT: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`ALERT: Existing PSO for ${dateStr}. Continue adding? (Requires PARPO Final Approval)`)) { container.innerHTML = ""; return; }
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
@@ -323,7 +326,6 @@
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 
-                // ROUTING LOGIC FROM PERSONAL CONTEXT
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
@@ -432,7 +434,6 @@
                     if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
 
-                    // Header
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
                     
@@ -440,7 +441,6 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
-                    // Name, Position, Station
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); 
                     doc.text(names, 40, 55); doc.line(40, 56, 160, 56);
@@ -450,7 +450,6 @@
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 62);
                     doc.setFont("helvetica", "normal"); doc.text(stations, 110, 62); doc.line(110, 63, 160, 63);
 
-                    // Transportation
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 72);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     
@@ -467,7 +466,6 @@
                     drawCheck("LAND", 20, 84, od.transport === "LAND");
                     drawCheck("OTHERS, PLEASE SPECIFY", 70, 84, od.transport === "OTHERS");
 
-                    // Destination
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
                     doc.text("DESTINATION:", 20, 94);
                     
@@ -480,7 +478,6 @@
                     doc.text(destLines, 50, 94);
                     let curY = 94 + Math.max(6, destLines.length * 4);
 
-                    // Dates
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
@@ -488,7 +485,6 @@
                     doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
 
-                    // Report & Purpose
                     curY += 8;
                     doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
@@ -502,14 +498,12 @@
                     doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
                     curY += Math.max(6, purpLines.length * 4);
 
-                    // Seminars
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
                     doc.setFont("helvetica", "normal");
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    // SIGNATURES
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 157);
                     
@@ -606,20 +600,26 @@
             
             for(let d=1; d<=daysInMonth; d++) {
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dayName = new Date(year, month, d).toLocaleDateString('en-US', { weekday: 'short' });
+                const dateObj = new Date(year, month, d);
+                const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
                 
                 let activityHtml = "";
                 const dayItins = itins?.filter(i => i.travel_date === dateStr);
                 const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
                 const holiday = holidays?.find(h => h.date === dateStr);
 
-                let holDetails = holiday ? (holiday.type || holiday.name || 'Holiday') : '';
+                let holDetails = holiday ? (holiday.description || holiday.type || holiday.name || 'Holiday') : '';
                 if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holDetails}</div>`;
                 if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO: ${p.remarks || 'Official Duty'}</div>`);
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.destination} (${i.purpose})</div>`);
 
+                let rowBg = '';
+                if(dateStr === todayStr) rowBg = 'background:#fffbeb; border-left: 3px solid var(--dar-gold);';
+                else if(isWeekend) rowBg = 'background:#f9fafb;';
+
                 tbody.innerHTML += `
-                    <tr style="${dateStr === todayStr ? 'background:#fffbeb;' : ''}">
+                    <tr style="${rowBg}">
                         <td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dayName}</span></td>
                         <td>${activityHtml || '<span style="color:#ccc;">-- No schedule --</span>'}</td>
                     </tr>`;
