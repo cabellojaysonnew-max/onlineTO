@@ -36,25 +36,23 @@
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; margin-bottom: 8px; }
         .btn:active { transform: scale(0.98); opacity: 0.8; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
-        .btn-warning { background: var(--warning); }
         .btn-success { background: var(--success); }
         
-        .action-group { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-        .btn-small { padding: 8px; font-size: 11px; flex: 1; min-width: 80px; }
-
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-        .calendar-day { background: white; border-radius: 6px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; position: relative; border: 1px solid #eee; cursor: pointer; }
-        .dot-container { display: flex; gap: 2px; position: absolute; bottom: 3px; }
-        .dot { width: 5px; height: 5px; border-radius: 50%; }
-        .dot-to { background: var(--dar-green); }
-        .dot-pso { background: var(--dar-gold); }
-        .dot-holiday { background: var(--danger); }
-        .today { border: 2px solid var(--dar-gold); font-weight: bold; }
+        /* Table Calendar Styling */
+        .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
+        .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; }
+        .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+        .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
+        .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; }
+        .entry-to { background: var(--dar-green); }
+        .entry-pso { background: var(--dar-gold); color: #003811; }
+        .entry-holiday { background: var(--danger); }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
@@ -97,7 +95,7 @@
                 <h4>1. Personnel (Max 5)</h4>
                 <div style="display: flex; gap: 5px;">
                     <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
-                    <button class="btn btn-primary" style="width: 70px; padding:0;" onclick="searchEmployees()">Find</button>
+                    <button class="btn btn-primary" style="width: 70px; padding:0; height: 45px;" onclick="searchEmployees()">Find</button>
                 </div>
                 <div id="search-results" class="search-results"></div>
                 <div id="personnel-draft-list" style="margin-top: 10px;"></div>
@@ -132,17 +130,25 @@
         </div>
 
         <div id="calendar-view" class="view">
-            <h3 style="color: var(--dar-green);">My Personal Schedule</h3>
-            <div class="card">
-                <div class="cal-nav" style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <button onclick="changeCalMonth(-1)" style="padding:5px 10px;">&lt;</button>
-                    <div id="cal-month-year" style="font-weight:bold;"></div>
-                    <button onclick="changeCalMonth(1)" style="padding:5px 10px;">&gt;</button>
+            <h3 style="color: var(--dar-green);">Personal Activity Schedule</h3>
+            <div class="card" style="padding:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f0f4f8;">
+                    <button onclick="changeCalMonth(-1)" class="btn-primary" style="width:auto; padding:5px 15px; margin:0;">&lt;</button>
+                    <div id="cal-month-year" style="font-weight:bold; color:var(--dar-green);"></div>
+                    <button onclick="changeCalMonth(1)" class="btn-primary" style="width:auto; padding:5px 15px; margin:0;">&gt;</button>
                 </div>
-                <div class="calendar-grid" id="cal-header"></div>
-                <div class="calendar-grid" id="cal-body"></div>
+                <div class="cal-container">
+                    <table class="cal-table">
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Schedule / Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cal-table-body"></tbody>
+                    </table>
+                </div>
             </div>
-            <div id="day-details" class="card" style="display:none; border-left: 5px solid var(--dar-gold); font-size:12px;"></div>
         </div>
 
         <div id="security-view" class="view">
@@ -241,7 +247,7 @@
             list.innerHTML = personnelDraft.map((p, i) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
                     <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px;" onclick="removePersonnel(${i})">X</button>` : ''}
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}
                 </div>`).join('');
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
@@ -260,7 +266,7 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
-            // EARLY CONFLICT CHECK
+            // EARLY CONFLICT CHECK (PSO & Active TO)
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let toNos = active?.map(a => a.to_no) || [];
@@ -269,12 +275,12 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`Conflict: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`ALERT: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
                     if(conf?.length > 0) {
-                        if(!confirm(`Conflict: Existing TO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                        if(!confirm(`Conflict: Existing TO on ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                     }
                 }
                 
@@ -282,11 +288,11 @@
                 container.innerHTML += `
                     <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h5>📅 ${dateStr}</h5>
-                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold;">DELETE</button>
+                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5>
+                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
                         </div>
                         <input type="text" id="dest-${i}" placeholder="Destination">
-                        ${i > 0 ? `<label style="font-size:11px;"><input type="checkbox" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value;"> Copy previous purpose</label>` : ''}
+                        ${i > 0 ? `<label style="font-size:11px; display:flex; align-items:center; gap:5px;"><input type="checkbox" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
                         <input type="text" id="rep-${i}" placeholder="Report To">
                     </div>`;
@@ -316,10 +322,12 @@
             try {
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
+                
+                // ROUTING LOGIC FROM PERSONAL CONTEXT
                 let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
-                else if (currentUser.unit) routeStatus = "PENDING_UNIT_HEAD";
+                else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
@@ -378,15 +386,12 @@
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
-                    
-                    // Smaller QR Code at Rightmost Upper Side
-                    if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20);
+                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
+                    if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); // Small QR at Top Right
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 45, { align: 'center' });
                     
-                    // Filing Date next to TO Number
                     const fDate = new Date(od.created_at).toLocaleDateString();
                     doc.setFontSize(10);
                     doc.text(`FILING DATE: ${fDate}`, 160, 45);
@@ -395,14 +400,35 @@
                     
                     const dests = itin_list.map(it => `${it.destination} (${it.travel_date})`).join(", ");
                     doc.text("DESTINATION:", 20, 85);
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                    doc.text(doc.splitTextToSize(dests, 100), 50, 85);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
+                    const destLines = doc.splitTextToSize(dests, 109);
+                    doc.text(destLines, 50, 85); 
+                    doc.line(50, 86, 159, 86);
+                    curY = 85 + Math.max(6, destLines.length * 4);
 
-                    if(od.transport === "GOV'T VEHICLE") {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-                        doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 120, {align:'center'});
-                    }
+                    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+                    doc.text("DEPARTURE:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 50, curY);
+                    doc.line(50, curY+1, 100, curY+1);
 
+                    doc.setFont("helvetica", "bold"); doc.text("RETURN:", 110, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 135, curY);
+                    doc.line(135, curY+1, 159, curY+1);
+
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY);
+                    doc.line(50, curY+1, 159, curY+1);
+
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
+                    const purpText = itin_list[0]?.purpose || "";
+                    const purpLines = doc.splitTextToSize(purpText, 109);
+                    doc.text(purpLines, 50, curY); 
+                    doc.line(50, curY+1, 159, curY+1);
+
+                    // RECOMMENDING APPROVAL
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("RECOMMENDING APPROVAL:", 20, 157);
                     
@@ -428,15 +454,27 @@
             const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
             let html = '';
             for(let to of tos || []) {
+                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 const isApproved = to.status === 'APPROVED';
                 const isPending = to.status.includes('PENDING');
 
                 html += `
-                    <div class="card" style="padding: 15px; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <div style="font-weight:bold; font-size: 16px;">${to.to_no}</div>
-                            <span class="badge ${sCls}">${to.status}</span>
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px;">
+                            <div style="font-weight:bold; font-size:14px; color: var(--dar-green);">${to.to_no}</div>
+                            <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div style="font-size:11px; color:gray; margin-bottom: 8px;">
+                            <strong>Division:</strong> ${to.division || 'N/A'} | <strong>Transport:</strong> ${to.transport || 'N/A'}
+                        </div>
+                        <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 10px;">
+                            <strong style="font-size: 11px; color: var(--dar-green);">Itinerary Details:</strong>
+                            ${itin?.map(i => `
+                                <div style="font-size:11px; margin-top:4px; padding-top: 4px; border-top: 1px dashed #e5e7eb;">
+                                    <span style="color: #374151;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}</span><br>
+                                    <span style="color: #6b7280; font-style: italic;">"${i.purpose}"</span>
+                                </div>`).join('')}
                         </div>`;
 
                 if (isApproved) {
@@ -448,26 +486,44 @@
 
                 html += `</div>`;
             }
-            list.innerHTML = html || "No records.";
+            list.innerHTML = html || "No records found.";
         }
 
         window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
+        
         async function renderCalendar() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
             const month = calDate.getMonth(), year = calDate.getFullYear();
-            const { data: myTOs } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const myToNos = myTOs?.map(t => t.to_no) || [];
-            const { data: itins } = await supabase.from('itinerary').select('travel_date, to_no').in('to_no', myToNos);
-            const { data: psos } = await supabase.from('pso_records').select('start_date, end_date').eq('emp_id', currentUser.emp_id);
-            const header = document.getElementById('cal-header'); const body = document.getElementById('cal-body');
-            header.innerHTML = ['S','M','T','W','T','F','S'].map(d=>`<div class="calendar-header">${d}</div>`).join(''); body.innerHTML = '';
-            const first = new Date(year, month, 1).getDay(); const last = new Date(year, month + 1, 0).getDate();
-            for(let i=0; i<first; i++) body.innerHTML += '<div></div>';
-            for(let d=1; d<=last; d++) {
-                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const hasTO = itins?.some(i => i.travel_date === ds);
-                const hasPSO = psos?.some(p => ds >= p.start_date && ds <= p.end_date);
-                body.innerHTML += `<div class="calendar-day ${ds === todayStr ? 'today' : ''}">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>':''}${hasPSO ? '<div class="dot dot-pso"></div>':''}</div></div>`;
+            const tbody = document.getElementById('cal-table-body');
+            tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
+
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+            const toNos = tos?.map(t => t.to_no) || [];
+            const { data: itins } = await supabase.from('itinerary').select('travel_date, destination, purpose').in('to_no', toNos);
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*');
+
+            tbody.innerHTML = "";
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dayName = new Date(year, month, d).toLocaleDateString('en-US', { weekday: 'short' });
+                
+                let activityHtml = "";
+                const dayItins = itins?.filter(i => i.travel_date === dateStr);
+                const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                const holiday = holidays?.find(h => h.date === dateStr);
+
+                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.remarks}</div>`;
+                if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO: ${p.remarks || 'On Duty'}</div>`);
+                if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.destination} (${i.purpose})</div>`);
+
+                tbody.innerHTML += `
+                    <tr style="${dateStr === todayStr ? 'background:#fffbeb;' : ''}">
+                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dayName}</span></td>
+                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                    </tr>`;
             }
         }
 
