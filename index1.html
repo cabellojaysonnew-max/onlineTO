@@ -285,7 +285,7 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`ALERT: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`Conflict: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
@@ -501,12 +501,21 @@
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 157);
-                    if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 165 - 12, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                    if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 165 - 12, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                    
+                    // Conditionally render signatures only if page > 1 (i > 0)
+                    if (i > 0) {
+                        if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 165 - 12, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 165 - 12, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                    } else {
+                        // Print names without signatures for page 1
+                        if(uh_data) { doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                    }
+
                     doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("UNIT HEAD", 52, 171, {align: 'center'});
                     doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
-                    if(img_p2) doc.addImage(img_p2, 'PNG', 121, 204 - 15, 40, 20); 
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 95, 204 - 15, 40, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 121, 204);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
