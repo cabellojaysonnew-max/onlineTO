@@ -149,8 +149,11 @@
             <h3 style="color: var(--dar-green);">Security</h3>
             <div class="card">
                 <h4>Update Portal Password</h4>
+                <label>Current Password</label>
                 <input type="password" id="pass-curr">
+                <label>New Password</label>
                 <input type="password" id="pass-new">
+                <label>Confirm Password</label>
                 <input type="password" id="pass-conf">
                 <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
             </div>
@@ -257,6 +260,7 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
+            // EARLY CONFLICT CHECK
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let toNos = active?.map(a => a.to_no) || [];
@@ -265,12 +269,12 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`ALERT: PSO overlap on ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`Conflict: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                 }
                 if(toNos.length > 0) {
                     const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
                     if(conf?.length > 0) {
-                        if(!confirm(`Conflict: Existing TO on ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                        if(!confirm(`Conflict: Existing TO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
                     }
                 }
                 
@@ -374,7 +378,7 @@
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
+                    if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
                     
                     // Smaller QR Code at Rightmost Upper Side
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20);
@@ -385,7 +389,7 @@
                     // Filing Date next to TO Number
                     const fDate = new Date(od.created_at).toLocaleDateString();
                     doc.setFontSize(10);
-                    doc.text(`FILING DATE: ${fDate}`, 155, 45);
+                    doc.text(`FILING DATE: ${fDate}`, 160, 45);
 
                     doc.setFontSize(11); doc.text("NAME:", 20, 75); doc.text(names, 45, 75); doc.line(45, 76, 159, 76);
                     
@@ -466,6 +470,14 @@
                 body.innerHTML += `<div class="calendar-day ${ds === todayStr ? 'today' : ''}">${d}<div class="dot-container">${hasTO ? '<div class="dot dot-to"></div>':''}${hasPSO ? '<div class="dot dot-pso"></div>':''}</div></div>`;
             }
         }
+
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value;
+            const nw = document.getElementById('pass-new').value;
+            if(curr !== currentUser.pass) return alert("Wrong current password.");
+            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            alert("Updated."); location.reload();
+        };
     </script>
 </body>
 </html>
