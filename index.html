@@ -42,19 +42,17 @@
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
         .btn-danger { background: var(--danger); }
         .btn-success { background: var(--success); }
-        .btn-warning { background: var(--warning); }
         
         .action-group { display: flex; gap: 8px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
 
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; }
+        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; }
         .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
         .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
         .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; }
         .entry-to { background: var(--dar-green); }
-        .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
@@ -64,7 +62,6 @@
         .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
         .bg-pending { background: #fefce8; color: #854d0e; }
         .bg-approved { background: #ecfdf5; color: #166534; }
-        .bg-cancelled { background: #fef2f2; color: #991b1b; }
         
         .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
         .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
@@ -76,7 +73,7 @@
         <div style="height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 25px;">
             <div style="background: white; padding: 35px 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border-top: 6px solid var(--dar-gold);">
                 <h2 style="color: var(--dar-green); text-align: center; margin: 0;">DAR PORTAL</h2>
-                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
+                <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">Employee Access</p>
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
@@ -117,10 +114,10 @@
 
             <div class="card">
                 <h4>3. Itinerary Builder</h4>
-                <label>Date Range (From - To, Max 5 days)</label>
+                <label>Date Range (From - To)</label>
                 <div style="display: flex; gap: 5px;">
-                    <input type="date" id="itin-from" onchange="handleStartDateChange()" onkeydown="return false">
-                    <input type="date" id="itin-to" onchange="generateItinFields()" onkeydown="return false">
+                    <input type="date" id="itin-from" onchange="handleStartDateChange()">
+                    <input type="date" id="itin-to" onchange="generateItinFields()">
                 </div>
                 <div id="dynamic-itin-fields" style="margin-top: 15px;"></div>
             </div>
@@ -128,12 +125,12 @@
         </div>
 
         <div id="status-view" class="view">
-            <h3 style="color: var(--dar-green);">APPLICATIONS</h3>
+            <h3 style="color: var(--dar-green);">MY APPLICATIONS</h3>
             <div id="status-list"></div>
         </div>
 
         <div id="calendar-view" class="view">
-            <h3 style="color: var(--dar-green);">Personal Activity Schedule</h3>
+            <h3 style="color: var(--dar-green);">Schedule</h3>
             <div class="card" style="padding:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f0f4f8;">
                     <button onclick="changeCalMonth(-1)" class="btn-primary" style="width:auto; padding:5px 15px; margin:0;">&lt;</button>
@@ -142,12 +139,7 @@
                 </div>
                 <div class="cal-container">
                     <table class="cal-table">
-                        <thead>
-                            <tr>
-                                <th>Day</th>
-                                <th>Schedule / Details</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Day</th><th>Schedule</th></tr></thead>
                         <tbody id="cal-table-body"></tbody>
                     </table>
                 </div>
@@ -157,14 +149,10 @@
         <div id="security-view" class="view">
             <h3 style="color: var(--dar-green);">Security</h3>
             <div class="card">
-                <h4>Update Portal Password</h4>
-                <label>Current Password</label>
-                <input type="password" id="pass-curr">
-                <label>New Password</label>
-                <input type="password" id="pass-new">
-                <label>Confirm Password</label>
-                <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
+                <h4>Password</h4>
+                <input type="password" id="pass-curr" placeholder="Current Password">
+                <input type="password" id="pass-new" placeholder="New Password">
+                <button class="btn btn-primary" onclick="changePassword()">UPDATE</button>
             </div>
         </div>
 
@@ -191,7 +179,6 @@
         const urlToBase64 = async (url) => {
             try {
                 const response = await fetch(url);
-                if (!response.ok) return null;
                 const blob = await response.blob();
                 return new Promise((resolve) => {
                     const reader = new FileReader();
@@ -211,11 +198,9 @@
                 document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-from').min = todayStr;
-                document.getElementById('itin-to').min = todayStr;
                 personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                 renderPersonnel();
-            } else { alert("Invalid Credentials"); }
+            } else { alert("Invalid"); }
         };
 
         window.switchTab = function(id, el) {
@@ -229,18 +214,17 @@
 
         window.searchEmployees = async function() {
             const term = document.getElementById('emp-search').value;
-            if (term.length < 2) return;
             const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
             const resDiv = document.getElementById('search-results');
             resDiv.innerHTML = ''; resDiv.style.display = 'block';
             data.forEach(emp => {
                 const row = document.createElement('div'); row.className = 'search-row';
-                row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
+                row.innerHTML = `${emp.full_name}`;
                 row.onclick = () => {
-                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
+                    if (personnelDraft.length >= 5) return;
                     if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
                     personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
-                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
+                    resDiv.style.display = 'none'; renderPersonnel();
                 };
                 resDiv.appendChild(row);
             });
@@ -248,205 +232,156 @@
 
         function renderPersonnel() {
             const list = document.getElementById('personnel-draft-list');
-            list.innerHTML = personnelDraft.map((p, i) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
-                    <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}
-                </div>`).join('');
+            list.innerHTML = personnelDraft.map((p, i) => `<div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px; border-radius:8px; margin-bottom:5px;"><span>${p.name}</span>${p.emp_id !== currentUser.emp_id ? `<button onclick="removePersonnel(${i})">X</button>` : ''}</div>`).join('');
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
 
-        window.handleStartDateChange = function() {
-            const fromDate = document.getElementById('itin-from').value;
-            if (fromDate) {
-                document.getElementById('itin-to').value = fromDate;
-                generateItinFields();
-            }
+        window.handleStartDateChange = () => {
+            const from = document.getElementById('itin-from').value;
+            document.getElementById('itin-to').value = from;
+            generateItinFields();
         };
 
-        window.generateItinFields = async function() {
-            const fromDate = document.getElementById('itin-from').value;
-            const toDate = document.getElementById('itin-to').value;
+        window.generateItinFields = () => {
+            const from = document.getElementById('itin-from').value, to = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
             container.innerHTML = ''; itineraryDraft = [];
-            if (!fromDate || !toDate) return;
-            const start = new Date(fromDate);
-            const end = new Date(toDate);
-            const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-            if (diffDays > 5) return alert("Maximum of 5 days allowed.");
+            const start = new Date(from), end = new Date(to);
+            const diff = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+            if (diff > 5) return alert("Max 5 days");
 
-            let currentDt = new Date(start);
-            for (let i = 0; i < diffDays; i++) {
-                const dateStr = currentDt.toISOString().split('T')[0];
-                const cardId = `card-${i}`;
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5>
-                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
-                        </div>
-                        <input type="text" id="dest-${i}" placeholder="Destination">
-                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
-                        <input type="text" id="rep-${i}" placeholder="Report To">
-                    </div>`;
-                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId });
-                currentDt.setDate(currentDt.getDate() + 1);
+            let cur = new Date(start);
+            for (let i = 0; i < diff; i++) {
+                const ds = cur.toISOString().split('T')[0];
+                container.innerHTML += `<div class="card"><h5 style="color:var(--dar-green);">📅 ${ds}</h5><input type="text" id="dest-${i}" placeholder="Destination"><textarea id="purp-${i}" placeholder="Purpose"></textarea><input type="text" id="rep-${i}" placeholder="Report To"></div>`;
+                itineraryDraft.push({ date: ds, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}` });
+                cur.setDate(cur.getDate() + 1);
             }
         };
 
+        // --- SUBMIT LOGIC WITH MARPO CHECK ---
         window.submitTO = async function() {
-            if (isSubmitting) return;
-            if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
-            const batchItin = []; const reportTos = new Set();
+            if (isSubmitting || itineraryDraft.length === 0) return;
+            const batchItin = []; const reps = [];
             for (let it of itineraryDraft) {
-                const dest = document.getElementById(it.destId).value.trim();
-                const purp = document.getElementById(it.purpId).value.trim();
-                const rep = document.getElementById(it.repId).value.trim();
-                if (!dest || !purp || !rep) return alert(`Fill all fields for ${it.date}.`);
-                batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
-                reportTos.add(rep);
+                const d = document.getElementById(it.destId).value, p = document.getElementById(it.purpId).value, r = document.getElementById(it.repId).value;
+                if (!d || !p || !r) return alert("Fill all fields");
+                batchItin.push({ travel_date: it.date, destination: d, purpose: p });
+                reps.push(r);
             }
 
             isSubmitting = true;
-            const submitBtn = document.getElementById('btn-submit-to');
-            if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
-
             try {
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 
-                // ROUTING LOGIC: If MARPO then forcing status to PENDING_CHIEF
-                let routeStatus = "PENDING_CHIEF"; 
+                // MARPO RULE: skipping Unit Head, goes to PENDING_CHIEF
+                let routeStatus = "PENDING_CHIEF";
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (currentUser.position === "MARPO") routeStatus = "PENDING_CHIEF"; 
+                else if (currentUser.position === "MARPO") routeStatus = "PENDING_CHIEF";
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
-                else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
+                else if (currentUser.unit && currentUser.unit !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", ")
+                    division: currentUser.division, status: routeStatus, transport, report_to: reps.join(", ")
                 }));
                 batchItin.forEach(it => it.to_no = finalToNo);
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
-                
                 alert("Submitted: " + finalToNo);
                 location.reload();
-            } catch(e) { 
-                alert("Error: " + e.message); 
-            } finally {
-                isSubmitting = false;
-            }
+            } catch(e) { alert(e.message); } finally { isSubmitting = false; }
         };
 
         async function generateToNo() {
-            const year = new Date().getFullYear();
-            const div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
+            const year = new Date().getFullYear(), div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
             const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
             let seq = 1;
-            if (data && data.length > 0) {
-                const parts = data[0].to_no.split('-');
-                if (parts.length >= 3) seq = parseInt(parts[2], 10) + 1;
-            }
+            if (data?.length > 0) seq = parseInt(data[0].to_no.split('-')[2]) + 1;
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
+        // --- PDF LOGIC WITH MARPO CHIEF SIGNATORY ---
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
-            const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
-            try {
-                const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
-                const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-                const od = group_orders[0];
+            const { data: group } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            
+            // MARPO RULE: Division LTSP Chief Signs
+            let chiefDiv = group[0].division;
+            if (currentUser.position === "MARPO") chiefDiv = "LTSP";
 
-                // CHIEF = LTSP if MARPO
-                let chiefDiv = od.division;
-                if (currentUser.position === "MARPO") chiefDiv = "LTSP";
+            const { data: uh } = await supabase.from('users').select('full_name').eq('unit', group[0].unit).eq('role', 'Unit Head').maybeSingle();
+            const { data: dc } = await supabase.from('users').select('full_name').eq('division', chiefDiv).eq('role', 'Division Chief').maybeSingle();
 
-                const { data: uh_data } = await supabase.from('users').select('full_name, username').eq('unit', od.unit).eq('role', 'Unit Head').maybeSingle();
-                const { data: dc_data } = await supabase.from('users').select('full_name, username').eq('division', chiefDiv).eq('role', 'Division Chief').maybeSingle();
+            doc.setFontSize(14); doc.setFont("helvetica", "bold");
+            doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 30, { align: 'center' });
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text(`Personnel: ${group.map(m => m.emp_name).join(", ")}`, 20, 50);
+            doc.text(`Destination: ${itin.map(i => i.destination).join(", ")}`, 20, 60);
+            doc.text(`Purpose: ${itin[0].purpose}`, 20, 70);
 
-                const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
-                    urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
-                    urlToBase64(getAssetUrl("P2.png")),
-                    uh_data ? urlToBase64(getAssetUrl(`${uh_data.username}.png`)) : null,
-                    dc_data ? urlToBase64(getAssetUrl(`${dc_data.username}.png`)) : null
-                ]);
-
-                for (let i = 0; i < 3; i++) {
-                    if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
-                    doc.setFontSize(14); doc.setFont("helvetica", "bold");
-                    doc.text(`TRAVEL ORDER: ${toNo}`, 105, 30, { align: 'center' });
-                    doc.setFontSize(10); doc.setFont("helvetica", "normal");
-                    doc.text(`Name: ${group_orders.map(m => m.emp_name).join(", ")}`, 20, 50);
-                    doc.text(`Transport: ${od.transport}`, 20, 58);
-                    
-                    // Approved signatories
-                    doc.setFont("helvetica", "bold");
-                    doc.text("Approved by:", 20, 157);
-                    if(uh_data) doc.text(uh_data.full_name.toUpperCase(), 30, 165);
-                    if(dc_data) doc.text(dc_data.full_name.toUpperCase(), 110, 165);
-                    
-                    // PARPO II Signatory always last
-                    doc.text("RICARDO C. GARCIA", 121, 204);
-                    doc.setFont("helvetica", "normal"); doc.text("PARPO II", 145, 209);
-                }
-                doc.save(`TO_${toNo}.pdf`);
-            } catch (e) { alert(e.message); }
+            doc.setFont("helvetica", "bold");
+            doc.text("Approved by:", 20, 100);
+            doc.text(uh?.full_name || "UNIT HEAD", 20, 115);
+            doc.text(dc?.full_name || "DIVISION CHIEF", 120, 115);
+            
+            // Final Signatory PARPO II
+            doc.text("RICARDO C. GARCIA", 120, 150);
+            doc.setFontSize(8); doc.text("PARPO II", 120, 154);
+            doc.save(`TO_${toNo}.pdf`);
         };
 
         async function loadStatus() {
-            const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(10);
+            const list = document.getElementById('status-list'); list.innerHTML = "Loading...";
+            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false});
             let html = '';
             for(let to of tos || []) {
-                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
-                const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
-
+                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date');
+                const isApproved = to.status === 'APPROVED';
                 html += `<div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                        ${itin?.map(i => `<div style="font-size: 11px; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}</div>`).join('')}
-                    </div>
+                    <div style="display:flex; justify-content:space-between;"><strong>${to.to_no}</strong><span class="badge ${isApproved ? 'bg-approved' : 'bg-pending'}">${to.status}</span></div>
+                    <div style="font-size:11px; color:var(--dar-green); margin-top:5px;">📍 ${itin?.[0]?.destination || 'N/A'} | 📅 ${itin?.[0]?.travel_date}</div>
                     <div class="action-group">
-                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button>` : ''}
+                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button>` : `<button class="btn btn-danger btn-small" onclick="cancelTO('${to.to_no}')">Cancel</button>`}
                     </div>
                 </div>`;
             }
-            list.innerHTML = html || "No records found.";
+            list.innerHTML = html || "Empty";
         }
 
-        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
+        window.cancelTO = async (toNo) => { if(confirm("Cancel?")) { await supabase.from('travel_orders').update({status:'CANCELLED'}).eq('to_no', toNo); loadStatus(); } };
+
         async function renderCalendar() {
-            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
-            const month = calDate.getMonth(), year = calDate.getFullYear();
             const tbody = document.getElementById('cal-table-body');
-            tbody.innerHTML = "";
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
+            tbody.innerHTML = "Loading...";
             const { data: holidays } = await supabase.from('holidays').select('*');
-            for(let d=1; d<=daysInMonth; d++) {
-                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const holiday = holidays?.find(h => h.date === dateStr);
-                tbody.innerHTML += `<tr><td><span class="day-num">${d}</span></td><td>${holiday ? `<div class="cal-entry entry-holiday">${holiday.description || 'Holiday'}</div>` : '--'}</td></tr>`;
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+            const { data: itin } = await supabase.from('itinerary').select('*').in('to_no', tos?.map(t=>t.to_no) || []);
+            
+            tbody.innerHTML = "";
+            const days = new Date(calDate.getFullYear(), calDate.getMonth()+1, 0).getDate();
+            for(let d=1; d<=days; d++) {
+                const ds = `${calDate.getFullYear()}-${String(calDate.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const hol = holidays?.find(h => h.date === ds), myItin = itin?.find(i => i.travel_date === ds);
+                let act = "";
+                if(hol) act += `<div class="cal-entry entry-holiday">${hol.holiday || hol.name}</div>`;
+                if(myItin) act += `<div class="cal-entry entry-to">TO: ${myItin.destination}</div>`;
+                tbody.innerHTML += `<tr><td class="day-num">${d}</td><td>${act || '--'}</td></tr>`;
             }
         }
 
-        window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            if(curr !== currentUser.pass) return alert("Wrong current password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
+        window.changeCalMonth = (v) => { calDate.setMonth(calDate.getMonth()+v); renderCalendar(); };
+
+        window.changePassword = async () => {
+            const c = document.getElementById('pass-curr').value, n = document.getElementById('pass-new').value;
+            if(c === currentUser.pass) { await supabase.from('employees').update({pass:n}).eq('emp_id', currentUser.emp_id); alert("Updated"); }
         };
 
-        window.onload = render;
+        window.onload = () => {};
     </script>
 </body>
 </html>
