@@ -248,10 +248,10 @@
 
         function renderPersonnel() {
             const list = document.getElementById('personnel-draft-list');
-            list.innerHTML = personnelDraft.map((p, i) => `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
-                    <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}
+            list.innerHTML = personnelDraft.map((p, i) => `<br>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;"><br>
+                    <span>👤 ${p.name}</span><br>
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}<br>
                 </div>`).join('');
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
@@ -296,16 +296,16 @@
                 }
                 
                 const cardId = `card-${i}`;
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5>
-                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
-                        </div>
-                        <input type="text" id="dest-${i}" placeholder="Destination">
-                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
-                        <input type="text" id="rep-${i}" placeholder="Report To">
+                container.innerHTML += `<br>
+                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);"><br>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><br>
+                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5><br>
+                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button><br>
+                        </div><br>
+                        <input type="text" id="dest-${i}" placeholder="Destination"><br>
+                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}<br>
+                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea><br>
+                        <input type="text" id="rep-${i}" placeholder="Report To"><br>
                     </div>`;
                 itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId });
                 currentDt.setDate(currentDt.getDate() + 1);
@@ -420,17 +420,17 @@
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
-                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
-                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
-                        </div>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
-                    </div>
+                container.innerHTML += `<br>
+                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);"><br>
+                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><br>
+                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5><br>
+                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span><br>
+                        </div><br>
+                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;"><br>
+                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}<br>
+                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea><br>
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;"><br>
+                    </div><br>
                 `;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
             });
@@ -455,8 +455,21 @@
                 const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
                 const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
-                const { data: uh_data } = await supabase.from('users').select('full_name, username').eq('unit', od.unit).eq('role', 'Unit Head').maybeSingle();
-                const { data: dc_data } = await supabase.from('users').select('full_name, username').eq('division', od.division).eq('role', 'Division Chief').maybeSingle();
+                const isMARPO = positions.includes("MARPO");
+
+                // Personal Context: Signatory Rule Execution
+                let uh_data = null;
+                if (!isMARPO && od.unit && od.unit !== "PARPO") {
+                    const res = await supabase.from('users').select('full_name, username').eq('unit', od.unit).eq('role', 'Unit Head').maybeSingle();
+                    uh_data = res.data;
+                }
+
+                let dc_data = null;
+                const divToFetch = isMARPO ? "LTSP" : od.division;
+                if (divToFetch) {
+                    const res = await supabase.from('users').select('full_name, username').eq('division', divToFetch).eq('role', 'Division Chief').maybeSingle();
+                    dc_data = res.data;
+                }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
@@ -470,6 +483,16 @@
                     if (i > 0) doc.addPage();
                     if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+
+                    // Personal Context: Logistics Warnings
+                    if (od.transport === "GOV'T VEHICLE") {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                        doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' });
+                    }
+                    if (od.remarks && od.remarks.includes("EXISTING PSO")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+                    }
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
@@ -536,21 +559,21 @@
                     doc.text("Recommended by:", 20, 157);
                     
                     if (i > 0) {
-                        if(uh_data) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
                         if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
                     } else {
-                        if(uh_data) { doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
+                        if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
                         if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
                     }
 
-                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("UNIT HEAD", 52, 171, {align: 'center'});
+                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 171, {align: 'center'});
                     doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 121, 189, 25, 20); 
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, 189, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 121, 204);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 145, 209);
+                    doc.text("PARPO II", 135, 209);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -565,19 +588,19 @@
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                html += `<div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div>
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);">
-                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div>
-                        ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br><span style="color: gray; font-style: italic;">"${i.purpose}"</span></div>`).join('')}
-                    </div>
-                    <div class="action-group">
-                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}
-                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
-                    </div>
+                html += `<div class="card"><br>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;"><br>
+                        <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div><br>
+                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span><br>
+                    </div><br>
+                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);"><br>
+                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div><br>
+                        ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br><span style="color: gray; font-style: italic;">"${i.purpose}"</span></div>`).join('')}<br>
+                    </div><br>
+                    <div class="action-group"><br>
+                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}<br>
+                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}<br>
+                    </div><br>
                 </div>`;
             }
             list.innerHTML = html || "No records found.";
