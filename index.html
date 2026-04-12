@@ -580,9 +580,9 @@
 
                     if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 114, 183, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 114, 198);
+                    doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 120, 202);
+                    doc.text("PARPO II", 128, 206);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
