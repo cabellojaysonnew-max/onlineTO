@@ -232,9 +232,10 @@
                         <h2 class="font-black text-dar text-xs uppercase tracking-widest">Schedule Maintenance</h2>
                         <p id="maintSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p>
                     </div>
-                    <div class="p-8 space-y-4 bg-white">
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="maintD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date (Optional)</label><input id="maintD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
+                    <div class="p-6 space-y-4 bg-white">
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Reason for Maintenance</label><input id="maintReason" placeholder="e.g., Change Oil, Brake Repair..." class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="maintD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date (Optional)</label><input id="maintD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none"></div>
                     </div>
                     <div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl">
                         <button onclick="closeModal('maintModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
@@ -309,6 +310,10 @@
             
             container.innerHTML = `<div class="space-y-4">` + Object.entries(grp).map(([to, list]) => {
                 const isMaint = list[0].remarks === 'MAINTENANCE';
+                
+                // Only show purpose if maintenance
+                const purpose = isMaint ? (itins.find(i => i.to_no === to)?.purpose || 'Fleet Maintenance') : '';
+
                 return `
             <div class="bg-white p-5 rounded-2xl shadow-sm border-l-4 ${isMaint ? 'border-red-600' : 'border-dar'} relative flex flex-col">
                 <div class="flex justify-between items-start mb-3 border-b border-slate-100 pb-2">
@@ -320,18 +325,39 @@
                     ${list[0].emp_name} ${!isMaint ? `<span class="bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>` : ''}
                 </h3>
                 
-                ${list.length > 1 ? `<div class="text-[10px] text-slate-500 font-bold uppercase mb-3 leading-tight pl-2 border-l-2 border-slate-100">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>` : '<div class="mb-2"></div>'}
+                ${isMaint ? `<p class="text-[10px] text-slate-500 font-bold uppercase mb-3 leading-tight border-l-2 border-red-200 pl-2 italic">${purpose}</p>` : ''}
+                ${list.length > 1 ? `<div class="text-[10px] text-slate-500 font-bold uppercase mb-3 leading-tight pl-2 border-l-2 border-slate-100">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>` : (!isMaint ? '<div class="mb-2"></div>' : '')}
 
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4 flex justify-between">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4 flex justify-between mt-auto">
                     <p class="text-[10px] text-dar font-black uppercase tracking-widest">🚙 ${list[0].received}</p>
                     <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">👤 ${list[0].driver}</p>
                 </div>
 
                 <div class="flex gap-2">
-                    <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-white border border-red-200 text-red-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex-1 active:scale-95 transition">Cancel</button>
-                    ${!isMaint ? `<button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-3 py-2.5 rounded-xl text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>` : `<div class="flex-[2]"></div>`}
+                    ${isMaint 
+                        ? `<button onclick="endMaintenance('${to}')" class="bg-white border border-dar text-dar px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex-[2] active:scale-95 transition">✅ Mark Done</button>
+                           <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-red-50 border border-red-100 text-red-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex-1 active:scale-95 transition">Void</button>`
+                        : `<button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-white border border-red-200 text-red-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex-1 active:scale-95 transition">Cancel</button>
+                           <button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-3 py-2.5 rounded-xl text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>`
+                    }
                 </div>
             </div>`}).join('') + `</div>`;
+        }
+
+        async function endMaintenance(to) {
+            if(!confirm("Has the maintenance finished? This will clear remaining schedules from today onwards and make the vehicle available.")) return;
+            
+            const now = new Date();
+            const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0'), d = String(now.getDate()).padStart(2,'0');
+            const todayStr = `${y}-${m}-${d}`;
+
+            await db.from('itinerary').delete().eq('to_no', to).gte('travel_date', todayStr);
+            
+            const remaining = await db.from('itinerary').select('id').eq('to_no', to);
+            if(!remaining.data || remaining.data.length === 0) {
+                 await db.from('travel_orders').delete().eq('to_no', to);
+            }
+            sync();
         }
 
         async function cancelTrip(to, status) {
@@ -375,7 +401,10 @@
                     const dates = [...new Set(filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
                     const allPass = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join('<br> • ');
                     const isMaint = h.remarks === 'MAINTENANCE';
-                    if(isMaint) return `<div class="bg-red-50 p-4 rounded-xl border border-red-200"><p class="text-xs font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | MAINT</p></div>`;
+                    const mainItin = filteredItins.find(itin => itin.to_no === toNo);
+                    
+                    if(isMaint) return `<div class="bg-red-50 p-4 rounded-xl border border-red-200"><p class="text-xs font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | MAINT</p><p class="text-[9px] text-slate-600 font-bold mt-1 italic">${mainItin?.purpose || ''}</p></div>`;
+                    
                     return `<div class="bg-slate-50 p-4 rounded-xl mb-3 flex justify-between items-center border border-slate-200 shadow-sm"><div class="overflow-hidden leading-tight pr-2"><p class="text-[11px] font-black text-slate-800 uppercase mb-2"> • ${allPass}</p><p class="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-2 pt-1 border-t">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="smartTransfer('${h.to_no}','${v}')" class="text-xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-10 h-10 flex items-center justify-center border border-slate-200 shadow-sm shrink-0">🔄</button></div>`;
                 }).join('');
                 return html + `</div>`;
@@ -412,12 +441,14 @@
             document.getElementById('maintSub').innerText = `Vehicle: ${veh}`;
             document.getElementById('maintD1').value = "";
             document.getElementById('maintD2').value = "";
+            document.getElementById('maintReason').value = "";
             openModal('maintModal');
         }
 
         async function saveMaintenance() {
             const d1 = document.getElementById('maintD1').value;
             const d2 = document.getElementById('maintD2').value;
+            const reason = document.getElementById('maintReason').value || "Routine Maintenance";
             if(!d1) return alert("Select at least a start date.");
             
             const to = `MAINT-${Math.floor(Date.now()%10000)}`;
@@ -425,7 +456,7 @@
             
             let st = new Date(d1), en = new Date(d2 || d1);
             while(st <= en) {
-                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Authorized Shop", purpose: "Fleet Maintenance" });
+                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Authorized Shop", purpose: reason });
                 st.setDate(st.getDate() + 1);
             }
             closeModal('maintModal');
@@ -525,7 +556,6 @@
             if(!d1 || !p) return alert("Missing Dates or Purpose.");
             if(manualPassengerQueue.length === 0) return alert("Please queue at least one passenger.");
 
-            // The first queued person is automatically the lead
             const headPass = manualPassengerQueue[0];
             const n = headPass.n;
 
