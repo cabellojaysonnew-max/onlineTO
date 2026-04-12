@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DAR CS I - Dispatch Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -18,170 +18,198 @@
             --success: #15803d;
         }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-tap-highlight-color: transparent; }
         body { margin: 0; background-color: var(--bg-main); color: #1f2937; }
 
         /* Screens */
         .screen { display: none; min-height: 100vh; }
-        .screen.active { display: block; }
+        .screen.active { display: flex; flex-direction: column; }
 
-        /* Login Styling */
-        #login-screen { display: flex; }
-        .login-left { width: 450px; background: var(--dar-green); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; padding: 20px; }
-        .login-right { flex: 1; display: flex; justify-content: center; align-items: center; }
-        .login-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        /* Login Styling - Mobile Friendly */
+        #login-screen { justify-content: center; align-items: center; padding: 20px; }
+        .login-card { background: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%; max-width: 400px; border-top: 6px solid var(--dar-gold); }
+        .login-header { text-align: center; margin-bottom: 25px; }
+        .login-header h2 { color: var(--dar-green); margin: 0 0 5px 0; }
+        .login-header p { color: gray; font-size: 12px; margin: 0; font-weight: bold; }
 
         /* Header */
-        .app-header { background: var(--dar-green); color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--dar-gold); }
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; flex-direction: column; gap: 10px; border-bottom: 4px solid var(--dar-gold); position: sticky; top: 0; z-index: 100; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
+        .header-title { font-weight: bold; font-size: 14px; }
+        .header-subtitle { font-size: 10px; color: var(--dar-gold); }
 
-        /* Tabs */
-        .nav-tabs { display: flex; background: #e5e7eb; padding: 0 20px; gap: 5px; }
-        .tab-link { padding: 12px 25px; cursor: pointer; border: none; background: #d1d5db; font-weight: bold; font-size: 14px; transition: 0.3s; }
-        .tab-link.active { background: white; border-top: 4px solid var(--dar-green); color: var(--dar-green); }
+        /* Bottom Tabs (Mobile Style) */
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); border-top: 2px solid var(--dar-gold); }
+        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); margin-top: -3px; }
 
-        /* Tables */
-        .view-content { padding: 20px; display: none; }
-        .view-content.active { display: block; }
-        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; background: white; padding: 15px; border-radius: 8px; flex-wrap: wrap; }
+        /* Content Views */
+        .view-content { padding: 15px; padding-bottom: 80px; display: none; flex: 1; overflow-y: auto; }
+        .view-content.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Toolbar / Actions */
+        .toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; background: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .toolbar-row { display: flex; gap: 8px; width: 100%; }
         
-        table { width: 100%; border-collapse: collapse; background: white; font-size: 14px; }
-        th { background: var(--dar-green); color: white; padding: 12px; text-align: center; }
-        td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center; }
-        tr:hover { background-color: #f9fafb; }
+        /* Cards for Data (Replacing wide tables for mobile) */
+        .data-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .data-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #f3f4f6; padding-bottom: 8px; }
+        .data-title { font-weight: bold; font-size: 14px; color: var(--dar-green); }
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; }
+        .bg-pending { background: #fefce8; color: #854d0e; }
+        .bg-approved { background: #dcfce7; color: #166534; }
+        .data-detail { font-size: 12px; margin-bottom: 4px; display: flex; flex-direction: column; }
+        .data-label { color: #6b7280; font-size: 10px; text-transform: uppercase; }
 
-        /* Calendar */
-        .cal-grid { display: grid; grid-template-columns: 120px repeat(7, 1fr); gap: 1px; background: #cbd5e1; border: 1px solid #cbd5e1; }
-        .cal-cell { background: white; min-height: 80px; padding: 5px; font-size: 11px; overflow: hidden; }
-        .cal-header { background: #f1f5f9; font-weight: bold; text-align: center; padding: 10px 5px; }
-        .cal-entry { margin-top: 4px; padding: 4px; border-radius: 4px; color: #1e293b; font-weight: bold; border-left: 4px solid var(--dar-gold); cursor: help; }
-        .status-approved { background: #dcfce7; }
-        .status-pending { background: #fef9c3; }
+        /* Calendar (Mobile Grid) */
+        .cal-header-row { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .cal-day-card { background: white; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e5e7eb; overflow: hidden; }
+        .cal-day-title { background: var(--dar-green); color: white; padding: 8px 15px; font-weight: bold; font-size: 13px; }
+        .cal-entry { padding: 10px 15px; border-bottom: 1px solid #f3f4f6; font-size: 12px; border-left: 4px solid transparent; }
+        .entry-approved { border-left-color: var(--success); background: #f0fdf4; }
+        .entry-pending { border-left-color: var(--warning); background: #fefce8; }
 
-        /* Inputs */
-        input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
-        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
-        .btn-primary { background: var(--dar-green); }
-        .btn-danger { background: var(--danger); }
+        /* Inputs & Buttons */
+        input, select { padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; font-size: 14px; }
+        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; width: 100%; text-align: center; }
+        .btn-primary { background: var(--dar-green); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        .btn-action { background: #2563eb; }
+        .btn-action { background: #2563eb; color: white; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; }
 
         /* Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 450px; max-width: 90%; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
+        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+        
+        /* Utility */
+        .flex-1 { flex: 1; }
+        .mt-2 { margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div id="terms-modal" class="modal-overlay" style="display: flex;">
-        <div class="modal-content">
-            <h2 style="color: var(--dar-green); text-align: center;">TERMS OF USE</h2>
-            <div style="margin: 20px 0; font-size: 14px; line-height: 1.6;">
-                <p>1. <strong>OFFICIAL USE ONLY:</strong> This system is for DAR business.</p>
-                <p>2. <strong>DATA PRIVACY:</strong> All data access is logged.</p>
-                <p>3. <strong>NO SHARING:</strong> Do not distribute credentials.</p>
-                <p>4. <strong>LIABILITY:</strong> Users are accountable for actions taken.</p>
+    <div id="login-screen" class="screen active">
+        <div class="login-card">
+            <div class="login-header">
+                <h2>DAR PORTAL</h2>
+                <p>DISPATCH CONTROL - MOBILE</p>
             </div>
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="btn" style="background: #e5e7eb; color: black;" onclick="window.close()">DECLINE</button>
-                <button class="btn btn-primary" onclick="acceptTerms()">I ACCEPT</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="login-screen" class="screen">
-        <div class="login-left">
-            <h1>DEPARTMENT OF<br>AGRARIAN REFORM</h1>
-            <p>Camarines Sur 1 - Dispatch Portal</p>
-        </div>
-        <div class="login-right">
-            <div class="login-card">
-                <h3 style="color: var(--dar-green); text-align: center;">AUTHORIZED LOGIN</h3>
-                <label style="font-size: 12px;">Username</label>
-                <input type="text" id="login-user" style="width: 100%; margin-bottom: 15px;">
-                <label style="font-size: 12px;">Password</label>
-                <input type="password" id="login-pass" style="width: 100%; margin-bottom: 25px;">
-                <button class="btn btn-primary" style="width: 100%;" onclick="handleLogin()">ENTER SYSTEM</button>
-            </div>
+            <label style="font-size: 11px; font-weight: bold; color: gray;">Username</label>
+            <input type="text" id="login-user" style="margin-bottom: 15px;" inputmode="text">
+            <label style="font-size: 11px; font-weight: bold; color: gray;">Password</label>
+            <input type="password" id="login-pass" style="margin-bottom: 25px;">
+            <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
         </div>
     </div>
 
     <div id="app-screen" class="screen">
         <div class="app-header">
-            <div id="user-display" style="font-weight: bold;">DISPATCH CONTROL: User</div>
-            <div>
-                <button class="btn btn-gold" onclick="syncData()">REFRESH DATA</button>
-                <button class="btn btn-danger" onclick="location.reload()">LOGOUT</button>
+            <div class="header-top">
+                <div>
+                    <div class="header-title" id="user-display">User</div>
+                    <div class="header-subtitle" id="role-display">Role</div>
+                </div>
+                <button class="btn" style="width: auto; padding: 5px 10px; background: transparent; border: 1px solid white; color: white; font-size: 10px;" onclick="location.reload()">Logout</button>
             </div>
-        </div>
-
-        <div class="nav-tabs">
-            <button class="tab-link active" onclick="switchTab('pending-view', this)">PENDING APPROVALS</button>
-            <button class="tab-link" onclick="switchTab('approved-view', this)">DISPATCHED / TRACKING</button>
-            <button class="tab-link" onclick="switchTab('calendar-view', this)">CALENDAR VIEW</button>
         </div>
 
         <div id="pending-view" class="view-content active">
             <div class="toolbar">
-                <label>Vehicle:</label>
-                <select id="assign-veh"><option value="">Select...</option></select>
-                <label>Driver:</label>
-                <select id="assign-drv"><option value="">Select...</option></select>
-                <button class="btn btn-primary" onclick="handleAssignment()">✅ APPROVE & ASSIGN</button>
-                <button class="btn btn-danger" onclick="cancelRequest('pending')">🚫 DELETE</button>
-                <button class="btn btn-action" onclick="generateReport('pending')">🖨 PRINT PENDING LIST</button>
+                <div class="toolbar-row">
+                    <select id="assign-veh" class="flex-1"><option value="">Select Vehicle...</option></select>
+                    <select id="assign-drv" class="flex-1"><option value="">Select Driver...</option></select>
+                </div>
+                <div class="toolbar-row mt-2">
+                    <button class="btn btn-primary btn-small" onclick="handleAssignment()">✅ APPROVE</button>
+                    <button class="btn btn-action btn-small" onclick="openReservation()">➕ RSO/PSO</button>
+                </div>
+                <div class="toolbar-row">
+                    <button class="btn btn-gold btn-small" onclick="generateReport('pending')">🖨 PENDING LIST</button>
+                    <button class="btn btn-gold btn-small" onclick="printParpoSignature()">🖨 PARPO SIGN</button>
+                </div>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>TO #</th><th>Date Filed</th><th>Travel Date</th><th>Applicant</th><th>Unit</th><th>Purpose</th><th>Printed</th>
-                    </tr>
-                </thead>
-                <tbody id="pending-table-body"></tbody>
-            </table>
+            <div id="pending-list-container"></div>
         </div>
 
         <div id="approved-view" class="view-content">
             <div class="toolbar">
-                <button class="btn btn-action" onclick="generateReport('approved')">🖨 PRINT LIST</button>
-                <button class="btn btn-primary" id="btn-manage" onclick="openManagement()">🛠 MANAGE TRIP</button>
-                <button class="btn btn-danger" onclick="cancelRequest('approved')">❌ DELETE TRIP</button>
+                <button class="btn btn-gold" onclick="generateReport('approved')">🖨 PRINT DISPATCH LIST</button>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>TO #</th><th>Date Filed</th><th>Vehicle</th><th>Travel Date</th><th>Applicant</th><th>Purpose</th><th>Status</th><th>Printed</th>
-                    </tr>
-                </thead>
-                <tbody id="approved-table-body"></tbody>
-            </table>
+            <div id="approved-list-container"></div>
         </div>
 
         <div id="calendar-view" class="view-content">
-            <div class="toolbar" style="justify-content: space-between;">
-                <button class="btn btn-primary" onclick="moveWeek(-7)">◀ PREV WEEK</button>
-                <h3 id="cal-week-label">WEEK OF...</h3>
-                <button class="btn btn-primary" onclick="moveWeek(7)">NEXT WEEK ▶</button>
+            <div class="cal-header-row">
+                <button class="btn btn-primary" style="width:auto; padding:8px 15px;" onclick="moveWeek(-7)">◀</button>
+                <div id="cal-week-label" style="font-weight:bold; font-size:13px; color:var(--dar-green);">WEEK OF...</div>
+                <button class="btn btn-primary" style="width:auto; padding:8px 15px;" onclick="moveWeek(7)">▶</button>
             </div>
-            <div id="cal-grid" class="cal-grid"></div>
+            <div id="mobile-cal-container"></div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('pending-view', this)">📝 Pending</div>
+            <div class="nav-item" onclick="switchTab('approved-view', this)">🚚 Dispatched</div>
+            <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Schedule</div>
+            <div class="nav-item" onclick="syncData()">🔄 Sync</div>
         </div>
     </div>
 
     <div id="mgmt-modal" class="modal-overlay">
-        <div class="modal-content" style="text-align: center;">
-            <h3 id="mgmt-title">MANAGE TRIP</h3>
-            <div style="display: flex; flex-direction: column; gap: 10px; padding: 20px;">
+        <div class="modal-content">
+            <h3 id="mgmt-title" style="color: var(--dar-green); border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;">MANAGE TRIP</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
                 <button class="btn btn-action" onclick="mgmtAction('purpose')">✏️ Edit Purpose</button>
                 <button class="btn btn-action" onclick="mgmtAction('reschedule')">📅 Reschedule Date</button>
                 <button class="btn btn-action" onclick="mgmtAction('driver')">🔄 Change Driver</button>
+                <button class="btn btn-danger" onclick="cancelRequest('approved')">❌ Delete Trip</button>
             </div>
-            <button class="btn btn-danger" onclick="closeMgmt()">CLOSE</button>
+            <button class="btn" style="background: #e5e7eb; color: black;" onclick="closeModal('mgmt-modal')">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="res-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="color: var(--dar-green); border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;">RSO/PSO RESERVATION</h3>
+            
+            <label class="data-label">Order Type</label>
+            <select id="res-type" style="margin-bottom: 10px;">
+                <option value="RSO">RSO</option>
+                <option value="PSO">PSO</option>
+                <option value="MEMO">MEMO</option>
+            </select>
+
+            <label class="data-label">Reference Number</label>
+            <input type="text" id="res-ref" style="margin-bottom: 10px;">
+
+            <label class="data-label">Date (YYYY-MM-DD)</label>
+            <input type="date" id="res-date" style="margin-bottom: 10px;">
+
+            <label class="data-label">Vehicle</label>
+            <select id="res-veh" style="margin-bottom: 10px;"><option value="">Select...</option></select>
+
+            <label class="data-label">Driver</label>
+            <select id="res-drv" style="margin-bottom: 10px;"><option value="">Select...</option></select>
+
+            <label class="data-label">Purpose/Destination</label>
+            <input type="text" id="res-purp" style="margin-bottom: 10px;">
+
+            <label class="data-label">Passengers (Comma Separated)</label>
+            <input type="text" id="res-pass" style="margin-bottom: 20px;">
+
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" style="background: #e5e7eb; color: black;" onclick="closeModal('res-modal')">CANCEL</button>
+                <button class="btn btn-primary" onclick="saveReservation()">CONFIRM</button>
+            </div>
         </div>
     </div>
 
     <script>
         const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; // Note: This is an example, use yours.
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const SUPABASE_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; 
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const VEHICLES = ["MAZDA", "REVO", "INNOVA", "SKY", "BLACK"];
         const DRIVERS = ["Driver 1", "Driver 2", "Driver 3", "Driver 4", "Driver 5"];
@@ -193,38 +221,41 @@
         let startDateView = new Date();
         let selectedTo = null;
 
-        // --- Initialization ---
         window.onload = () => {
-            if(localStorage.getItem('legal_accepted')) {
-                document.getElementById('terms-modal').style.display = 'none';
-                document.getElementById('login-screen').classList.add('active');
-            }
             populateDropdowns();
+            document.getElementById('res-date').value = new Date().toISOString().split('T')[0];
         };
 
-        function acceptTerms() {
-            localStorage.setItem('legal_accepted', true);
-            document.getElementById('terms-modal').style.display = 'none';
-            document.getElementById('login-screen').classList.add('active');
-        }
-
         function populateDropdowns() {
-            const vBox = document.getElementById('assign-veh');
-            const dBox = document.getElementById('assign-drv');
-            VEHICLES.forEach(v => vBox.innerHTML += `<option value="${v}">${v}</option>`);
-            DRIVERS.forEach(d => dBox.innerHTML += `<option value="${d}">${d}</option>`);
+            const vBox1 = document.getElementById('assign-veh');
+            const dBox1 = document.getElementById('assign-drv');
+            const vBox2 = document.getElementById('res-veh');
+            const dBox2 = document.getElementById('res-drv');
+            
+            VEHICLES.forEach(v => {
+                vBox1.innerHTML += `<option value="${v}">${v}</option>`;
+                vBox2.innerHTML += `<option value="${v}">${v}</option>`;
+            });
+            DRIVERS.forEach(d => {
+                dBox1.innerHTML += `<option value="${d}">${d}</option>`;
+                dBox2.innerHTML += `<option value="${d}">${d}</option>`;
+            });
         }
 
         async function handleLogin() {
-            const user = document.getElementById('login-user').value;
-            const pass = document.getElementById('login-pass').value;
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
             
+            if(!user || !pass) return alert("Please enter credentials");
+
             const { data, error } = await supabase.from('users').select('*');
             const match = data.find(u => u.username === user && u.password === pass);
             
             if(match) {
                 currentUser = match;
-                document.getElementById('user-display').innerText = `DISPATCH CONTROL: ${currentUser.full_name}`;
+                document.getElementById('user-display').innerText = currentUser.full_name.toUpperCase();
+                document.getElementById('role-display').innerText = `${currentUser.division} | ${currentUser.role}`;
+                
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
                 syncData();
@@ -233,74 +264,128 @@
             }
         }
 
-        // --- Data Fetching ---
-        async function syncData() {
-            const ordersRes = await supabase.from('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
-            const itinRes = await supabase.from('itinerary').select('*');
-            const empRes = await supabase.from('employees').select('*');
-
-            cachedOrders = ordersRes.data;
-            cachedItin = itinRes.data;
-            cachedEmployees = empRes.data;
-
-            renderTables();
-            renderCalendar();
-        }
-
-        function renderTables() {
-            const pBody = document.getElementById('pending-table-body');
-            const aBody = document.getElementById('approved-table-body');
-            pBody.innerHTML = ''; aBody.innerHTML = '';
-
-            const printed = JSON.parse(localStorage.getItem('printed_tos') || '[]');
-
-            // Filter out duplicate to_nos for the table view
-            const uniqueTOs = [...new Map(cachedOrders.map(item => [item['to_no'], item])).values()];
-
-            uniqueTOs.forEach(o => {
-                const itin = cachedItin.find(i => i.to_no === o.to_no) || {};
-                const isPrinted = printed.includes(o.to_no) ? "✅ YES" : "❌ NO";
-                const row = `
-                    <tr onclick="selectRow('${o.to_no}', this)">
-                        <td>${o.to_no}</td>
-                        <td>${o.created_at ? o.created_at.substring(0,10) : ''}</td>
-                        ${o.status === "PENDING_VEHICLE_APPROVER" ? '' : `<td>${o.received || '-'}</td>`}
-                        <td>${itin.travel_date || 'N/A'}</td>
-                        <td>${o.emp_name}</td>
-                        <td>${o.status === "PENDING_VEHICLE_APPROVER" ? o.unit || '' : ''}</td>
-                        <td>${itin.purpose || 'N/A'}</td>
-                        ${o.status === "PENDING_VEHICLE_APPROVER" ? '' : `<td>${o.status}</td>`}
-                        <td>${isPrinted}</td>
-                    </tr>`;
-
-                if(o.status === "PENDING_VEHICLE_APPROVER") pBody.innerHTML += row;
-                else if(o.status !== "CANCELLED") aBody.innerHTML += row;
-            });
-        }
-
-        // --- Tabs ---
         function switchTab(id, btn) {
             document.querySelectorAll('.view-content').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.tab-link').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             btn.classList.add('active');
             selectedTo = null;
         }
 
-        function selectRow(to_no, row) {
-            selectedTo = to_no;
-            document.querySelectorAll('tr').forEach(r => r.style.backgroundColor = '');
-            row.style.backgroundColor = '#fef9c3';
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
         }
 
-        // --- Logic: Assignment ---
+        async function syncData() {
+            const btnSync = document.querySelectorAll('.nav-item')[3];
+            const origText = btnSync.innerText;
+            btnSync.innerText = "⏳ Syncing...";
+
+            const ordersRes = await supabase.from('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
+            const itinRes = await supabase.from('itinerary').select('*');
+            const empRes = await supabase.from('employees').select('*');
+
+            cachedOrders = ordersRes.data || [];
+            cachedItin = itinRes.data || [];
+            cachedEmployees = empRes.data || [];
+
+            renderLists();
+            renderCalendar();
+            
+            btnSync.innerText = origText;
+        }
+
+        function renderLists() {
+            const pContainer = document.getElementById('pending-list-container');
+            const aContainer = document.getElementById('approved-list-container');
+            pContainer.innerHTML = ''; aContainer.innerHTML = '';
+
+            const printed = JSON.parse(localStorage.getItem('printed_tos') || '[]');
+            const uniqueTOs = [...new Map(cachedOrders.map(item => [item['to_no'], item])).values()];
+
+            uniqueTOs.forEach(o => {
+                const itin = cachedItin.find(i => i.to_no === o.to_no) || {};
+                const isPrinted = printed.includes(o.to_no);
+                
+                // Card Template for Mobile
+                const card = document.createElement('div');
+                card.className = 'data-card';
+                card.id = `card-${o.to_no}`;
+                
+                const isPending = o.status === "PENDING_VEHICLE_APPROVER";
+                const badgeCls = isPending ? 'bg-pending' : 'bg-approved';
+                const statusTxt = isPending ? 'PENDING ASSIGNMENT' : 'APPROVED/DISPATCHED';
+
+                card.innerHTML = `
+                    <div class="data-header">
+                        <div class="data-title">${o.to_no}</div>
+                        <div class="badge ${badgeCls}">${statusTxt}</div>
+                    </div>
+                    <div style="display:flex; gap: 10px;">
+                        <div style="flex:1;">
+                            <div class="data-detail"><span class="data-label">Travel Date</span><b>${itin.travel_date || 'N/A'}</b></div>
+                            <div class="data-detail"><span class="data-label">Applicant</span><b>${o.emp_name}</b></div>
+                        </div>
+                        <div style="flex:1;">
+                            ${!isPending ? `<div class="data-detail"><span class="data-label">Vehicle & Driver</span><b>${o.received || '-'} | ${o.driver || '-'}</b></div>` : ''}
+                            <div class="data-detail"><span class="data-label">Printed</span><b>${isPrinted ? '✅ YES' : '❌ NO'}</b></div>
+                        </div>
+                    </div>
+                    <div class="data-detail" style="margin-top:8px; border-top: 1px dashed #eee; padding-top: 8px;">
+                        <span class="data-label">Purpose</span>
+                        <i>${itin.purpose || 'N/A'}</i>
+                    </div>
+                `;
+
+                // Selection Logic
+                card.onclick = () => {
+                    document.querySelectorAll('.data-card').forEach(c => c.style.borderColor = '#e5e7eb');
+                    card.style.borderColor = var(--dar-gold);
+                    selectedTo = o.to_no;
+                    
+                    if(!isPending) {
+                        openManagement(); // Auto open management for approved
+                    }
+                };
+
+                if(isPending) pContainer.appendChild(card);
+                else if(o.status !== "CANCELLED") aContainer.appendChild(card);
+            });
+
+            if(pContainer.innerHTML === '') pContainer.innerHTML = '<p style="text-align:center; color:gray; font-size:12px; margin-top:20px;">No pending requests.</p>';
+            if(aContainer.innerHTML === '') aContainer.innerHTML = '<p style="text-align:center; color:gray; font-size:12px; margin-top:20px;">No dispatched vehicles.</p>';
+        }
+
+        // --- Logic: Assignment & Checking ---
+        function checkConflict(item, type, dateStr, excludeTo = null) {
+            if(!item) return false;
+            const activeTrips = cachedOrders.filter(o => (type === 'driver' ? o.driver : o.received) === item && o.status !== 'CANCELLED');
+            
+            for(let trip of activeTrips) {
+                if(excludeTo && trip.to_no === excludeTo) continue;
+                const tripDates = cachedItin.filter(i => i.to_no === trip.to_no).map(i => i.travel_date);
+                if(tripDates.includes(dateStr)) return true;
+            }
+            return false;
+        }
+
         async function handleAssignment() {
-            if(!selectedTo) return alert("Select a request first");
+            if(!selectedTo) return alert("Tap a pending request card first.");
             const veh = document.getElementById('assign-veh').value;
             const drv = document.getElementById('assign-drv').value;
-            if(!veh || !drv) return alert("Select Vehicle and Driver");
+            if(!veh || !drv) return alert("Select Vehicle and Driver from dropdowns.");
 
             const order = cachedOrders.find(o => o.to_no === selectedTo);
+            const itin = cachedItin.find(i => i.to_no === selectedTo);
+            const tDate = itin ? itin.travel_date : null;
+
+            if(checkConflict(veh, 'vehicle', tDate, selectedTo)) {
+                if(!confirm(`Vehicle ${veh} is assigned on ${tDate}. Override for different time slot?`)) return;
+            }
+            if(checkConflict(drv, 'driver', tDate, selectedTo)) {
+                if(!confirm(`Driver ${drv} is assigned on ${tDate}. Override for different time slot?`)) return;
+            }
+
             const employee = cachedEmployees.find(e => e.full_name === order.emp_name);
             const unit = (employee?.unit || "").toUpperCase();
 
@@ -308,60 +393,200 @@
             if(unit === "PARPO") nextStatus = "PENDING_PARPO";
             else if(!unit || unit === "NULL") nextStatus = "PENDING_CHIEF";
 
-            const { error } = await supabase.from('travel_orders').update({
-                received: veh,
-                driver: drv,
-                status: nextStatus
-            }).eq('to_no', selectedTo);
+            if(confirm(`Assign ${veh} and ${drv} to TO ${selectedTo}?\nWill route to: ${nextStatus.replace('PENDING_','')}`)) {
+                const { error } = await supabase.from('travel_orders').update({
+                    received: veh, driver: drv, status: nextStatus
+                }).eq('to_no', selectedTo);
 
-            if(!error) {
-                alert(`Assigned! Routed to ${nextStatus}`);
+                if(!error) {
+                    alert("Assigned successfully.");
+                    selectedTo = null;
+                    document.getElementById('assign-veh').value = "";
+                    document.getElementById('assign-drv').value = "";
+                    syncData();
+                } else alert("Error: " + error.message);
+            }
+        }
+
+        async function cancelRequest(mode) {
+            if(!selectedTo) return alert("Select a trip first.");
+            if(confirm("Permanently delete this record?")) {
+                await supabase.from('itinerary').delete().eq('to_no', selectedTo);
+                await supabase.from('travel_orders').delete().eq('to_no', selectedTo);
+                alert("Deleted");
+                selectedTo = null;
+                closeModal('mgmt-modal');
                 syncData();
             }
         }
 
-        // --- Calendar Logic ---
+        // --- Management ---
+        function openManagement() {
+            if(!selectedTo) return;
+            document.getElementById('mgmt-modal').style.display = 'flex';
+            document.getElementById('mgmt-title').innerText = `MANAGE TO: ${selectedTo}`;
+        }
+
+        async function mgmtAction(type) {
+            const itin = cachedItin.find(i => i.to_no === selectedTo);
+            
+            if(type === 'purpose') {
+                const val = prompt("Enter new Purpose:", itin?.purpose || "");
+                if(val && val !== itin?.purpose) {
+                    await supabase.from('itinerary').update({purpose: val}).eq('to_no', selectedTo);
+                    alert("Updated"); syncData(); closeMgmt();
+                }
+            } else if(type === 'reschedule') {
+                const val = prompt("Enter new Date (YYYY-MM-DD):", itin?.travel_date || "");
+                if(val && val !== itin?.travel_date) {
+                    await supabase.from('itinerary').update({travel_date: val}).eq('to_no', selectedTo);
+                    alert("Rescheduled"); syncData(); closeMgmt();
+                }
+            } else if (type === 'driver') {
+                const order = cachedOrders.find(o => o.to_no === selectedTo);
+                const val = prompt(`Enter new driver name (Current: ${order?.driver}):`);
+                if(val) {
+                    await supabase.from('travel_orders').update({driver: val}).eq('to_no', selectedTo);
+                    alert("Driver Changed"); syncData(); closeMgmt();
+                }
+            }
+        }
+
+        // --- RSO/PSO Reservation ---
+        function openReservation() {
+            document.getElementById('res-modal').style.display = 'flex';
+        }
+
+        async function saveReservation() {
+            const rtype = document.getElementById('res-type').value;
+            const ref = document.getElementById('res-ref').value.trim();
+            const tdate = document.getElementById('res-date').value;
+            const veh = document.getElementById('res-veh').value;
+            const drv = document.getElementById('res-drv').value;
+            const purp = document.getElementById('res-purp').value.trim();
+            const passengers = document.getElementById('res-pass').value.trim();
+
+            if(!ref || !veh || !drv || !purp || !tdate) return alert("Fill all required fields.");
+
+            if(checkConflict(veh, 'vehicle', tdate)) {
+                if(!confirm(`Vehicle ${veh} assigned on ${tdate}. Override?`)) return;
+            }
+            if(checkConflict(drv, 'driver', tdate)) {
+                if(!confirm(`Driver ${drv} assigned on ${tdate}. Override?`)) return;
+            }
+
+            const pseudoTo = `${rtype}-${ref}-${Math.floor(Math.random() * 1000)}`;
+
+            try {
+                // Insert Main
+                await supabase.from('travel_orders').insert({
+                    to_no: pseudoTo, emp_id: currentUser.username, emp_name: `ADMIN (${rtype} ${ref})`,
+                    unit: "ADMIN", status: "APPROVED", received: veh, driver: drv,
+                    transport: "GOV'T VEHICLE", report_to: "PARPO II", division: "ADMIN"
+                });
+
+                // Insert Itin
+                await supabase.from('itinerary').insert({
+                    to_no: pseudoTo, travel_date: tdate, destination: "Official Business", purpose: `${rtype} ${ref}: ${purp}`
+                });
+
+                // Insert Passengers
+                if(passengers) {
+                    const pList = passengers.split(',').map(p => p.trim()).filter(p => p);
+                    for(let p of pList) {
+                        await supabase.from('travel_orders').insert({
+                            to_no: pseudoTo, emp_id: "GUEST", emp_name: p, unit: "GUEST",
+                            status: "APPROVED", received: veh, driver: drv, transport: "GOV'T VEHICLE",
+                            report_to: "PARPO II", division: "ADMIN"
+                        });
+                    }
+                }
+
+                alert("Reserved successfully.");
+                closeModal('res-modal');
+                syncData();
+
+                // Clear form
+                document.getElementById('res-ref').value = "";
+                document.getElementById('res-purp').value = "";
+                document.getElementById('res-pass').value = "";
+            } catch(e) { alert("Error: " + e.message); }
+        }
+
+        // --- Calendar Logic (Mobile List Format) ---
         function moveWeek(days) {
             startDateView.setDate(startDateView.getDate() + days);
             renderCalendar();
         }
 
         function renderCalendar() {
-            const grid = document.getElementById('cal-grid');
-            grid.innerHTML = '<div class="cal-header">VEHICLE</div>';
+            const container = document.getElementById('mobile-cal-container');
+            container.innerHTML = '';
             
             const days = [];
             for(let i=0; i<7; i++) {
                 const d = new Date(startDateView);
                 d.setDate(d.getDate() + i);
                 days.push(d);
-                grid.innerHTML += `<div class="cal-header">${d.toDateString().substring(0,3)}<br>${d.getDate()}</div>`;
             }
 
-            document.getElementById('cal-week-label').innerText = `Week of ${days[0].toLocaleDateString()} - ${days[6].toLocaleDateString()}`;
+            document.getElementById('cal-week-label').innerText = `${days[0].toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${days[6].toLocaleDateString('en-US', {month:'short', day:'numeric'})}`;
 
-            VEHICLES.forEach(v => {
-                grid.innerHTML += `<div class="cal-cell" style="font-weight:bold; background:#fff;">${v}</div>`;
-                days.forEach(d => {
-                    const dStr = d.toISOString().split('T')[0];
-                    const match = cachedOrders.find(o => {
+            days.forEach(d => {
+                const dStr = d.toISOString().split('T')[0];
+                const dayCard = document.createElement('div');
+                dayCard.className = 'cal-day-card';
+                
+                let dayHtml = `<div class="cal-day-title">${d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'})}</div>`;
+                
+                let hasEntries = false;
+                VEHICLES.forEach(v => {
+                    const matches = cachedOrders.filter(o => {
                         const itin = cachedItin.find(i => i.to_no === o.to_no && i.travel_date === dStr);
-                        return o.received === v && itin;
+                        return o.received === v && itin && o.status !== 'CANCELLED';
                     });
 
-                    if(match) {
-                        const cls = match.status === "APPROVED" ? "status-approved" : "status-pending";
-                        grid.innerHTML += `<div class="cal-cell">
-                            <div class="cal-entry ${cls}">TO-${match.to_no.slice(-4)}<br>${match.driver || ''}</div>
-                        </div>`;
-                    } else {
-                        grid.innerHTML += `<div class="cal-cell"></div>`;
-                    }
+                    // Deduplicate by TO No
+                    const uniqueMatches = [...new Map(matches.map(item => [item['to_no'], item])).values()];
+
+                    uniqueMatches.forEach(m => {
+                        hasEntries = true;
+                        const cls = m.status === "APPROVED" ? "entry-approved" : "entry-pending";
+                        const itin = cachedItin.find(i => i.to_no === m.to_no && i.travel_date === dStr);
+                        
+                        // Find all passengers for this TO
+                        const passengers = cachedOrders.filter(o => o.to_no === m.to_no).map(o => o.emp_name);
+                        const passSet = [...new Set(passengers)];
+                        
+                        dayHtml += `
+                            <div class="cal-entry ${cls}">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <b>${v} | ${m.driver || 'No Driver'}</b>
+                                    <span style="font-size:10px; color:gray;">TO-${m.to_no.slice(-4)}</span>
+                                </div>
+                                <div style="color:#4b5563;">${itin.destination || 'Destination N/A'}</div>
+                                <div style="font-size:10px; color:#6b7280; margin-top:4px;">Pax: ${passSet.length > 2 ? passSet.slice(0,2).join(', ') + '...' : passSet.join(', ')}</div>
+                            </div>
+                        `;
+                    });
                 });
+
+                if(!hasEntries) {
+                    dayHtml += `<div class="cal-entry" style="color:gray; font-style:italic;">No dispatched vehicles.</div>`;
+                }
+
+                dayCard.innerHTML = dayHtml;
+                container.appendChild(dayCard);
             });
         }
 
         // --- PDF Reporting ---
+        function markPrintedLocally(toNos) {
+            let printed = JSON.parse(localStorage.getItem('printed_tos') || '[]');
+            toNos.forEach(to => { if(!printed.includes(to)) printed.push(to); });
+            localStorage.setItem('printed_tos', JSON.stringify(printed));
+        }
+
         function generateReport(mode) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4');
@@ -376,59 +601,97 @@
                 : [['TO NO', 'VEHICLE', 'APPLICANT', 'DATE', 'PURPOSE', 'COMPLETED']];
 
             const body = [];
-            const printed = JSON.parse(localStorage.getItem('printed_tos') || '[]');
+            const printedIds = [];
             
-            cachedOrders.forEach(o => {
+            // Deduplicate for report
+            const uniqueTOs = [...new Map(cachedOrders.map(item => [item['to_no'], item])).values()];
+
+            uniqueTOs.forEach(o => {
                 const itin = cachedItin.find(i => i.to_no === o.to_no) || {};
-                if(mode === 'pending' && o.status === "PENDING_VE_APPROVER") {
-                    body.push([o.to_no, o.emp_name, itin.travel_date, itin.purpose, "PENDING"]);
-                    if(!printed.includes(o.to_no)) printed.push(o.to_no);
+                if(mode === 'pending' && o.status === "PENDING_VEHICLE_APPROVER") {
+                    body.push([o.to_no, o.emp_name, itin.travel_date, (itin.purpose||'').substring(0,60), "PENDING"]);
+                    printedIds.push(o.to_no);
                 } else if(mode === 'approved' && o.status !== "PENDING_VEHICLE_APPROVER" && o.status !== "CANCELLED") {
-                    body.push([o.to_no, o.received, o.emp_name, itin.travel_date, itin.purpose, "[ ]"]);
-                    if(!printed.includes(o.to_no)) printed.push(o.to_no);
+                    body.push([o.to_no, o.received, o.emp_name, itin.travel_date, (itin.purpose||'').substring(0,60), "[ ]"]);
+                    printedIds.push(o.to_no);
                 }
             });
+
+            if(body.length === 0) return alert("No data to print.");
 
             doc.autoTable({
                 startY: 45,
                 head: headers,
                 body: body,
-                headStyles: { fillColor: [0, 56, 17] }
+                headStyles: { fillColor: [0, 56, 17] },
+                styles: { fontSize: 9 }
             });
 
-            localStorage.setItem('printed_tos', JSON.stringify(printed));
-            doc.save(`DAR_Report_${new Date().getTime()}.pdf`);
-            syncData();
-        }
-
-        // --- Management UI ---
-        function openManagement() {
-            if(!selectedTo) return alert("Select a trip first");
-            document.getElementById('mgmt-modal').style.display = 'flex';
-            document.getElementById('mgmt-title').innerText = `MANAGE TO: ${selectedTo}`;
-        }
-        function closeMgmt() { document.getElementById('mgmt-modal').style.display = 'none'; }
-
-        async function mgmtAction(type) {
-            if(type === 'purpose') {
-                const val = prompt("Enter new Purpose:");
-                if(val) await supabase.from('itinerary').update({purpose: val}).eq('to_no', selectedTo);
-            } else if(type === 'reschedule') {
-                const val = prompt("Enter new Date (YYYY-MM-DD):");
-                if(val) await supabase.from('itinerary').update({travel_date: val}).eq('to_no', selectedTo);
-            }
-            alert("Updated successfully");
-            closeMgmt();
-            syncData();
-        }
-
-        async function cancelRequest(mode) {
-            if(!selectedTo) return;
-            if(confirm("Permanently delete this record?")) {
-                await supabase.from('itinerary').delete().eq('to_no', selectedTo);
-                await supabase.from('travel_orders').delete().eq('to_no', selectedTo);
+            doc.save(`DAR_${mode.toUpperCase()}_Report.pdf`);
+            
+            if(confirm("Mark these requests as PRINTED in the system?")) {
+                markPrintedLocally(printedIds);
                 syncData();
             }
+        }
+
+        // Print specifically for PARPO signature (Pending requests only)
+        async function printParpoSignature() {
+            if(!selectedTo) return alert("Select a pending request first.");
+            const veh = document.getElementById('assign-veh').value;
+            const drv = document.getElementById('assign-drv').value;
+            if(!veh || !drv) return alert("Select Vehicle and Driver before printing.");
+
+            const order = cachedOrders.find(o => o.to_no === selectedTo);
+            const itin = cachedItin.find(i => i.to_no === selectedTo);
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+
+            doc.setFontSize(14).text("VEHICLE REQUEST APPROVAL", 105, 20, {align:'center'});
+            
+            doc.setFontSize(11);
+            let y = 40;
+            
+            const addLine = (lbl, val) => {
+                doc.setFont("helvetica", "bold").text(lbl, 20, y);
+                doc.setFont("helvetica", "normal").text(val || 'N/A', 70, y);
+                y += 8;
+            };
+
+            addLine("TO Number:", order.to_no);
+            addLine("Date Filed:", order.created_at ? order.created_at.substring(0,10) : '');
+            addLine("Travel Date:", itin.travel_date);
+            addLine("Applicant:", order.emp_name);
+            
+            y+=5;
+            doc.setFont("helvetica", "bold").text("Purpose:", 20, y);
+            doc.setFont("helvetica", "normal").text(doc.splitTextToSize(itin.purpose || '', 120), 70, y);
+            y += 20;
+
+            // Box for assignment
+            doc.setFillColor(240, 240, 240);
+            doc.rect(15, y, 180, 25, 'F');
+            y += 8;
+            doc.setFont("helvetica", "bold").text("Assigned Vehicle:", 20, y);
+            doc.setFont("helvetica", "normal").text(veh, 65, y);
+            doc.setFont("helvetica", "bold").text("Driver:", 120, y);
+            doc.setFont("helvetica", "normal").text(drv, 140, y);
+            
+            y += 30;
+            doc.text("Certified Availability of Vehicle/Driver:", 20, y);
+            
+            y += 20;
+            doc.setFont("helvetica", "bold");
+            doc.text("DISPATCH OFFICER", 60, y, {align:'center'});
+            doc.text("CHIEF ADMIN OFFICER", 150, y, {align:'center'});
+
+            y += 25;
+            doc.setFont("helvetica", "normal").text("Approved:", 105, y, {align:'center'});
+            y += 20;
+            doc.setFont("helvetica", "bold").text("PARPO II", 105, y, {align:'center'});
+
+            doc.save(`PARPO_SIGN_${order.to_no}.pdf`);
         }
     </script>
 </body>
