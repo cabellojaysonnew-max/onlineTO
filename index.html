@@ -460,24 +460,17 @@
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                // Extract base division (e.g., turns "LTSP, DARMO" into "LTSP") to correctly query the users table
-                const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-
-                // Personal Context: Signatory Rule Execution strictly based on current user
+                // Personal Context: Signatory Rule Execution based on current user
                 let uh_data = null;
+                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
+                    const res = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
+                    uh_data = res.data;
+                }
+
                 let dc_data = null;
-                
-                if (currentUser.unit !== "PARPO") {
-                    if (!isMARPO && currentUser.unit && currentUser.unit.trim() !== "") {
-                        // Adjusted to ilike '%HEAD%' to prevent strict-casing query failures
-                        const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).ilike('role', '%HEAD%').maybeSingle();
-                        uh_data = resUH.data;
-                    }
-                    if (baseDiv) {
-                        // Adjusted query from 'Division Chief' to 'CHIEF' as per the actual database table values
-                        const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                        dc_data = resDC.data;
-                    }
+                if (currentUser.unit !== "PARPO" && currentUser.division) {
+                    const res = await supabase.from('users').select('full_name, username').eq('division', currentUser.division).eq('role', 'Division Chief').maybeSingle();
+                    dc_data = res.data;
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
@@ -568,28 +561,25 @@
                     drawCheck("LIVE OUT", 135, curY, false);
 
                     // SIGNATORIES BLOCK COMPRESSION
-                    let recY = curY + 12;
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("Recommended by:", 20, recY);
+                    doc.text("Recommended by:", 20, 156);
                     
-                    let nameY = recY + 8;
                     if (i > 0) {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, recY-4, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 52, nameY, {align: 'center'}); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, recY-4, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 127, nameY, {align: 'center'}); }
+                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
+                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
                     } else {
-                        if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 52, nameY, {align: 'center'}); }
-                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 127, nameY, {align: 'center'}); }
+                        if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
+                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
                     }
 
-                    doc.line(25, nameY+2, 80, nameY+2); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, nameY+6, {align: 'center'});
-                    doc.line(100, nameY+2, 155, nameY+2); doc.text("DIVISION CHIEF", 127, nameY+6, {align: 'center'});
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    let parpoY = nameY + 20;
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, parpoY-15, 20, 20); 
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 114, 183, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 121, parpoY);
+                    doc.text("RICARDO C. GARCIA", 114, 198);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 135, parpoY+4);
+                    doc.text("PARPO II", 114, 202);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
