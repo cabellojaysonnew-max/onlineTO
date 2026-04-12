@@ -174,15 +174,22 @@
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50"></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment</label><select id="resS" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Departure Time</label><input id="resDepTime" type="time" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Arrival Time</label><input id="resArrTime" type="time" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
                         </div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50"></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white text-dar outline-none focus:ring-2 focus:ring-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-dar"></div>
+                        </div>
+                        <div class="space-y-3 pt-2 border-t">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Reference Number</label><input id="resRef" placeholder="Leave blank to auto-generate..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Destination</label><input id="resDest" placeholder="e.g., DAR Regional Office..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose</label><input id="resP" placeholder="Reason for travel..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar"></div>
+                        </div>
                     </div>
                     
                     <div class="p-5 border-t flex gap-4 bg-slate-50 shrink-0 rounded-b-2xl">
@@ -304,11 +311,17 @@
 
         function renderReservations() {
             const container = document.getElementById('main-content');
-            // Filter out OFF_ROAD completely from Reservations tab
-            const data = orders.filter(x => x.transport === "GOV'T VEHICLE" && x.status !== 'PENDING_VEHICLE_APPROVER' && x.status !== 'OFF_ROAD');
+            
+            // STRICT FILTER: Remove both OFF_ROAD and old 'MAINTENANCE' records from Reservations
+            const data = orders.filter(x => 
+                x.transport === "GOV'T VEHICLE" && 
+                x.status !== 'PENDING_VEHICLE_APPROVER' && 
+                x.status !== 'OFF_ROAD' && 
+                x.remarks !== 'MAINTENANCE'
+            );
             
             if (!data.length) { 
-                container.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📋</span><p class="font-bold mt-2 text-xs uppercase">No Reservations</p></div>`; 
+                container.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📋</span><p class="font-bold mt-2 text-xs uppercase">No Active Reservations</p></div>`; 
                 return; 
             }
             
@@ -399,14 +412,15 @@
                     const h = logs.find(l => l.to_no === toNo);
                     const dates = [...new Set(filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
                     const allPass = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join('<br> • ');
-                    const isMaint = h.status === 'OFF_ROAD';
+                    // Ensure BOTH old and new flags trigger maintenance display
+                    const isMaint = h.status === 'OFF_ROAD' || h.remarks === 'MAINTENANCE';
                     const mainItin = filteredItins.find(itin => itin.to_no === toNo);
                     
                     if(isMaint) return `
                         <div class="bg-red-50 p-4 rounded-xl border border-red-200 mb-3 relative">
                             <p class="text-xs font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p>
                             <p class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | OFF-ROAD</p>
-                            <p class="text-[9px] text-slate-600 font-bold mt-1 italic border-l-2 border-red-300 pl-2">${mainItin?.purpose || ''}</p>
+                            <p class="text-[9px] text-slate-600 font-bold mt-1 italic border-l-2 border-red-300 pl-2">${mainItin?.purpose || 'Maintenance'}</p>
                             <button onclick="endMaintenance('${h.to_no}')" class="mt-3 bg-white border border-red-300 text-red-700 px-3 py-2 rounded-lg text-[9px] font-black uppercase w-full active:scale-95 transition shadow-sm">✅ Mark Done</button>
                         </div>`;
                     
@@ -457,6 +471,7 @@
             if(!d1) return alert("Select at least a start date.");
             
             const to = `MAINT-${Math.floor(Date.now()%10000)}`;
+            // Make absolutely sure it is OFF_ROAD status
             await db.from('travel_orders').insert({ to_no: to, emp_name: '🚨 UNAVAILABLE', received: activeVehForMaint, remarks: 'MAINTENANCE', status: 'OFF_ROAD', transport: "GOV'T VEHICLE" });
             
             let st = new Date(d1), en = new Date(d2 || d1);
@@ -554,11 +569,25 @@
 
         async function doRemovePerson(id) { await db.from('travel_orders').delete().eq('id', id); await renderPList(); sync(); }
 
+        // Time Formatter for clean 12hr strings
+        function formatTo12Hour(timeStr) {
+            if (!timeStr) return "";
+            let [h, m] = timeStr.split(':');
+            let ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return `${h}:${m} ${ampm}`;
+        }
+
         async function saveManual() {
             const d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
-            const s = document.getElementById('resS').value, v = document.getElementById('resV').value, dr = document.getElementById('resDr').value, p = document.getElementById('resP').value;
+            const depT = document.getElementById('resDepTime').value, arrT = document.getElementById('resArrTime').value;
+            const v = document.getElementById('resV').value, dr = document.getElementById('resDr').value;
             
-            if(!d1 || !p) return alert("Missing Dates or Purpose.");
+            const ref = document.getElementById('resRef').value.trim();
+            const dest = document.getElementById('resDest').value.trim();
+            const p = document.getElementById('resP').value.trim();
+            
+            if(!d1 || !dest || !p) return alert("Missing Start Date, Destination, or Purpose.");
             if(manualPassengerQueue.length === 0) return alert("Please queue at least one passenger.");
 
             const headPass = manualPassengerQueue[0];
@@ -569,8 +598,20 @@
 
             if (await isDoubleBooked(n, dates)) return alert(`Lead Passenger ${n} is already booked on these dates!`);
 
-            const to = `MAN-${Math.floor(Date.now()%10000)}`;
-            const head = { to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: s, status: "APPROVED", unit: headPass.u, division: headPass.d };
+            // Apply Reference or Auto-gen
+            const to = ref || `MAN-${Math.floor(Date.now()%10000)}`;
+            
+            // Apply Times to Remarks
+            let timeStr = "WHOLE DAY";
+            if (depT && arrT) {
+                timeStr = `${formatTo12Hour(depT)} - ${formatTo12Hour(arrT)}`;
+            } else if (depT) {
+                timeStr = `${formatTo12Hour(depT)} Onward`;
+            } else if (arrT) {
+                timeStr = `Until ${formatTo12Hour(arrT)}`;
+            }
+
+            const head = { to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: timeStr, status: "APPROVED", unit: headPass.u, division: headPass.d };
             
             await db.from('travel_orders').insert([head]);
             
@@ -580,11 +621,16 @@
             }
             
             for(let date of dates) {
-                await db.from('itinerary').insert({ to_no: to, travel_date: date, destination: "Manual Booking", purpose: p });
+                await db.from('itinerary').insert({ to_no: to, travel_date: date, destination: dest, purpose: p });
             }
             
+            // Reset fields
             manualPassengerQueue = []; 
+            document.getElementById('resRef').value = "";
+            document.getElementById('resDest').value = "";
             document.getElementById('resP').value = "";
+            document.getElementById('resDepTime').value = "";
+            document.getElementById('resArrTime').value = "";
             renderManualPList();
             closeModal('bookModal'); 
             sync();
