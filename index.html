@@ -460,24 +460,17 @@
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                // Extract base division (e.g., turns "LTSP, DARMO" into "LTSP") to correctly query the users table
-                const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-
-                // Personal Context: Signatory Rule Execution strictly based on current user
+                // Personal Context: Signatory Rule Execution based on current user
                 let uh_data = null;
+                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
+                    const res = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
+                    uh_data = res.data;
+                }
+
                 let dc_data = null;
-                
-                if (currentUser.unit !== "PARPO") {
-                    if (!isMARPO && currentUser.unit && currentUser.unit.trim() !== "") {
-                        // Adjusted to ilike '%HEAD%' to prevent strict-casing query failures
-                        const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).ilike('role', '%HEAD%').maybeSingle();
-                        uh_data = resUH.data;
-                    }
-                    if (baseDiv) {
-                        // Adjusted query from 'Division Chief' to 'CHIEF' as per the actual database table values
-                        const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                        dc_data = resDC.data;
-                    }
+                if (currentUser.unit !== "PARPO" && currentUser.division) {
+                    const res = await supabase.from('users').select('full_name, username').eq('division', currentUser.division).eq('role', 'Division Chief').maybeSingle();
+                    dc_data = res.data;
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
