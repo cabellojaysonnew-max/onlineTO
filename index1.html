@@ -249,19 +249,56 @@
         function renderInbox() {
             const m = document.getElementById('main-content');
             const data = orders.filter(x => x.status === 'PENDING_VEHICLE_APPROVER' && x.transport === "GOV'T VEHICLE");
-            if (!data.length) { m.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Queue Empty</p></div>`; return; }
+            
+            if (!data.length) { 
+                m.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Queue Empty</p></div>`; 
+                return; 
+            }
+            
             m.innerHTML = `<div class="space-y-4">` + data.map(o => {
-                const itin = itins.find(i => i.to_no === o.to_no) || {travel_date: '?'};
+                // Get all itinerary items for this specific TO and sort them by date
+                const tripItins = itins.filter(i => i.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
+                
+                // Construct Date String (Single day vs Range)
+                const dateStr = tripItins.length > 0 ? (tripItins.length === 1 ? tripItins[0].travel_date : `${tripItins[0].travel_date} to ${tripItins[tripItins.length-1].travel_date}`) : '?';
+                
+                // Construct Detailed Itinerary HTML block
+                const itinHTML = tripItins.map(i => `
+                    <div class="text-[10px] leading-tight border-l-2 border-dar-gold pl-2 mb-1.5">
+                        <span class="font-black text-slate-700">${i.travel_date}</span>: ${i.destination} <br>
+                        <span class="text-slate-500 italic">${i.purpose}</span>
+                    </div>
+                `).join('');
+
                 return `
                 <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                    <div class="flex justify-between mb-3 border-b pb-2"><span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">ID: ${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button></div>
-                    <h3 class="font-black text-slate-800 text-base leading-tight mb-1">${o.emp_name}</h3>
-                    <p class="text-[11px] text-dar-gold font-bold mb-4 uppercase tracking-widest leading-none">📅 ${itin.travel_date}</p>
-                    <div class="space-y-3 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Unit</label><select id="v-${o.to_no}" class="border rounded font-bold p-1 text-xs text-dar outline-none bg-white">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
-                        <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Slot</label><select id="s-${o.to_no}" class="border rounded font-bold p-1 text-xs text-slate-600 outline-none bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                        <div class="flex flex-col pt-1"><label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-2 text-xs font-bold outline-none shadow-inner"></div>
+                    <div class="flex justify-between mb-3 border-b pb-2">
+                        <span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">ID: ${o.to_no}</span>
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button>
                     </div>
+                    <h3 class="font-black text-slate-800 text-base leading-tight mb-1">${o.emp_name}</h3>
+                    <p class="text-[11px] text-dar-gold font-bold mb-3 uppercase tracking-widest leading-none">📅 ${dateStr}</p>
+                    
+                    <div class="mb-4 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Trip Details:</p>
+                        ${itinHTML}
+                    </div>
+
+                    <div class="space-y-3 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <div class="flex justify-between items-center">
+                            <label class="text-[9px] font-black text-gray-400 uppercase">Unit</label>
+                            <select id="v-${o.to_no}" class="border rounded font-bold p-1 text-xs text-dar outline-none bg-white">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <label class="text-[9px] font-black text-gray-400 uppercase">Slot</label>
+                            <select id="s-${o.to_no}" class="border rounded font-bold p-1 text-xs text-slate-600 outline-none bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select>
+                        </div>
+                        <div class="flex flex-col pt-1">
+                            <label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label>
+                            <input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-2 text-xs font-bold outline-none shadow-inner">
+                        </div>
+                    </div>
+                    
                     <div class="flex gap-2">
                         <button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-[10px] font-bold uppercase flex-1 active:scale-95 transition">Reject</button>
                         <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary flex-[2] py-3 rounded-xl shadow-md">Approve</button>
