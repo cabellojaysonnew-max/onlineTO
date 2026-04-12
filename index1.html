@@ -26,10 +26,9 @@
             background: white; width: 100%; max-width: 600px;
             border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
             max-height: 90vh; display: flex; flex-direction: column; 
-            overflow: visible; /* Allows search results to drop out of the box */
+            overflow: visible;
         }
 
-        /* Fixed Search Results Dropdown */
         .search-results-box { 
             position: absolute; width: 100%; max-height: 250px; 
             overflow-y: auto; z-index: 2000; background: white; 
@@ -76,7 +75,7 @@
 
         let user = null, currentTab = 'inbox', scheduleFilter = 'day'; 
         let emps = [], orders = [], itins = [];
-        let activeTO = "", selectedEmpForAdd = null;
+        let activeTO = "", selectedEmpForAdd = null, activeVehForMaint = "";
         let manualPassengerQueue = [];
 
         async function handleLogin() {
@@ -155,7 +154,7 @@
                         </div>
                     </div>
                     <div class="p-6 border-t flex gap-4 bg-slate-50 shrink-0">
-                        <button onclick="closeModal('bookModal')" class="btn-cancel flex-1">Cancel</button>
+                        <button onclick="closeModal('bookModal')" class="btn-cancel flex-1 text-slate-500 font-bold uppercase text-[10px]">Cancel</button>
                         <button onclick="saveManual()" class="btn-primary flex-[2] py-4 tracking-widest">Confirm Trip</button>
                     </div>
                 </div>
@@ -192,8 +191,25 @@
                         <select id="tSelect" class="w-full p-5 border border-slate-200 rounded-lg font-black text-dar outline-none bg-slate-50 text-base shadow-inner"></select>
                     </div>
                     <div class="p-6 border-t flex gap-4 bg-slate-50">
-                        <button onclick="closeModal('transferModal')" class="btn-cancel flex-1 py-4">Cancel</button>
+                        <button onclick="closeModal('transferModal')" class="btn-cancel flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
                         <button id="tExec" class="btn-primary flex-1 py-4 tracking-widest shadow-lg">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="maintModal" class="hidden modal-overlay">
+                <div class="modal-box max-w-sm">
+                    <div class="p-6 border-b bg-slate-50">
+                        <h2 class="font-black text-dar text-xs uppercase tracking-widest">Schedule Maintenance</h2>
+                        <p id="maintSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p>
+                    </div>
+                    <div class="p-10 space-y-4 bg-white">
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="maintD1" type="date" class="w-full p-3 border rounded text-sm bg-slate-50"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date (Optional)</label><input id="maintD2" type="date" class="w-full p-3 border rounded text-sm bg-slate-50"></div>
+                    </div>
+                    <div class="p-6 border-t flex gap-4 bg-slate-50">
+                        <button onclick="closeModal('maintModal')" class="btn-cancel flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
+                        <button onclick="saveMaintenance()" class="btn-primary bg-red-600 flex-1 py-4 tracking-widest shadow-lg hover:bg-red-700">Off-Road</button>
                     </div>
                 </div>
             </div>
@@ -219,14 +235,14 @@
                         <div class="flex flex-col pt-2"><label class="text-[9px] font-black text-gray-400 uppercase mb-2">Assigned Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-3 text-xs font-bold outline-none shadow-inner"></div>
                     </div>
                     <div class="flex gap-3">
-                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="btn-cancel flex-1">Reject</button>
-                        <button onclick="approveTrip('${o.to_no}','${o.unit}','${safeStr(o.emp_name)}')" class="btn-primary flex-[2] shadow-lg">Approve</button>
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="btn-cancel flex-1 text-slate-500 font-bold uppercase text-[10px]">Reject</button>
+                        <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary flex-[2] shadow-lg">Approve</button>
                     </div>
                 </div>`;
             }).join('') + `</div>`;
         }
 
-        async function approveTrip(to, unit, name) {
+        async function approveTrip(to, unit) {
             const v = document.getElementById(`v-${to}`).value, s = document.getElementById(`s-${to}`).value, d = document.getElementById(`d-${to}`).value || "TBD";
             const next = getApprovalTarget(unit);
             await db.from('travel_orders').update({ received: v, driver: d, remarks: s, status: next }).eq('to_no', to);
@@ -244,22 +260,31 @@
             const data = orders.filter(x => x.transport === "GOV'T VEHICLE" && x.status !== 'PENDING_VEHICLE_APPROVER');
             const grp = {}; data.forEach(x => { if(!grp[x.to_no]) grp[x.to_no] = []; grp[x.to_no].push(x); });
             if (!Object.keys(grp).length) { container.innerHTML = `<div class="p-20 text-center opacity-30 uppercase font-black text-xs mt-20">Manifest Empty</div>`; return; }
-            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">` + Object.entries(grp).map(([to, list]) => `
-            <div class="bg-white p-6 rounded-xl shadow-md border-l-8 border-dar relative flex flex-col h-full hover:shadow-lg transition">
+            
+            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">` + Object.entries(grp).map(([to, list]) => {
+                const isMaint = list[0].remarks === 'MAINTENANCE';
+                return `
+            <div class="bg-white p-6 rounded-xl shadow-md border-l-8 ${isMaint ? 'border-red-600' : 'border-dar'} relative flex flex-col h-full hover:shadow-lg transition">
                 <div>
-                    <div class="flex justify-between items-start mb-4"><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID: ${to}</span><span class="text-[9px] bg-green-50 text-dar font-black px-2 py-1 rounded uppercase tracking-wider">${list[0].remarks||'WHOLE'}</span></div>
-                    <h3 class="font-black text-slate-800 text-sm uppercase mb-4 leading-tight">${list[0].emp_name}</h3>
+                    <div class="flex justify-between items-start mb-4"><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID: ${to}</span><span class="text-[9px] ${isMaint ? 'bg-red-50 text-red-600' : 'bg-green-50 text-dar'} font-black px-2 py-1 rounded uppercase tracking-wider">${list[0].remarks||'WHOLE'}</span></div>
+                    
+                    <h3 class="font-black ${isMaint ? 'text-red-700' : 'text-slate-800'} text-sm uppercase mb-1 leading-tight flex items-center gap-2">
+                        ${list[0].emp_name} ${!isMaint ? `<span class="bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>` : ''}
+                    </h3>
+                    
+                    ${list.length > 1 ? `<div class="text-[10px] text-slate-500 font-bold uppercase mb-4 leading-tight pl-2 border-l-2 border-slate-100">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>` : '<div class="mb-4"></div>'}
+
                     <div class="bg-slate-50 p-3 rounded border border-slate-100 mb-6"><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">🚙 ${list[0].received}</p><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">👤 ${list[0].driver}</p></div>
                 </div>
                 <div class="flex gap-3 pt-4 border-t border-slate-100 mt-auto">
                     <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-white border border-red-200 text-red-600 px-4 py-3 rounded text-[10px] font-black uppercase flex-1 active:scale-95 transition">Cancel</button>
-                    <button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-4 py-3 rounded text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>
+                    ${!isMaint ? `<button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-4 py-3 rounded text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>` : `<div class="flex-[2]"></div>`}
                 </div>
-            </div>`).join('') + `</div>`;
+            </div>`}).join('') + `</div>`;
         }
 
         async function cancelTrip(to, status) {
-            if(!confirm("Change to LAND?")) return;
+            if(!confirm("Change to LAND or Cancel?")) return;
             if(status === 'APPROVED') await db.from('travel_orders').update({ transport: 'LAND' }).eq('to_no', to);
             else await db.from('travel_orders').update({ transport: 'LAND', status: 'PENDING_UNIT_HEAD' }).eq('to_no', to);
             sync();
@@ -296,17 +321,16 @@
                 if(!uniqueTo.length) html += `<p class="p-8 text-center text-[11px] text-slate-300 font-black uppercase tracking-widest">Available</p>`;
                 else html += uniqueTo.map(toNo => {
                     const h = logs.find(l => l.to_no === toNo);
-                    const dates = filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date).join(', ');
-                    const allPass = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join(', ');
+                    const dates = [...new Set(filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
+                    const allPass = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join('<br> • ');
                     const isMaint = h.remarks === 'MAINTENANCE';
                     if(isMaint) return `<div class="bg-red-50 p-5 rounded-lg border border-red-200"><p class="text-sm font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[10px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | MAINTENANCE</p></div>`;
-                    return `<div class="bg-slate-50 p-5 rounded-lg mb-3 flex justify-between items-center border border-slate-200 shadow-sm hover:bg-white transition"><div class="overflow-hidden leading-tight pr-4"><p class="text-sm font-black text-slate-800 uppercase truncate mb-1">${allPass}</p><p class="text-[10px] text-slate-500 font-bold tracking-widest font-mono uppercase">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="smartTransfer('${h.to_no}','${v}')" class="text-3xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-12 h-12 flex items-center justify-center border border-slate-100 shadow-sm">🔄</button></div>`;
+                    return `<div class="bg-slate-50 p-5 rounded-lg mb-3 flex justify-between items-start border border-slate-200 shadow-sm hover:bg-white transition"><div class="overflow-hidden leading-tight pr-4"><p class="text-xs font-black text-slate-800 uppercase mb-2"> • ${allPass}</p><p class="text-[10px] text-slate-500 font-bold tracking-widest font-mono uppercase mt-3 pt-2 border-t">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="smartTransfer('${h.to_no}','${v}')" class="text-3xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-12 h-12 flex items-center justify-center border border-slate-100 shadow-sm shrink-0">🔄</button></div>`;
                 }).join('');
                 return html + `</div>`;
             }).join('') + `</div>`;
         }
 
-        // --- SMART TRANSFER (Feature 8) ---
         async function smartTransfer(toNo, curV) {
             activeTO = toNo;
             const dates = itins.filter(i => i.to_no === toNo).map(i => i.travel_date);
@@ -332,16 +356,44 @@
             openModal('transferModal');
         }
 
-        async function setOffRoad(veh) {
-            const d = prompt("Enter Maintenance Date (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
-            if(!d) return;
-            const to = `MAINT-${Math.floor(Math.random()*10000)}`;
-            await db.from('travel_orders').insert({ to_no: to, emp_name: '🚨 UNAVAILABLE', received: veh, remarks: 'MAINTENANCE', status: 'APPROVED', transport: "GOV'T VEHICLE" });
-            await db.from('itinerary').insert({ to_no: to, travel_date: d, destination: "Authorized Shop", purpose: "Fleet Maintenance" });
+        // --- NEW MAINTENANCE LOGIC ---
+        function setOffRoad(veh) {
+            activeVehForMaint = veh;
+            document.getElementById('maintSub').innerText = `Vehicle: ${veh}`;
+            document.getElementById('maintD1').value = "";
+            document.getElementById('maintD2').value = "";
+            openModal('maintModal');
+        }
+
+        async function saveMaintenance() {
+            const d1 = document.getElementById('maintD1').value;
+            const d2 = document.getElementById('maintD2').value;
+            if(!d1) return alert("Select at least a start date.");
+            
+            const to = `MAINT-${Math.floor(Date.now()%10000)}`;
+            await db.from('travel_orders').insert({ to_no: to, emp_name: '🚨 UNAVAILABLE', received: activeVehForMaint, remarks: 'MAINTENANCE', status: 'APPROVED', transport: "GOV'T VEHICLE" });
+            
+            let st = new Date(d1), en = new Date(d2 || d1);
+            while(st <= en) {
+                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Authorized Shop", purpose: "Fleet Maintenance" });
+                st.setDate(st.getDate() + 1);
+            }
+            closeModal('maintModal');
             sync();
         }
 
-        // --- PERSONNEL MANAGEMENT (Lead Protection Implemented) ---
+        // --- DOUBLE BOOKING CHECKER ---
+        async function isDoubleBooked(empName, checkDates) {
+            const empTrips = orders.filter(o => o.emp_name === empName && o.status !== 'CANCELLED' && o.transport === "GOV'T VEHICLE");
+            for (let trip of empTrips) {
+                const tripDates = itins.filter(i => i.to_no === trip.to_no).map(i => i.travel_date);
+                const overlap = tripDates.filter(d => checkDates.includes(d));
+                if (overlap.length > 0) return true; // Found a conflict
+            }
+            return false;
+        }
+
+        // --- PERSONNEL MANAGEMENT ---
         function runEmpSearch(inp, resId) {
             const div = document.getElementById(resId);
             const val = inp.value.toLowerCase().trim();
@@ -357,8 +409,19 @@
             if(iId === 'pAdd' || iId === 'resPAdd') selectedEmpForAdd = { n, u, d };
         }
 
-        function queuePassenger() {
+        async function queuePassenger() {
             if(!selectedEmpForAdd) return alert("Search and click a name first.");
+            
+            const d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
+            if(!d1) return alert("Please set the Start Date first to verify availability.");
+            
+            let st = new Date(d1), en = new Date(d2 || d1), dates = [];
+            while(st <= en) { dates.push(st.toISOString().split('T')[0]); st.setDate(st.getDate() + 1); }
+            
+            if (await isDoubleBooked(selectedEmpForAdd.n, dates)) {
+                return alert(`${selectedEmpForAdd.n} is already scheduled on a Gov't Vehicle during these dates!`);
+            }
+
             manualPassengerQueue.push(selectedEmpForAdd);
             document.getElementById('resPAdd').value = "";
             selectedEmpForAdd = null;
@@ -367,8 +430,8 @@
 
         function renderManualPList() {
             document.getElementById('manualPList').innerHTML = manualPassengerQueue.map((p, idx) => `
-                <div class="flex justify-between items-center bg-slate-50 p-2 rounded text-[10px] font-black uppercase">
-                    <span>${p.n}</span><button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500">✕</button>
+                <div class="flex justify-between items-center bg-slate-50 p-2 rounded text-[10px] font-black uppercase border border-slate-200">
+                    <span>${p.n}</span><button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500 font-bold hover:scale-110">✕</button>
                 </div>`).join('');
         }
 
@@ -380,7 +443,6 @@
         }
 
         async function renderPList() {
-            // Sort by ID to ensure the lead (first entry) stays at index 0
             const { data } = await db.from('travel_orders').select('id, emp_name').eq('to_no', activeTO).order('id', { ascending: true });
             document.getElementById('pList').innerHTML = (data || []).map((p, idx) => `
                 <div class="flex justify-between items-center p-4 bg-white rounded-lg border border-slate-200 shadow-sm transition">
@@ -391,6 +453,12 @@
 
         async function handleAddPersonnel() {
             if(!selectedEmpForAdd) return alert("Search and click a name first.");
+            
+            const tripDates = itins.filter(i => i.to_no === activeTO).map(i => i.travel_date);
+            if (await isDoubleBooked(selectedEmpForAdd.n, tripDates)) {
+                return alert(`${selectedEmpForAdd.n} is already scheduled on a Gov't Vehicle for these dates!`);
+            }
+
             const head = orders.find(o => o.to_no === activeTO);
             const row = { ...head, emp_name: selectedEmpForAdd.n, unit: selectedEmpForAdd.u, division: selectedEmpForAdd.d };
             delete row.id; delete row.created_at;
@@ -405,16 +473,27 @@
             const n = document.getElementById('resN').value, d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
             const s = document.getElementById('resS').value, v = document.getElementById('resV').value, dr = document.getElementById('resDr').value, p = document.getElementById('resP').value;
             if(!n || !d1 || !p) return alert("Missing Details.");
+
+            let st = new Date(d1), en = new Date(d2 || d1), dates = [];
+            while(st <= en) { dates.push(st.toISOString().split('T')[0]); st.setDate(st.getDate() + 1); }
+
+            if (await isDoubleBooked(n, dates)) return alert(`Lead Passenger ${n} is already booked on these dates!`);
+
             const to = `MAN-${Math.floor(Date.now()%10000)}`;
             const head = { to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: s, status: "APPROVED" };
+            
             await db.from('travel_orders').insert([head]);
             if(manualPassengerQueue.length) await db.from('travel_orders').insert(manualPassengerQueue.map(pass => ({ ...head, emp_name: pass.n, unit: pass.u, division: pass.d })));
-            let st = new Date(d1), en = new Date(d2 || d1);
-            while(st <= en) {
-                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Manual Booking", purpose: p });
-                st.setDate(st.getDate() + 1);
+            
+            for(let date of dates) {
+                await db.from('itinerary').insert({ to_no: to, travel_date: date, destination: "Manual Booking", purpose: p });
             }
-            manualPassengerQueue = []; closeModal('bookModal'); sync();
+            
+            manualPassengerQueue = []; 
+            document.getElementById('resN').value = "";
+            document.getElementById('resP').value = "";
+            closeModal('bookModal'); 
+            sync();
         }
 
         // --- UTILS ---
