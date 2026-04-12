@@ -2,281 +2,369 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DAR CAM SUR 1 - Dispatch Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DAR Vehicle Dispatch</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DAR Dispatch">
+    <meta name="theme-color" content="#003811">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <link id="pwa-manifest" rel="manifest">
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-
+    
     <style>
-        :root {
-            --dar-green: #003811;
-            --dar-gold: #D4AF37;
+        .dar-green { background-color: #003811; }
+        .text-dar-green { color: #003811; }
+        .dar-gold { background-color: #D4AF37; }
+        .text-dar-gold { color: #D4AF37; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f3f4f6; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: none; 
         }
-        body { background-color: #F3F4F6; font-family: 'Segoe UI', sans-serif; }
-        .bg-dar { background-color: var(--dar-green); }
-        .text-dar-gold { color: var(--dar-gold); }
-        .border-dar-gold { border-color: var(--dar-gold); }
-        .tab-active { border-bottom: 4px solid var(--dar-gold); color: var(--dar-gold); font-weight: bold; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        ::-webkit-scrollbar { display: none; }
+        .modal-fade { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 </head>
-<body class="h-screen flex flex-col">
+<body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800 bg-gray-100 text-left">
 
-    <div id="login-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-dar">
-        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md mx-4">
-            <div class="text-center mb-6">
-                <h1 class="text-2xl font-bold text-dar">DAR CAM SUR 1</h1>
-                <p class="text-gray-500 text-sm">Vehicle Dispatch Control</p>
-            </div>
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="Username" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-900">
-                <input type="password" id="password" placeholder="Password" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-900">
-                <button onclick="handleLogin()" class="w-full bg-dar text-white p-3 rounded font-bold hover:bg-opacity-90 transition">ENTER SYSTEM</button>
-            </div>
-            <p id="login-error" class="text-red-500 text-sm mt-4 hidden text-center"></p>
-        </div>
-        <div class="text-white text-xs mt-8 opacity-50 text-center max-w-md px-4">
-            <p>&copy; System Intellectual Property remains personally with the Developer.</p>
-        </div>
-    </div>
-
-    <div id="main-app" class="hidden flex-col h-full">
-        <header class="bg-dar text-white p-4 shadow-lg flex justify-between items-center">
-            <div>
-                <h1 class="font-bold text-lg leading-tight">DISPATCH CONTROL</h1>
-                <p id="user-display" class="text-xs text-dar-gold uppercase tracking-widest"></p>
-            </div>
-            <button onclick="syncData()" class="p-2 bg-green-800 rounded-full hover:bg-green-700">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-        </header>
-
-        <nav class="bg-dar text-white flex border-t border-green-900 sticky top-0 z-10">
-            <button onclick="switchTab('pending')" id="tab-pending" class="flex-1 py-3 text-sm tab-active">PENDING</button>
-            <button onclick="switchTab('dispatched')" id="tab-dispatched" class="flex-1 py-3 text-sm">DISPATCHED</button>
-            <button onclick="switchTab('calendar')" id="tab-calendar" class="flex-1 py-3 text-sm">CALENDAR</button>
-        </nav>
-
-        <main class="flex-1 overflow-y-auto p-4 no-scrollbar pb-20">
-            
-            <div id="content-pending" class="space-y-4">
-                <div class="bg-white p-4 rounded shadow border-l-4 border-dar-gold mb-4">
-                    <h2 class="font-bold text-dar mb-2"><i class="fas fa-tasks mr-2"></i>Quick Assignment</h2>
-                    <div class="grid grid-cols-2 gap-2 mb-3">
-                        <select id="assign-veh" class="p-2 border rounded text-sm bg-gray-50">
-                            <option value="">Select Vehicle</option>
-                            <option>MAZDA</option><option>REVO</option><option>INNOVA</option><option>SKY</option><option>BLACK</option>
-                        </select>
-                        <select id="assign-drv" class="p-2 border rounded text-sm bg-gray-50">
-                            <option value="">Select Driver</option>
-                            <option>Driver 1</option><option>Driver 2</option><option>Driver 3</option><option>Driver 4</option><option>Driver 5</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="pending-list" class="space-y-3">
-                    </div>
-            </div>
-
-            <div id="content-dispatched" class="hidden space-y-3">
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="search-dispatch" placeholder="Search TO or Name..." class="flex-1 p-2 border rounded text-sm">
-                    <button onclick="generateReport()" class="bg-dar text-white px-3 rounded"><i class="fas fa-file-pdf"></i></button>
-                </div>
-                <div id="dispatched-list" class="space-y-3"></div>
-            </div>
-
-            <div id="content-calendar" class="hidden">
-                <div id="calendar-view" class="bg-white rounded shadow p-2 overflow-x-auto">
-                    </div>
-            </div>
-        </main>
-        
-        <footer class="bg-white border-t p-2 text-center fixed bottom-0 w-full lg:hidden">
-            <button onclick="location.reload()" class="text-red-600 text-sm font-bold">LOGOUT SYSTEM</button>
-        </footer>
-    </div>
+    <div id="app" class="w-full h-full flex flex-col relative"></div>
 
     <script>
-        // --- CONFIG ---
-        const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SB_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
-        
-        // Browser-compatible Supabase initialization
-        const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
+        const manifestData = {
+            "name": "DAR Cam Sur 1 Dispatch",
+            "short_name": "Dispatch",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#F3F4F6",
+            "theme_color": "#003811",
+            "icons": [{
+                "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwMzgxMSIvPjx0ZXh0IHg9IjUwIiB5PSI2NSIgZm9udC1zaXplPSI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI0Q0QUYzNyI+RDwvdGV4dD48L3N2Zz4=",
+                "sizes": "192x192",
+                "type": "image/svg+xml"
+            }]
+        };
+        document.getElementById('pwa-manifest').setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData)));
+
+        // --- SUPABASE CONFIG ---
+        const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
+        const SUPABASE_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- CONSTANTS ---
+        const OFFICIAL_VEHICLES = ["MAZDA", "REVO", "INNOVA", "SKY", "BLACK"];
+        const OFFICIAL_DRIVERS = ["Driver 1", "Driver 2", "Driver 3", "Driver 4", "Driver 5"];
 
         let currentUser = null;
-        let orders = [];
-        let itinerary = [];
-        let employees = [];
+        let currentTab = 'pending'; 
 
-        // Helper: Format Date/Time to strictly use 12-hour format
-        function formatTo12Hour(dateString) {
-            if (!dateString) return 'N/A';
-            const date = new Date(dateString);
-            return date.toLocaleString('en-US', { 
-                year: 'numeric', month: 'short', day: 'numeric', 
-                hour: 'numeric', minute: '2-digit', hour12: true 
-            });
+        function render() { if (!currentUser) renderLogin(); else renderMain(); }
+
+        // --- LOGIN VIEW ---
+        function renderLogin() {
+            document.getElementById('app').innerHTML = `
+                <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
+                    <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+                        <div class="dar-gold h-2 w-full"></div>
+                        <div class="p-8">
+                            <h1 class="text-dar-green font-bold text-3xl font-serif mb-1 text-center">DAR</h1>
+                            <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Vehicle Dispatch Console</p>
+                            <div class="space-y-4">
+                                <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="username" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
+                                <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
+                                <p id="loginError" class="text-red-600 text-[10px] font-bold text-center hidden"></p>
+                                <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg">LOG IN</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
         }
 
-        // --- AUTH ---
         async function handleLogin() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            const errEl = document.getElementById('login-error');
+            const uBox = document.getElementById('username').value.trim();
+            const pBox = document.getElementById('password').value.trim();
+            const err = document.getElementById('loginError');
             
-            errEl.classList.add('hidden');
-
             try {
-                // FIXED: Changed .table() to .from() for JavaScript SDK
-                const { data, error } = await supabaseClient
-                    .from('users')
-                    .select('id, username, password, role, division, full_name, unit')
-                    .eq('username', u)
-                    .eq('password', p)
-                    .single();
-
-                if (error) {
-                    errEl.innerText = "Invalid credentials or network error.";
-                    errEl.classList.remove('hidden');
-                    return;
-                }
-
+                const { data, error } = await supabaseClient.from('users').select('*').eq('username', uBox).eq('password', pBox).maybeSingle();
+                
                 if (data) {
-                    // Strict validation for VEHICLE_APPROVER role
                     if (data.role === 'VEHICLE_APPROVER') {
-                        currentUser = data;
-                        document.getElementById('login-screen').classList.add('hidden');
-                        document.getElementById('main-app').classList.remove('hidden');
-                        document.getElementById('user-display').innerText = `${data.full_name} (${data.role})`;
-                        syncData();
+                        currentUser = { username: data.username, fullName: data.full_name, role: data.role.toUpperCase(), unit: data.unit ? data.unit.trim().toUpperCase() : '' };
+                        render();
                     } else {
-                        errEl.innerText = "Access Denied: Account lacks VEHICLE_APPROVER privileges.";
-                        errEl.classList.remove('hidden');
+                        err.innerText = "Access Denied: Only Vehicle Approvers permitted.";
+                        err.classList.remove("hidden");
                     }
+                } else { 
+                    err.innerText = "Check credentials."; 
+                    err.classList.remove("hidden"); 
                 }
-            } catch (err) {
-                errEl.innerText = "System error: " + err.message;
-                errEl.classList.remove('hidden');
+            } catch (e) { 
+                err.innerText = "Connection Error."; 
+                err.classList.remove("hidden"); 
             }
         }
 
-        // --- DATA SYNC ---
-        async function syncData() {
-            // FIXED: Changed .table() to .from()
-            const ordReq = supabaseClient.from('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
-            const itinReq = supabaseClient.from('itinerary').select('*');
-            const empReq = supabaseClient.from('employees').select('*');
+        function logout() { currentUser = null; render(); }
 
-            const [ordRes, itinRes, empRes] = await Promise.all([ordReq, itinReq, empReq]);
-            orders = ordRes.data || [];
-            itinerary = itinRes.data || [];
-            employees = empRes.data || [];
-            
-            renderPending();
-            renderDispatched();
-            renderCalendar();
-        }
-
-        // --- UI RENDERING ---
-        function switchTab(tabId) {
-            ['pending', 'dispatched', 'calendar'].forEach(t => {
-                document.getElementById(`content-${t}`).classList.add('hidden');
-                document.getElementById(`tab-${t}`).classList.remove('tab-active');
-            });
-            document.getElementById(`content-${tabId}`).classList.remove('hidden');
-            document.getElementById(`tab-${tabId}`).classList.add('tab-active');
-        }
-
-        function renderPending() {
-            const container = document.getElementById('pending-list');
-            const pending = orders.filter(o => o.status === 'PENDING_VEHICLE_APPROVER');
-            
-            container.innerHTML = pending.length ? '' : '<p class="text-center text-gray-400 py-10">No pending requests</p>';
-            
-            pending.forEach(o => {
-                const itin = itinerary.find(i => i.to_no === o.to_no) || {};
-                container.innerHTML += `
-                    <div class="bg-white p-4 rounded shadow border-l-4 border-green-700 relative">
-                        <span class="absolute top-2 right-2 text-[10px] font-bold text-gray-400">TO #${o.to_no}</span>
-                        <h3 class="font-bold text-gray-800">${o.emp_name}</h3>
-                        <p class="text-xs text-dar font-semibold mb-2 uppercase">${o.unit || 'NO UNIT'}</p>
-                        <div class="text-sm text-gray-600 space-y-1">
-                            <div><i class="far fa-calendar-alt mr-2"></i>${itin.travel_date || 'N/A'}</div>
-                            <div class="italic"><i class="fas fa-map-marker-alt mr-2"></i>${itin.purpose || 'N/A'}</div>
+        // --- MAIN APP SHELL ---
+        function renderMain() {
+            document.getElementById('app').innerHTML = `
+                <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
+                    <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.role}</p></div>
+                    <div class="flex items-center space-x-2"><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
+                </header>
+                
+                <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
+                
+                <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/3 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
+                    <button onclick="switchTab('dispatched')" class="flex flex-col items-center justify-center w-1/3 ${currentTab === 'dispatched' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">🚚</span><span class="text-[9px] uppercase tracking-tighter">Dispatched</span></button>
+                    <button onclick="switchTab('reserve')" class="flex flex-col items-center justify-center w-1/3 ${currentTab === 'reserve' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">➕</span><span class="text-[9px] uppercase tracking-tighter">Reserve</span></button>
+                </nav>
+                
+                <div id="reserveModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
+                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
+                        <div class="dar-green text-white p-4 font-bold text-center relative">RSO/PSO Reservation<button onclick="hideReserveModal()" class="absolute right-4 text-xl leading-none">✕</button></div>
+                        <div class="p-6 space-y-3 overflow-y-auto max-h-[70vh]">
+                            <div><label class="block text-xs font-bold text-gray-700">Type</label><select id="resType" class="w-full px-3 py-2 border rounded-lg text-sm"><option>RSO</option><option>PSO</option><option>MEMO</option></select></div>
+                            <div><label class="block text-xs font-bold text-gray-700">Ref Number</label><input type="text" id="resRef" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                            <div><label class="block text-xs font-bold text-gray-700">Date</label><input type="date" id="resDate" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                            <div><label class="block text-xs font-bold text-gray-700">Vehicle</label><select id="resVeh" class="w-full px-3 py-2 border rounded-lg text-sm">${OFFICIAL_VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                            <div><label class="block text-xs font-bold text-gray-700">Driver</label><select id="resDrv" class="w-full px-3 py-2 border rounded-lg text-sm">${OFFICIAL_DRIVERS.map(d=>`<option>${d}</option>`).join('')}</select></div>
+                            <div><label class="block text-xs font-bold text-gray-700">Purpose</label><input type="text" id="resPurp" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                            <button onclick="saveReservation()" class="w-full dar-green text-white font-bold py-3 rounded-xl mt-4">Confirm Reservation</button>
                         </div>
-                        <button onclick="approveOrder('${o.to_no}', '${o.emp_name}')" class="mt-4 w-full bg-dar text-white py-2 rounded text-sm font-bold">APPROVE & ASSIGN</button>
                     </div>
-                `;
-            });
+                </div>`;
+            
+            if (currentTab === 'pending') loadPendingTab();
+            else if (currentTab === 'dispatched') loadDispatchedTab();
+            else if (currentTab === 'reserve') { loadDispatchedTab(); showReserveModal(); currentTab = 'dispatched'; }
         }
 
-        async function approveOrder(toNo, empName) {
-            const veh = document.getElementById('assign-veh').value;
-            const drv = document.getElementById('assign-drv').value;
+        function switchTab(tab) { currentTab = tab; renderMain(); }
+        function showReserveModal() { document.getElementById('reserveModal').classList.remove('hidden'); document.getElementById('resDate').valueAsDate = new Date(); }
+        function hideReserveModal() { document.getElementById('reserveModal').classList.add('hidden'); }
 
-            if (!veh || !drv) {
-                alert("Please select Vehicle and Driver first.");
+        // --- PENDING TAB (ASSIGNMENT LOGIC) ---
+        async function loadPendingTab() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Syncing Inbox...</p>`;
+            
+            const [oRes, iRes] = await Promise.all([
+                supabaseClient.from('travel_orders').select('*').eq('status', 'PENDING_VEHICLE_APPROVER'), 
+                supabaseClient.from('itinerary').select('*')
+            ]);
+            
+            const pending = oRes.data || [];
+            
+            if (pending.length === 0) {
+                content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">No Pending Vehicles</p></div>`;
+                return;
+            }
+            
+            let h = `<div class="p-4 space-y-4 pb-32">`;
+            
+            // Build Dropdown HTML options
+            const vehOptions = `<option value="">Select Vehicle...</option>` + OFFICIAL_VEHICLES.map(v => `<option value="${v}">${v}</option>`).join('');
+            const drvOptions = `<option value="">Select Driver...</option>` + OFFICIAL_DRIVERS.map(d => `<option value="${d}">${d}</option>`).join('');
+
+            pending.forEach(o => { 
+                let d = (iRes.data || []).filter(i => i.to_no === o.to_no);
+                let dest = d.map(i => i.destination).join(', ') || 'N/A';
+                let dates = d.map(i => i.travel_date).join(', ') || 'N/A';
+                
+                h += `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-dar-gold/50">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[10px] font-black text-dar-green uppercase">${o.to_no}</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded uppercase font-bold">${o.unit || 'NO UNIT'}</span>
+                    </div>
+                    <p class="font-bold text-gray-800 text-sm leading-tight">${o.emp_name}</p>
+                    <p class="text-xs text-gray-500 mt-1 truncate">📍 ${dest}</p>
+                    <p class="text-[10px] text-gray-400 mt-1">📅 ${dates}</p>
+                    
+                    <div class="mt-4 p-3 bg-gray-50 rounded-xl border space-y-2">
+                        <select id="veh-${o.to_no}" class="w-full text-xs p-2 border rounded-lg bg-white">${vehOptions}</select>
+                        <select id="drv-${o.to_no}" class="w-full text-xs p-2 border rounded-lg bg-white">${drvOptions}</select>
+                    </div>
+
+                    <div class="flex justify-between space-x-2 mt-4">
+                        <button onclick="denyVehicle('${o.to_no}')" class="w-1/3 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold border border-red-100 shadow-sm">Disapprove</button>
+                        <button onclick="approveVehicle('${o.to_no}', '${o.unit || ''}')" class="w-2/3 py-2 dar-green text-white rounded-xl text-[11px] font-bold shadow-md">✅ Route & Assign</button>
+                    </div>
+                </div>`; 
+            });
+            content.innerHTML = h + `</div>`;
+        }
+
+        async function approveVehicle(to_no, unit) {
+            const veh = document.getElementById(`veh-${to_no}`).value;
+            const drv = document.getElementById(`drv-${to_no}`).value;
+            
+            if(!veh || !drv) return alert("Please select both a Vehicle and a Driver.");
+
+            // Logic matching Python specifications
+            let nextStatus = "PENDING_UNIT_HEAD";
+            if (unit.toUpperCase() === "PARPO") nextStatus = "PENDING_PARPO";
+            else if (!unit || unit.toUpperCase() === "NULL" || unit.toUpperCase() === "NAN") nextStatus = "PENDING_CHIEF";
+
+            // Prevent spam clicks
+            document.body.style.pointerEvents = "none";
+            try {
+                await supabaseClient.from('travel_orders').update({
+                    received: veh,
+                    driver: drv,
+                    status: nextStatus
+                }).eq('to_no', to_no);
+                loadPendingTab();
+            } catch(e) {
+                alert("Update failed.");
+            } finally {
+                document.body.style.pointerEvents = "auto";
+            }
+        }
+
+        async function denyVehicle(to_no) {
+            if(!confirm(`Disapprove vehicle request for TO ${to_no}?\nStatus will change to 'VEHICLE_DISAPPROVED'.`)) return;
+            
+            document.body.style.pointerEvents = "none";
+            try {
+                await supabaseClient.from('travel_orders').update({
+                    status: "VEHICLE_DISAPPROVED",
+                    received: null,
+                    driver: null
+                }).eq('to_no', to_no);
+                loadPendingTab();
+            } catch(e) {
+                alert("Update failed.");
+            } finally {
+                document.body.style.pointerEvents = "auto";
+            }
+        }
+
+        // --- DISPATCHED / TRACKING TAB ---
+        async function loadDispatchedTab() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Loading Manifest...</p>`;
+            
+            // Get all TOs that have a vehicle but aren't pending vehicle assignment
+            const { data: oRes } = await supabaseClient.from('travel_orders')
+                .select('to_no, emp_name, received, driver, status, created_at')
+                .eq('transport', "GOV'T VEHICLE")
+                .neq('status', 'PENDING_VEHICLE_APPROVER')
+                .neq('status', 'VEHICLE_DISAPPROVED')
+                .neq('status', 'CANCELLED')
+                .order('created_at', { ascending: false });
+
+            const dispatched = oRes || [];
+            
+            if (dispatched.length === 0) {
+                content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">🚚</span><p class="font-bold mt-2 text-xs uppercase">No Active Dispatches</p></div>`;
                 return;
             }
 
-            const emp = employees.find(e => e.full_name === empName) || {};
-            const unit = (emp.unit || '').toUpperCase();
+            let h = `<div class="p-4 space-y-3 pb-32">
+                        <div class="sticky top-0 bg-gray-100 pt-2 pb-3 z-10">
+                            <input type="text" id="searchDispatch" onkeyup="filterDispatched()" placeholder="Search TO or Personnel..." class="w-full px-4 py-3 bg-white border rounded-xl text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-green-800">
+                        </div>
+                        <div id="dispatchList">`;
             
-            let nextStatus = "PENDING_UNIT_HEAD";
-            if (unit === "PARPO") nextStatus = "PENDING_PARPO";
-            else if (!unit || unit === "NULL") nextStatus = "PENDING_CHIEF";
+            dispatched.forEach(o => {
+                let statusColor = o.status === "APPROVED" ? "text-green-600" : "text-orange-500";
+                h += `
+                <div class="dispatch-card bg-white p-4 rounded-xl shadow-sm border-l-4 border-dar-green mb-3" data-search="${o.to_no.toLowerCase()} ${o.emp_name.toLowerCase()}">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-[10px] font-black text-gray-400 uppercase">TO #${o.to_no}</span>
+                        <span class="text-[9px] font-bold uppercase ${statusColor} bg-gray-50 px-2 py-0.5 rounded">${o.status.replace('PENDING_', '')}</span>
+                    </div>
+                    <p class="font-bold text-gray-800 text-sm">${o.emp_name}</p>
+                    <div class="flex space-x-3 mt-3 pt-3 border-t">
+                        <div class="flex items-center text-[11px] text-gray-600"><span class="mr-1">🚙</span> <b>${o.received || 'N/A'}</b></div>
+                        <div class="flex items-center text-[11px] text-gray-600"><span class="mr-1">👤</span> <b>${o.driver || 'N/A'}</b></div>
+                    </div>
+                </div>`;
+            });
+            content.innerHTML = h + `</div></div>`;
+        }
 
-            // FIXED: Changed .table() to .from()
-            const { error } = await supabaseClient.from('travel_orders').update({
-                received: veh,
-                driver: drv,
-                status: nextStatus
-            }).eq('to_no', toNo);
-
-            if (!error) {
-                alert(`Approved! Routed to: ${nextStatus}`);
-                syncData();
-            } else {
-                alert("Error updating order: " + error.message);
+        function filterDispatched() {
+            let input = document.getElementById('searchDispatch').value.toLowerCase();
+            let cards = document.getElementsByClassName('dispatch-card');
+            for (let i = 0; i < cards.length; i++) {
+                let searchData = cards[i].getAttribute('data-search');
+                cards[i].style.display = searchData.includes(input) ? "" : "none";
             }
         }
 
-        function renderDispatched() {
-            const container = document.getElementById('dispatched-list');
-            const dispatched = orders.filter(o => o.status !== 'PENDING_VEHICLE_APPROVER');
-            container.innerHTML = '';
-            dispatched.forEach(o => {
-                container.innerHTML += `
-                    <div class="bg-white p-3 rounded shadow text-sm border-l-4 border-gray-300">
-                        <div class="flex justify-between font-bold">
-                            <span>${o.received} - ${o.driver}</span>
-                            <span class="text-xs text-green-700">${o.status}</span>
-                        </div>
-                        <div class="text-gray-500 text-xs mt-1">${o.emp_name} • TO #${o.to_no}</div>
-                    </div>
-                `;
-            });
+        // --- MANUAL RSO/PSO RESERVATION ---
+        async function saveReservation() {
+            const rtype = document.getElementById('resType').value;
+            const ref = document.getElementById('resRef').value.trim();
+            const tdate = document.getElementById('resDate').value;
+            const veh = document.getElementById('resVeh').value;
+            const drv = document.getElementById('resDrv').value;
+            const purp = document.getElementById('resPurp').value.trim();
+
+            if (!ref || !veh || !drv || !purp || !tdate) {
+                alert("All fields are required.");
+                return;
+            }
+
+            const pseudo_to = `${rtype}-${ref}-${Math.floor(Date.now() % 1000)}`;
+
+            document.body.style.pointerEvents = "none";
+            try {
+                // 1. Insert Main Record
+                await supabaseClient.from("travel_orders").insert({
+                    to_no: pseudo_to,
+                    emp_id: currentUser.username,
+                    emp_name: `ADMIN RESERVATION (${rtype} ${ref})`,
+                    unit: "ADMIN",
+                    status: "APPROVED",
+                    received: veh,
+                    driver: drv,
+                    transport: "GOV'T VEHICLE",
+                    report_to: "PARPO II",
+                    division: "ADMIN"
+                });
+
+                // 2. Insert Itinerary
+                await supabaseClient.from("itinerary").insert({
+                    to_no: pseudo_to,
+                    travel_date: tdate,
+                    destination: "Official Business",
+                    purpose: `${rtype} ${ref}: ${purp}`
+                });
+
+                alert("Vehicle Reserved successfully.");
+                hideReserveModal();
+                loadDispatchedTab(); // Refresh list
+            } catch (e) {
+                alert("Failed to save reservation.");
+            } finally {
+                document.body.style.pointerEvents = "auto";
+            }
         }
 
-        function renderCalendar() {
-            const container = document.getElementById('calendar-view');
-            container.innerHTML = '<p class="text-center text-xs p-4 text-gray-400">Weekly Grid rendering based on data...</p>';
-        }
-
-        async function generateReport() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('l', 'mm', 'a4');
-            doc.text("DAR CAM SUR 1 - DISPATCH MANIFEST", 14, 15);
-            // 12-hour format used for the generated timestamp
-            const now = new Date();
-            const timeString = now.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(':', '');
-            doc.save(`Dispatch_${now.toISOString().slice(0,10)}_${timeString}.pdf`);
-        }
-
+        window.onload = render;
     </script>
 </body>
 </html>
