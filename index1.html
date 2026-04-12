@@ -74,7 +74,7 @@
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
-        // --- LOGIN VIEW ---
+        // --- LOGIN VIEW (Using Working Logic from TO App) ---
         function renderLogin() {
             document.getElementById('app').innerHTML = `
                 <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
@@ -101,14 +101,22 @@
             const err = document.getElementById('loginError');
             
             try {
-                const { data, error } = await supabaseClient.from('users').select('*').eq('username', uBox).eq('password', pBox).maybeSingle();
+                // Working logic: fetch all, then .find() locally to bypass parameter binding issues
+                const { data: users } = await supabaseClient.from('users').select('*');
+                const u = (users || []).find(x => x.username === uBox && x.password === pBox);
                 
-                if (data) {
-                    if (data.role === 'VEHICLE_APPROVER') {
-                        currentUser = { username: data.username, fullName: data.full_name, role: data.role.toUpperCase(), unit: data.unit ? data.unit.trim().toUpperCase() : '' };
+                if (u) {
+                    // Strict check for Vehicle Approver
+                    if (u.role && u.role.toUpperCase() === 'VEHICLE_APPROVER') {
+                        currentUser = { 
+                            username: u.username, 
+                            fullName: u.full_name, 
+                            role: u.role.toUpperCase(), 
+                            unit: u.unit ? u.unit.trim().toUpperCase() : '' 
+                        };
                         render();
                     } else {
-                        err.innerText = "Access Denied: Only Vehicle Approvers permitted.";
+                        err.innerText = "Access Denied: Vehicle Approvers only.";
                         err.classList.remove("hidden");
                     }
                 } else { 
