@@ -2,64 +2,91 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>DAR Fleet Master Pro</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#003811">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        /* BRANDING VARIABLES */
         :root { --dar-green: #003811; --dar-gold: #D4AF37; }
-        body { background: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; color: #1e293b; }
-        .bg-dar { background: var(--dar-green); }
-        .text-dar { color: var(--dar-green); }
-        .bg-gold { background: var(--dar-gold); }
         
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f3f4f6; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: none; 
+        }
+        
+        .bg-dar { background-color: var(--dar-green); }
+        .text-dar { color: var(--dar-green); }
+        .bg-gold { background-color: var(--dar-gold); }
+        .border-dar-gold { border-color: var(--dar-gold); }
+        .border-dar { border-color: var(--dar-green); }
+        
+        ::-webkit-scrollbar { display: none; /* Mobile app feel */ }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
-        /* INDUSTRY STANDARD CENTERED MODALS */
+        /* MODALS (Kept from original but styled to match) */
+        .modal-fade { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         .modal-overlay {
             position: fixed; inset: 0; z-index: 999;
-            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);
+            background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
             display: flex; align-items: center; justify-content: center; padding: 20px;
         }
         .modal-box {
             background: white; width: 100%; max-width: 600px;
-            border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
             max-height: 90vh; display: flex; flex-direction: column; 
             overflow: visible;
         }
 
         .search-results-box { 
-            position: absolute; width: 100%; max-height: 250px; 
+            position: absolute; width: 100%; max-height: 200px; 
             overflow-y: auto; z-index: 2000; background: white; 
-            border: 2px solid var(--dar-green); border-radius: 8px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
+            border: 2px solid var(--dar-gold); border-radius: 8px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
             top: 100%; left: 0;
         }
 
-        .btn-primary { @apply bg-dar text-white px-6 py-3 rounded font-bold uppercase text-xs transition active:scale-95 hover:opacity-90 shadow-md; }
-        .btn-gold { background: var(--dar-gold); color: white; padding: 0.75rem 1.5rem; border-radius: 0.25rem; font-weight: 800; text-transform: uppercase; font-size: 0.75rem; }
+        .btn-primary { background-color: var(--dar-green); color: white; border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; font-size: 0.75rem; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+        .btn-gold { background-color: var(--dar-gold); color: var(--dar-green); border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; font-size: 0.75rem; }
 
         @media print {
             .no-print { display: none !important; }
-            .print-area { display: block !important; width: 100% !important; background: white; }
-            .card-item { border: 1px solid #e2e8f0 !important; margin-bottom: 10px; break-inside: avoid; padding: 20px; border-radius: 0; }
+            .print-area { display: block !important; width: 100% !important; background: white; padding: 0 !important; }
+            .card-item { border: 1px solid #e2e8f0 !important; margin-bottom: 10px; break-inside: avoid; padding: 20px; border-radius: 0; box-shadow: none !important; }
         }
     </style>
 </head>
-<body class="h-screen w-full flex flex-col overflow-hidden">
+<body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800">
 
-    <div id="app" class="flex flex-col h-full w-full">
-        <div id="login-screen" class="h-full w-full flex items-center justify-center p-6 bg-dar">
-            <div class="bg-white p-10 rounded-2xl w-full max-w-sm shadow-2xl border-t-8 border-dar-gold">
-                <div class="text-center mb-8">
-                    <h1 class="text-3xl font-black text-dar tracking-tighter uppercase">DAR Fleet</h1>
-                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Official Dispatch Command</p>
-                </div>
-                <div class="space-y-4">
-                    <input id="un" type="text" placeholder="Username" class="w-full p-4 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-dar bg-slate-50">
-                    <input id="pw" type="password" placeholder="Password" class="w-full p-4 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-dar bg-slate-50">
-                    <button onclick="handleLogin()" class="w-full btn-primary py-4 mt-2">Enter Console</button>
+    <div id="app" class="w-full h-full flex flex-col relative">
+        <div id="login-screen" class="flex-grow flex flex-col justify-center items-center px-6 bg-dar h-full">
+            <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div class="bg-gold h-2 w-full"></div>
+                <div class="p-8">
+                    <h1 class="text-dar font-bold text-3xl font-serif mb-1 text-center">DAR FLEET</h1>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Official Dispatch Command</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label>
+                            <input type="text" id="un" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label>
+                            <input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar">
+                        </div>
+                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary py-3.5">ENTER CONSOLE</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -87,7 +114,7 @@
                 const {data: e} = await db.from('employees').select('*');
                 emps = e || []; 
                 renderDashboard(); 
-            } else alert("Invalid Login.");
+            } else alert("Invalid Login. You must be a Dispatcher.");
         }
 
         async function sync() {
@@ -103,113 +130,114 @@
 
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
-            <div class="flex flex-col h-screen">
-                <header class="bg-dar text-white px-8 py-5 flex justify-between items-center no-print shadow-md shrink-0">
-                    <div class="leading-tight"><span class="block font-black text-xl tracking-tight uppercase">${user.full_name}</span><p class="text-[9px] text-dar-gold font-bold uppercase tracking-widest mt-1">DISPATCHER</p></div>
-                    <div class="flex gap-6 items-center"><button onclick="sync()" class="text-2xl hover:opacity-70 transition">🔄</button><button onclick="location.reload()" class="bg-white/10 border border-white/20 px-4 py-2 rounded text-[10px] font-bold uppercase">Logout</button></div>
-                </header>
-                <nav class="bg-white border-b flex no-print shadow-sm shrink-0">
-                    <button onclick="switchTab('inbox')" class="flex-1 p-5 text-xs font-black ${currentTab==='inbox'?'border-b-4 border-green-900 text-dar':'text-slate-400'} uppercase">Inbox</button>
-                    <button onclick="switchTab('manifest')" class="flex-1 p-5 text-xs font-black ${currentTab==='manifest'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Manifest</button>
-                    <button onclick="switchTab('schedule')" class="flex-1 p-5 text-xs font-black ${currentTab==='schedule'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Schedule</button>
-                </nav>
-                <main id="main-content" class="flex-1 overflow-y-auto p-10 no-scrollbar print-area bg-slate-100"></main>
-                <footer class="p-5 no-print bg-white border-t flex justify-end shrink-0 shadow-lg">
-                    <button onclick="openModal('bookModal')" class="btn-primary py-4 px-10 tracking-widest">+ Create Booking</button>
-                </footer>
+            <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50 no-print">
+                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${user.full_name}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">DISPATCHER</p></div>
+                <div class="flex items-center space-x-2"><button onclick="sync()" class="text-xl px-2">🔄</button><button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
+            </header>
+            
+            <main id="main-content" class="flex-grow w-full overflow-y-auto p-4 pb-32 relative z-10 scroll-smooth print-area"></main>
+            
+            <div class="fixed bottom-20 right-4 z-40 no-print">
+                <button onclick="openModal('bookModal')" class="bg-dar text-white shadow-[0_8px_30px_rgb(0,0,0,0.3)] border-2 border-dar-gold px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-2 active:scale-90 transition">
+                    <span class="text-lg leading-none">+</span> Booking
+                </button>
             </div>
+
+            <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)] no-print">
+                <button onclick="switchTab('inbox')" class="flex flex-col items-center justify-center w-1/3 ${currentTab==='inbox'?'text-dar font-bold':'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Inbox</span></button>
+                <button onclick="switchTab('manifest')" class="flex flex-col items-center justify-center w-1/3 ${currentTab==='manifest'?'text-dar font-bold':'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Manifest</span></button>
+                <button onclick="switchTab('schedule')" class="flex flex-col items-center justify-center w-1/3 ${currentTab==='schedule'?'text-dar font-bold':'text-gray-400'}"><span class="text-xl">📅</span><span class="text-[9px] uppercase tracking-tighter">Schedule</span></button>
+            </nav>
+            
             ${modalsMarkup()}`;
             sync();
         }
 
         function modalsMarkup() {
             return `
-            <div id="bookModal" class="hidden modal-overlay">
+            <div id="bookModal" class="hidden modal-overlay modal-fade">
                 <div class="modal-box">
-                    <div class="p-6 border-b flex justify-between items-center bg-slate-50 shrink-0">
+                    <div class="p-5 border-b flex justify-between items-center bg-slate-50 shrink-0 rounded-t-2xl">
                         <h2 class="font-black text-dar uppercase text-sm tracking-widest">Manual Reservation</h2>
-                        <button onclick="closeModal('bookModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light">✕</button>
+                        <button onclick="closeModal('bookModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light leading-none">✕</button>
                     </div>
-                    <div class="p-8 space-y-6 overflow-y-auto no-scrollbar flex-1 bg-white">
-                        <div class="relative"><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Lead Passenger</label><input id="resN" oninput="runEmpSearch(this, 'resResults')" placeholder="Search and click a name..." class="w-full p-3 border rounded text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50"><div id="resResults" class="search-results-box hidden"></div></div>
+                    <div class="p-6 space-y-5 overflow-y-auto no-scrollbar flex-1 bg-white">
+                        <div class="relative"><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Lead Passenger</label><input id="resN" oninput="runEmpSearch(this, 'resResults')" placeholder="Search and click a name..." class="w-full p-3 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50"><div id="resResults" class="search-results-box hidden"></div></div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-3 border rounded text-sm"></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-3 border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment</label><select id="resS" class="w-full p-3 border rounded text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-3 border rounded text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment</label><select id="resS" class="w-full p-3 border rounded-xl text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-3 border rounded-xl text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
                         </div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-3 border rounded text-sm font-bold bg-slate-50"></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-3 border rounded text-sm outline-none bg-slate-50"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-3 border rounded-xl text-sm font-bold bg-slate-50"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-3 border rounded-xl text-sm outline-none bg-slate-50"></div>
                         
                         <div class="border-t pt-4">
                             <label class="text-[10px] font-black text-dar uppercase mb-2 block tracking-widest">Add Additional Passengers:</label>
                             <div class="flex gap-2 relative">
-                                <input id="resPAdd" oninput="runEmpSearch(this, 'resPResults')" placeholder="Search extra people..." class="flex-1 p-3 border rounded text-sm outline-none bg-slate-50 focus:bg-white focus:ring-2 focus:ring-dar">
-                                <button onclick="queuePassenger()" class="bg-dar text-white px-4 rounded font-bold text-[10px] uppercase">Queue</button>
+                                <input id="resPAdd" oninput="runEmpSearch(this, 'resPResults')" placeholder="Search extra people..." class="flex-1 p-3 border rounded-xl text-sm outline-none bg-slate-50 focus:bg-white focus:ring-2 focus:ring-dar">
+                                <button onclick="queuePassenger()" class="bg-dar text-white px-4 rounded-xl font-bold text-[10px] uppercase">Queue</button>
                                 <div id="resPResults" class="search-results-box hidden"></div>
                             </div>
                             <div id="manualPList" class="mt-4 space-y-1"></div>
                         </div>
                     </div>
-                    <div class="p-6 border-t flex gap-4 bg-slate-50 shrink-0">
-                        <button onclick="closeModal('bookModal')" class="btn-cancel flex-1 text-slate-500 font-bold uppercase text-[10px]">Cancel</button>
+                    <div class="p-5 border-t flex gap-4 bg-slate-50 shrink-0 rounded-b-2xl">
+                        <button onclick="closeModal('bookModal')" class="flex-1 text-slate-500 font-bold uppercase text-[10px]">Cancel</button>
                         <button onclick="saveManual()" class="btn-primary flex-[2] py-4 tracking-widest">Confirm Trip</button>
                     </div>
                 </div>
             </div>
 
-            <div id="peopleModal" class="hidden modal-overlay">
+            <div id="peopleModal" class="hidden modal-overlay modal-fade">
                 <div class="modal-box h-[600px]">
-                    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                    <div class="p-5 border-b flex justify-between items-center bg-slate-50 shrink-0 rounded-t-2xl">
                         <div><h2 class="font-black text-dar uppercase text-sm tracking-widest">Manage Passengers</h2><p id="pSub" class="text-[10px] text-slate-500 font-bold uppercase mt-1"></p></div>
                         <button onclick="closeModal('peopleModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light">✕</button>
                     </div>
-                    <div id="pList" class="p-8 flex-1 space-y-3 overflow-y-auto no-scrollbar bg-slate-100/50"></div>
-                    <div class="p-8 border-t bg-white relative shrink-0">
+                    <div id="pList" class="p-6 flex-1 space-y-3 overflow-y-auto no-scrollbar bg-slate-100/50"></div>
+                    <div class="p-6 border-t bg-white relative shrink-0">
                         <label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Add Passenger:</label>
                         <div class="flex gap-3">
                             <div class="relative flex-1">
-                                <input id="pAdd" oninput="runEmpSearch(this, 'pResults')" placeholder="Enter name..." class="w-full p-4 border border-slate-200 rounded text-sm outline-none focus:ring-2 focus:ring-dar transition bg-slate-50" autocomplete="off">
+                                <input id="pAdd" oninput="runEmpSearch(this, 'pResults')" placeholder="Enter name..." class="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50" autocomplete="off">
                                 <div id="pResults" class="search-results-box hidden"></div>
                             </div>
-                            <button id="pAddBtn" onclick="handleAddPersonnel()" class="btn-primary px-8 tracking-widest">Add</button>
+                            <button id="pAddBtn" onclick="handleAddPersonnel()" class="btn-primary px-6 rounded-xl tracking-widest">Add</button>
                         </div>
                     </div>
-                    <div class="p-5 border-t text-center bg-slate-50 shrink-0">
-                        <button onclick="closeModal('peopleModal')" class="bg-slate-800 text-white px-16 py-3 rounded font-bold text-[10px] uppercase tracking-widest hover:bg-black transition shadow-lg active:scale-95">Done / OK</button>
-                    </div>
                 </div>
             </div>
 
-            <div id="transferModal" class="hidden modal-overlay">
+            <div id="transferModal" class="hidden modal-overlay modal-fade">
                 <div class="modal-box max-w-sm">
-                    <div class="p-6 border-b bg-slate-50"><h2 class="font-black text-dar text-xs uppercase tracking-widest">Smart Transfer</h2><p id="tSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p></div>
-                    <div class="p-10 space-y-4 bg-white">
+                    <div class="p-5 border-b bg-slate-50 rounded-t-2xl"><h2 class="font-black text-dar text-xs uppercase tracking-widest">Smart Transfer</h2><p id="tSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p></div>
+                    <div class="p-8 space-y-4 bg-white">
                         <label class="text-[10px] font-black text-slate-400 uppercase">Available Fleet (Matching Dates):</label>
-                        <select id="tSelect" class="w-full p-5 border border-slate-200 rounded-lg font-black text-dar outline-none bg-slate-50 text-base shadow-inner"></select>
+                        <select id="tSelect" class="w-full p-4 border border-slate-200 rounded-xl font-black text-dar outline-none bg-slate-50 text-base shadow-inner"></select>
                     </div>
-                    <div class="p-6 border-t flex gap-4 bg-slate-50">
-                        <button onclick="closeModal('transferModal')" class="btn-cancel flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
-                        <button id="tExec" class="btn-primary flex-1 py-4 tracking-widest shadow-lg">Confirm</button>
+                    <div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl">
+                        <button onclick="closeModal('transferModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
+                        <button id="tExec" class="btn-primary flex-1 py-3 tracking-widest shadow-lg rounded-xl">Confirm</button>
                     </div>
                 </div>
             </div>
 
-            <div id="maintModal" class="hidden modal-overlay">
+            <div id="maintModal" class="hidden modal-overlay modal-fade">
                 <div class="modal-box max-w-sm">
-                    <div class="p-6 border-b bg-slate-50">
+                    <div class="p-5 border-b bg-slate-50 rounded-t-2xl">
                         <h2 class="font-black text-dar text-xs uppercase tracking-widest">Schedule Maintenance</h2>
                         <p id="maintSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p>
                     </div>
-                    <div class="p-10 space-y-4 bg-white">
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="maintD1" type="date" class="w-full p-3 border rounded text-sm bg-slate-50"></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date (Optional)</label><input id="maintD2" type="date" class="w-full p-3 border rounded text-sm bg-slate-50"></div>
+                    <div class="p-8 space-y-4 bg-white">
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="maintD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date (Optional)</label><input id="maintD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
                     </div>
-                    <div class="p-6 border-t flex gap-4 bg-slate-50">
-                        <button onclick="closeModal('maintModal')" class="btn-cancel flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
-                        <button onclick="saveMaintenance()" class="btn-primary bg-red-600 flex-1 py-4 tracking-widest shadow-lg hover:bg-red-700">Off-Road</button>
+                    <div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl">
+                        <button onclick="closeModal('maintModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
+                        <button onclick="saveMaintenance()" class="bg-red-600 text-white rounded-xl font-bold uppercase text-[10px] flex-1 py-3 tracking-widest shadow-lg hover:bg-red-700">Off-Road</button>
                     </div>
                 </div>
             </div>
@@ -221,22 +249,22 @@
         function renderInbox() {
             const m = document.getElementById('main-content');
             const data = orders.filter(x => x.status === 'PENDING_VEHICLE_APPROVER' && x.transport === "GOV'T VEHICLE");
-            if (!data.length) { m.innerHTML = `<div class="p-20 text-center opacity-20 uppercase font-black text-xs mt-20">Queue Empty</div>`; return; }
-            m.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">` + data.map(o => {
+            if (!data.length) { m.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Queue Empty</p></div>`; return; }
+            m.innerHTML = `<div class="space-y-4">` + data.map(o => {
                 const itin = itins.find(i => i.to_no === o.to_no) || {travel_date: '?'};
                 return `
-                <div class="bg-white p-8 rounded-xl shadow-md border border-slate-200 flex flex-col hover:border-dar transition">
-                    <div class="flex justify-between mb-5 border-b pb-3"><span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-1 rounded">ID: ${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button></div>
-                    <h3 class="font-black text-slate-800 text-lg leading-tight mb-2">${o.emp_name}</h3>
-                    <p class="text-[11px] text-slate-500 font-bold mb-6 uppercase tracking-widest leading-none">📅 ${itin.travel_date}</p>
-                    <div class="space-y-4 mb-8 bg-slate-50 p-5 rounded-lg border border-slate-100 mt-auto">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                    <div class="flex justify-between mb-3 border-b pb-2"><span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">ID: ${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button></div>
+                    <h3 class="font-black text-slate-800 text-base leading-tight mb-1">${o.emp_name}</h3>
+                    <p class="text-[11px] text-dar-gold font-bold mb-4 uppercase tracking-widest leading-none">📅 ${itin.travel_date}</p>
+                    <div class="space-y-3 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Unit</label><select id="v-${o.to_no}" class="border rounded font-bold p-1 text-xs text-dar outline-none bg-white">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
                         <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Slot</label><select id="s-${o.to_no}" class="border rounded font-bold p-1 text-xs text-slate-600 outline-none bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                        <div class="flex flex-col pt-2"><label class="text-[9px] font-black text-gray-400 uppercase mb-2">Assigned Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-3 text-xs font-bold outline-none shadow-inner"></div>
+                        <div class="flex flex-col pt-1"><label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-2 text-xs font-bold outline-none shadow-inner"></div>
                     </div>
-                    <div class="flex gap-3">
-                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="btn-cancel flex-1 text-slate-500 font-bold uppercase text-[10px]">Reject</button>
-                        <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary flex-[2] shadow-lg">Approve</button>
+                    <div class="flex gap-2">
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-[10px] font-bold uppercase flex-1 active:scale-95 transition">Reject</button>
+                        <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary flex-[2] py-3 rounded-xl shadow-md">Approve</button>
                     </div>
                 </div>`;
             }).join('') + `</div>`;
@@ -259,26 +287,31 @@
             const container = document.getElementById('main-content');
             const data = orders.filter(x => x.transport === "GOV'T VEHICLE" && x.status !== 'PENDING_VEHICLE_APPROVER');
             const grp = {}; data.forEach(x => { if(!grp[x.to_no]) grp[x.to_no] = []; grp[x.to_no].push(x); });
-            if (!Object.keys(grp).length) { container.innerHTML = `<div class="p-20 text-center opacity-30 uppercase font-black text-xs mt-20">Manifest Empty</div>`; return; }
+            if (!Object.keys(grp).length) { container.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📋</span><p class="font-bold mt-2 text-xs uppercase">Manifest Empty</p></div>`; return; }
             
-            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">` + Object.entries(grp).map(([to, list]) => {
+            container.innerHTML = `<div class="space-y-4">` + Object.entries(grp).map(([to, list]) => {
                 const isMaint = list[0].remarks === 'MAINTENANCE';
                 return `
-            <div class="bg-white p-6 rounded-xl shadow-md border-l-8 ${isMaint ? 'border-red-600' : 'border-dar'} relative flex flex-col h-full hover:shadow-lg transition">
-                <div>
-                    <div class="flex justify-between items-start mb-4"><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID: ${to}</span><span class="text-[9px] ${isMaint ? 'bg-red-50 text-red-600' : 'bg-green-50 text-dar'} font-black px-2 py-1 rounded uppercase tracking-wider">${list[0].remarks||'WHOLE'}</span></div>
-                    
-                    <h3 class="font-black ${isMaint ? 'text-red-700' : 'text-slate-800'} text-sm uppercase mb-1 leading-tight flex items-center gap-2">
-                        ${list[0].emp_name} ${!isMaint ? `<span class="bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>` : ''}
-                    </h3>
-                    
-                    ${list.length > 1 ? `<div class="text-[10px] text-slate-500 font-bold uppercase mb-4 leading-tight pl-2 border-l-2 border-slate-100">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>` : '<div class="mb-4"></div>'}
-
-                    <div class="bg-slate-50 p-3 rounded border border-slate-100 mb-6"><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">🚙 ${list[0].received}</p><p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">👤 ${list[0].driver}</p></div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border-l-4 ${isMaint ? 'border-red-600' : 'border-dar'} relative flex flex-col">
+                <div class="flex justify-between items-start mb-3 border-b border-slate-100 pb-2">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">ID: ${to}</span>
+                    <span class="text-[9px] ${isMaint ? 'bg-red-50 text-red-600' : 'bg-green-50 text-dar'} font-black px-2 py-0.5 rounded uppercase tracking-wider">${list[0].remarks||'WHOLE'}</span>
                 </div>
-                <div class="flex gap-3 pt-4 border-t border-slate-100 mt-auto">
-                    <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-white border border-red-200 text-red-600 px-4 py-3 rounded text-[10px] font-black uppercase flex-1 active:scale-95 transition">Cancel</button>
-                    ${!isMaint ? `<button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-4 py-3 rounded text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>` : `<div class="flex-[2]"></div>`}
+                
+                <h3 class="font-black ${isMaint ? 'text-red-700' : 'text-slate-800'} text-sm uppercase mb-1 leading-tight flex items-center gap-2">
+                    ${list[0].emp_name} ${!isMaint ? `<span class="bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>` : ''}
+                </h3>
+                
+                ${list.length > 1 ? `<div class="text-[10px] text-slate-500 font-bold uppercase mb-3 leading-tight pl-2 border-l-2 border-slate-100">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>` : '<div class="mb-2"></div>'}
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4 flex justify-between">
+                    <p class="text-[10px] text-dar font-black uppercase tracking-widest">🚙 ${list[0].received}</p>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">👤 ${list[0].driver}</p>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-white border border-red-200 text-red-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex-1 active:scale-95 transition">Cancel</button>
+                    ${!isMaint ? `<button onclick="openManagePersonnel('${to}')" class="bg-slate-100 text-dar font-black px-3 py-2.5 rounded-xl text-[10px] uppercase flex-[2] active:bg-slate-200 transition">Personnel (${list.length})</button>` : `<div class="flex-[2]"></div>`}
                 </div>
             </div>`}).join('') + `</div>`;
         }
@@ -306,26 +339,26 @@
             const validToNos = filteredItins.map(i => i.to_no);
 
             container.innerHTML = `
-            <div class="no-print bg-white p-3 rounded-lg mb-10 flex gap-2 shadow-sm border w-full max-w-2xl mx-auto items-center">
-                <button onclick="setFilter('day')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='day'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Daily</button>
-                <button onclick="setFilter('week')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='week'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Weekly</button>
-                <button onclick="setFilter('month')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='month'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Monthly</button>
-                <button onclick="window.print()" class="btn-gold flex-[1.5] py-3 text-[11px] shadow-lg active:scale-95 transition flex items-center justify-center gap-2">🖨️ Print Report</button>
+            <div class="no-print bg-white p-2 rounded-xl mb-6 flex gap-1 shadow-sm w-full mx-auto items-center sticky top-0 z-20 border">
+                <button onclick="setFilter('day')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${scheduleFilter==='day'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Day</button>
+                <button onclick="setFilter('week')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${scheduleFilter==='week'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Week</button>
+                <button onclick="setFilter('month')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${scheduleFilter==='month'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Month</button>
+                <button onclick="window.print()" class="btn-gold flex-[1.2] py-2.5 text-[10px] shadow active:scale-95 transition flex items-center justify-center gap-1 rounded-lg">🖨️ Print</button>
             </div>
-            <div class="print-area grid grid-cols-1 xl:grid-cols-2 gap-10">
-                <h1 class="print-header text-dar uppercase font-black col-span-full mb-2 border-b-2 border-dar pb-4 text-2xl text-center tracking-tighter">Official Fleet Deployment Report (${scheduleFilter.toUpperCase()})</h1>
+            <div class="print-area grid grid-cols-1 gap-6">
+                <h1 class="print-header text-dar uppercase font-black col-span-full mb-0 border-b-2 border-dar pb-2 text-lg text-center tracking-tighter">Deployments (${scheduleFilter})</h1>
                 ` + VEHICLES.map(v => {
                 const logs = orders.filter(o => o.received === v && validToNos.includes(o.to_no));
                 const uniqueTo = [...new Set(logs.map(l => l.to_no))].sort();
-                let html = `<div class="card-item bg-white p-8 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden"><div class="flex justify-between items-center mb-6 border-b pb-3"><h3 class="font-black text-base text-dar uppercase border-l-8 border-dar-gold pl-3 tracking-widest">${v}</h3><button onclick="setOffRoad('${v}')" class="no-print bg-red-600 text-white text-[9px] px-3 py-1.5 rounded font-black shadow tracking-widest active:scale-95 transition">OFF-ROAD</button></div>`;
-                if(!uniqueTo.length) html += `<p class="p-8 text-center text-[11px] text-slate-300 font-black uppercase tracking-widest">Available</p>`;
+                let html = `<div class="card-item bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative"><div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="font-black text-sm text-dar uppercase border-l-4 border-dar-gold pl-2 tracking-widest">${v}</h3><button onclick="setOffRoad('${v}')" class="no-print bg-red-50 text-red-600 text-[8px] px-2.5 py-1 rounded font-black tracking-widest active:scale-95 transition border border-red-100">OFF-ROAD</button></div>`;
+                if(!uniqueTo.length) html += `<p class="p-6 text-center text-[10px] text-slate-300 font-black uppercase tracking-widest">Available</p>`;
                 else html += uniqueTo.map(toNo => {
                     const h = logs.find(l => l.to_no === toNo);
                     const dates = [...new Set(filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
                     const allPass = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join('<br> • ');
                     const isMaint = h.remarks === 'MAINTENANCE';
-                    if(isMaint) return `<div class="bg-red-50 p-5 rounded-lg border border-red-200"><p class="text-sm font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[10px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | MAINTENANCE</p></div>`;
-                    return `<div class="bg-slate-50 p-5 rounded-lg mb-3 flex justify-between items-start border border-slate-200 shadow-sm hover:bg-white transition"><div class="overflow-hidden leading-tight pr-4"><p class="text-xs font-black text-slate-800 uppercase mb-2"> • ${allPass}</p><p class="text-[10px] text-slate-500 font-bold tracking-widest font-mono uppercase mt-3 pt-2 border-t">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="smartTransfer('${h.to_no}','${v}')" class="text-3xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-12 h-12 flex items-center justify-center border border-slate-100 shadow-sm shrink-0">🔄</button></div>`;
+                    if(isMaint) return `<div class="bg-red-50 p-4 rounded-xl border border-red-200"><p class="text-xs font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | MAINT</p></div>`;
+                    return `<div class="bg-slate-50 p-4 rounded-xl mb-3 flex justify-between items-center border border-slate-200 shadow-sm"><div class="overflow-hidden leading-tight pr-2"><p class="text-[11px] font-black text-slate-800 uppercase mb-2"> • ${allPass}</p><p class="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-2 pt-1 border-t">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="smartTransfer('${h.to_no}','${v}')" class="text-xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-10 h-10 flex items-center justify-center border border-slate-200 shadow-sm shrink-0">🔄</button></div>`;
                 }).join('');
                 return html + `</div>`;
             }).join('') + `</div>`;
@@ -342,10 +375,10 @@
 
             const opts = VEHICLES.filter(v => v !== curV).map(v => {
                 const m = busy.find(b => b.v === v);
-                return `<option value="${v}" data-drv="${m?m.drv:''}">${v} ${m ? `(JOIN TRIP #${m.to})` : '(AVAILABLE)'}</option>`;
+                return `<option value="${v}" data-drv="${m?m.drv:''}">${v} ${m ? `(JOIN #${m.to})` : '(AVAIL)'}</option>`;
             }).join('');
 
-            document.getElementById('tSub').innerText = `Transfer Trip ID #${toNo} for Dates: ${dates.join(', ')}`;
+            document.getElementById('tSub').innerText = `ID #${toNo} | Dates: ${dates.join(', ')}`;
             document.getElementById('tSelect').innerHTML = opts;
             document.getElementById('tExec').onclick = async () => {
                 const targetV = document.getElementById('tSelect').value;
@@ -356,7 +389,6 @@
             openModal('transferModal');
         }
 
-        // --- NEW MAINTENANCE LOGIC ---
         function setOffRoad(veh) {
             activeVehForMaint = veh;
             document.getElementById('maintSub').innerText = `Vehicle: ${veh}`;
@@ -382,18 +414,16 @@
             sync();
         }
 
-        // --- DOUBLE BOOKING CHECKER ---
         async function isDoubleBooked(empName, checkDates) {
             const empTrips = orders.filter(o => o.emp_name === empName && o.status !== 'CANCELLED' && o.transport === "GOV'T VEHICLE");
             for (let trip of empTrips) {
                 const tripDates = itins.filter(i => i.to_no === trip.to_no).map(i => i.travel_date);
                 const overlap = tripDates.filter(d => checkDates.includes(d));
-                if (overlap.length > 0) return true; // Found a conflict
+                if (overlap.length > 0) return true;
             }
             return false;
         }
 
-        // --- PERSONNEL MANAGEMENT ---
         function runEmpSearch(inp, resId) {
             const div = document.getElementById(resId);
             const val = inp.value.toLowerCase().trim();
@@ -430,14 +460,14 @@
 
         function renderManualPList() {
             document.getElementById('manualPList').innerHTML = manualPassengerQueue.map((p, idx) => `
-                <div class="flex justify-between items-center bg-slate-50 p-2 rounded text-[10px] font-black uppercase border border-slate-200">
-                    <span>${p.n}</span><button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500 font-bold hover:scale-110">✕</button>
+                <div class="flex justify-between items-center bg-white p-3 rounded-xl text-[10px] font-black uppercase border border-slate-200 shadow-sm">
+                    <span>${p.n}</span><button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500 font-bold hover:scale-110 text-sm">✕</button>
                 </div>`).join('');
         }
 
         async function openManagePersonnel(to) {
             activeTO = to;
-            document.getElementById('pSub').innerText = `Trip Reference: ${to}`;
+            document.getElementById('pSub').innerText = `Ref: ${to}`;
             openModal('peopleModal');
             renderPList();
         }
@@ -445,9 +475,9 @@
         async function renderPList() {
             const { data } = await db.from('travel_orders').select('id, emp_name').eq('to_no', activeTO).order('id', { ascending: true });
             document.getElementById('pList').innerHTML = (data || []).map((p, idx) => `
-                <div class="flex justify-between items-center p-4 bg-white rounded-lg border border-slate-200 shadow-sm transition">
-                    <span class="text-xs font-black text-slate-800 uppercase tracking-widest">${p.emp_name} ${idx===0?'<span class="ml-2 bg-dar text-[9px] text-white px-2 py-1 rounded">LEAD</span>':''}</span>
-                    ${idx!==0 ? `<button onclick="doRemovePerson('${p.id}')" class="bg-red-50 text-red-600 px-4 py-2 rounded text-[10px] font-black uppercase active:scale-90 transition">Remove</button>` : `<span class="text-[8px] text-slate-300 font-bold uppercase mr-4 italic">Source Person</span>`}
+                <div class="flex justify-between items-center p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-[10px] font-black text-slate-800 uppercase tracking-widest">${p.emp_name} ${idx===0?'<span class="ml-2 bg-dar text-[8px] text-white px-2 py-0.5 rounded">LEAD</span>':''}</span>
+                    ${idx!==0 ? `<button onclick="doRemovePerson('${p.id}')" class="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase active:scale-90 transition border border-red-100">Remove</button>` : `<span class="text-[8px] text-slate-300 font-bold uppercase mr-2 italic">Source</span>`}
                 </div>`).join('');
         }
 
@@ -503,6 +533,9 @@
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
         function safeStr(str) { return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
         function getApprovalTarget(u) { const unit = (u || "").toUpperCase(); if (unit === "PARPO") return "PENDING_PARPO"; return (unit && unit !== "NULL") ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF"; }
+        
+        // Auto-initialize if needed
+        // renderDashboard();
     </script>
 </body>
 </html>
