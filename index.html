@@ -68,6 +68,23 @@
         
         .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
         .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
+
+        /* NEW CLASS FOR MAXIMIZING QR CODE */
+        .qr-maximized {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 85vw !important;
+            height: 85vw !important;
+            max-width: 400px !important;
+            max-height: 400px !important;
+            z-index: 9999 !important;
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.85) !important;
+            background: white !important;
+            border: 4px solid var(--dar-gold) !important;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -97,8 +114,9 @@
             <div class="card" style="text-align: center;">
                 <button class="btn btn-gold btn-small" onclick="showEmployeeQR()" style="margin: 0;">Generate My QR Code</button>
                 <div id="my-qr-container" style="display: none; margin-top: 15px;">
-                    <img id="my-qr-img" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--dar-green); padding: 5px;">
+                    <img id="my-qr-img" src="" alt="QR Code" onclick="this.classList.toggle('qr-maximized')" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--dar-green); padding: 5px; cursor: pointer; transition: all 0.3s ease;">
                     <div style="font-size: 12px; font-weight: bold; margin-top: 5px; color: var(--dar-green);" id="my-qr-text"></div>
+                    <div style="font-size: 9px; color: gray; margin-top: 2px;">(Tap QR to enlarge)</div>
                 </div>
             </div>
 
@@ -191,15 +209,14 @@
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         // GLOBAL STATE VARIABLES
-        let currentUser = null; // Stores authenticated user data
-        let itineraryDraft = []; // Stores the current working travel dates and destinations
-        let personnelDraft = []; // Stores the list of employees associated with the current TO application
-        const todayStr = new Date().toISOString().split('T')[0]; // Pre-calculated string for 'today' to prevent backdating
-        let calDate = new Date(); // Tracks the currently viewed month in the calendar
-        let isSubmitting = false; // Prevents duplicate submissions on double-click
-        let conflictsToProcess = []; // Stores existing TOs identified for SPLIT or OVERWRITE logic during application
+        let currentUser = null; 
+        let itineraryDraft = []; 
+        let personnelDraft = []; 
+        const todayStr = new Date().toISOString().split('T')[0]; 
+        let calDate = new Date(); 
+        let isSubmitting = false; 
+        let conflictsToProcess = []; 
 
-        // UTILITY: Convert image URL to Base64 for PDF embedding (required for jsPDF images)
         const urlToBase64 = async (url) => {
             try {
                 const response = await fetch(url);
@@ -213,7 +230,6 @@
             } catch (e) { return null; }
         };
 
-        // AUTHENTICATION
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -222,63 +238,47 @@
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
                 document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                
-                // Hide login screen, show main app
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('app-screen').classList.add('active');
-                
-                // UI Level Backdating Rule: Restrict HTML date pickers to today or future
                 document.getElementById('itin-from').min = todayStr;
                 document.getElementById('itin-to').min = todayStr;
-                
-                // Initialize default personnel list with logged-in user
                 personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                 renderPersonnel();
             } else { alert("Invalid Credentials"); }
         };
 
-        // NAVIGATION (Load Once, Hide & Show Strategy to prevent full page reloads)
         window.switchTab = function(id, el) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             el.classList.add('active');
-            
-            // Lazy load specific data only when tabs are clicked
             if (id === 'status-view') loadStatus();
             if (id === 'calendar-view') renderCalendar();
         };
 
-        // QR CODE GENERATOR
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
             const img = document.getElementById('my-qr-img');
             const text = document.getElementById('my-qr-text');
-            
             if (container.style.display === 'none') {
                 img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${currentUser.emp_id}`;
                 text.innerText = `EMP ID: ${currentUser.emp_id}`;
                 container.style.display = 'block';
-            } else {
-                container.style.display = 'none';
-            }
+            } else { container.style.display = 'none'; }
         };
 
-        // PERSONNEL MANAGEMENT
-        // Queries employees table to allow users to add colleagues to the TO
         window.searchEmployees = async function() {
             const term = document.getElementById('emp-search').value;
             if (term.length < 2) return;
             const { data } = await supabase.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${term}%,emp_id.eq.${term}`).limit(5);
             const resDiv = document.getElementById('search-results');
             resDiv.innerHTML = ''; resDiv.style.display = 'block';
-            
             data.forEach(emp => {
                 const row = document.createElement('div'); row.className = 'search-row';
                 row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
                 row.onclick = () => {
-                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel"); // Max capacity limit
-                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return; // Prevent duplicates
+                    if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
+                    if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
                     personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
                     resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
                 };
@@ -296,11 +296,10 @@
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
 
-        // ITINERARY BUILDER & CONFLICT DETECTION
         window.handleStartDateChange = function() {
             const fromDate = document.getElementById('itin-from').value;
             if (fromDate) {
-                document.getElementById('itin-to').value = fromDate; // Automatically sync To Date with From Date
+                document.getElementById('itin-to').value = fromDate;
                 generateItinFields();
             }
         };
@@ -309,9 +308,8 @@
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = []; conflictsToProcess = []; // Reset states
+            container.innerHTML = ''; itineraryDraft = []; conflictsToProcess = []; 
             
-            // Logic Level Backdating Rule: Block execution if dates are in the past or illogical
             if (!fromDate || !toDate) return;
             if (fromDate < todayStr) return alert("No backdating allowed.");
             if (toDate < fromDate) return alert("End date cannot be before Start date.");
@@ -321,7 +319,6 @@
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
-            // Fetch existing schedules for conflict checking against selected dates
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let hasPSO = false;
@@ -330,26 +327,29 @@
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 
-                // Rule: TO cannot supersede a PSO
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
-                    hasPSO = true; // Flag to append remarks later
+                    hasPSO = true; 
                 }
 
-                // Rule: Check for existing TOs (Pre-process for SPLIT/OVERWRITE logic)
                 for (let to of activeTOs || []) {
                     const { data: itins } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
                     if (itins && itins.length > 0) {
                         const isApproved = to.status === 'APPROVED';
+                        const isDisapproved = to.status.includes('DISAPPROVED');
+                        
+                        if (isDisapproved) {
+                            alert(`Conflict: You have a DISAPPROVED TO (${to.to_no}) on ${dateStr}. Overwriting is not allowed. Please select a different date.`);
+                            container.innerHTML = ""; return;
+                        }
+
                         const promptMsg = isApproved ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)` : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
                         if (confirm(promptMsg)) {
-                            // Queue the conflict to be processed upon final submission
                             conflictsToProcess.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
-                        } else { container.innerHTML = ""; return; } // Abort if user declines
+                        } else { container.innerHTML = ""; return; } 
                     }
                 }
 
-                // Generate dynamic input cards per date
                 const cardId = `card-${i}`;
                 container.innerHTML += `<br>
                     <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);"><br>
@@ -373,12 +373,10 @@
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
         };
 
-        // SUBMISSION & WORKFLOW ROUTING
         window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             
-            // Validate all fields are filled before database processing
             const batchItin = []; const reportTos = new Set();
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
@@ -394,21 +392,16 @@
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
             try {
-                // SPLIT / OVERWRITE EXECUTION BLOCK
                 for (let conflict of conflictsToProcess) {
                     if (conflict.status.includes("PENDING")) {
-                        // Pending Rule: Simply delete the old conflicting record (Overwrite)
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
                         await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
                     } else if (conflict.status === "APPROVED") {
-                        // Approved Rule: Execute SPLIT logic
                         const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
                         const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
                         
-                        // 1. Cancel Original Record completely
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
 
-                        // 2. Notify lowest approving officer (Unit Head or Chief)
                         let notifyTarget = currentUser.unit ? "UNIT HEAD" : "CHIEF";
                         await supabase.from('notifications').insert({ 
                             emp_id: currentUser.emp_id, 
@@ -416,7 +409,6 @@
                             sender: currentUser.full_name
                         });
 
-                        // 3. Auto-regenerate the remaining unaffected days as an automatically APPROVED TO
                         if (remainingDays.length > 0) {
                             const remainderToNo = await generateToNo();
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
@@ -428,13 +420,11 @@
                     }
                 }
 
-                // 4. Generate New Control Number for the newly applied TO
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 let routeStatus = "PENDING_CHIEF";
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                // Route Assignment Logic based on Transport and Employee Unit
                 if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (isMARPO) routeStatus = "PENDING_CHIEF";
@@ -444,18 +434,15 @@
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
                     division: currentUser.division, status: routeStatus, transport, 
                     report_to: Array.from(reportTos).join(", "),
-                    // Append Remarks if PSO conflict was accepted
                     remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
                 
-                // Commit new TO to Database
                 batchItin.forEach(it => it.to_no = finalToNo);
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
                 
                 alert("Logic Executed. Submitted: " + finalToNo);
                 
-                // Form reset logic and redirection to Status view instead of full page reload
                 document.getElementById('itin-from').value = '';
                 document.getElementById('itin-to').value = '';
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
@@ -474,11 +461,9 @@
             }
         };
 
-        // SEQUENTIAL NUMBER GENERATOR (Format: YYYY-DIV-XXXXX)
         async function generateToNo() {
             const year = new Date().getFullYear();
             const div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
-            // Find the highest sequence number for this specific division and year
             const { data } = await supabase.from('travel_orders')
                 .select('to_no')
                 .like('to_no', `${year}-${div}-%`)
@@ -490,13 +475,12 @@
                 const parts = data[0].to_no.split('-');
                 if (parts.length >= 3) {
                     const parsed = parseInt(parts[2], 10);
-                    if (!isNaN(parsed)) seq = parsed + 1; // Increment latest existing sequence
+                    if (!isNaN(parsed)) seq = parsed + 1; 
                 }
             }
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         }
 
-        // RECORD MODIFICATION HANDLERS (Used in Status View)
         window.deletePendingTO = async function(toNo) {
             if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
             await supabase.from('itinerary').delete().eq('to_no', toNo);
@@ -511,7 +495,6 @@
             loadStatus();
         };
 
-        // Loads an existing pending TO back into the draft state for editing
         window.modifyPendingTO = async function(toNo) {
             if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
             const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
@@ -543,20 +526,17 @@
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
             });
             
-            // Delete original so submitting creates a clean replacement
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
             switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-        // PDF GENERATION (Strictly mapped to physical DAR/Civil Service Format coordinates)
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4'); // A4 paper size, dimensions in mm
+            const doc = new jsPDF('p', 'mm', 'a4'); 
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
 
             try {
-                // Fetch relevant data blocks for the PDF
                 const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station');
@@ -569,7 +549,6 @@
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
                 const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
 
-                // Signatory logic: Determine necessary signatures based on user unit/role
                 let uh_data = null;
                 if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
                     const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle();
@@ -582,22 +561,19 @@
                     dc_data = resDC.data;
                 }
 
-                // Fetch necessary images concurrently (Background, QR, E-Signatures)
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
                     urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
-                    urlToBase64(getAssetUrl("P2.png")), // PARPO Signature
+                    urlToBase64(getAssetUrl("P2.png")), 
                     uh_data ? urlToBase64(getAssetUrl(`${uh_data.username}.png`)) : null,
                     dc_data ? urlToBase64(getAssetUrl(`${dc_data.username}.png`)) : null
                 ]);
 
-                // Loop through 3 copies (standard requirement for physical routing in DAR)
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} // Full page background form
+                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} 
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
 
-                    // Inject specific legal/logistics notices
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
                         doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' });
@@ -607,25 +583,21 @@
                         doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
                     }
 
-                    // Header Info
                     doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
                     const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
-                    // Personnel Row
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
                     doc.text(names, 40, 48); doc.line(40, 49, 160, 49);
 
-                    // Role/Station Row
                     doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 54);
                     doc.setFont("helvetica", "normal"); doc.text(positions, 40, 54); doc.line(40, 55, 85, 55);
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 54);
                     doc.setFont("helvetica", "normal"); doc.text(stations, 110, 54); doc.line(110, 55, 160, 55);
 
-                    // Transport Selection Checkboxes
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 61);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const drawCheck = (label, x, y, isChecked) => {
@@ -638,7 +610,6 @@
                     drawCheck("LAND", 20, 71, od.transport === "LAND");
                     drawCheck("OTHERS, PLEASE SPECIFY", 70, 71, od.transport === "OTHERS");
 
-                    // Destination List (One line per date format to preserve space and readability)
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
                     doc.text("DESTINATION:", 20, 78);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -649,10 +620,8 @@
                         destY += 4.5;
                     });
                     
-                    // Dynamic Y-shift to prevent overlapping if destination list is long
                     let curY = Math.max(destY, 83);
 
-                    // Date range and reporting lines
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
@@ -667,7 +636,6 @@
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    // Split purpose text to fit within designated paragraph bounds
                     const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
                     doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
                     curY += Math.max(5, purpLines.length * 4);
@@ -677,11 +645,9 @@
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    // SIGNATORIES BLOCK
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 156);
                     
-                    // Note: Signatures only appear on Page 2 and 3 as per DAR rules
                     if (i > 0) {
                         if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
                         if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
@@ -693,7 +659,6 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    // PARPO Signature overlaps the printed name natively
                     if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
@@ -704,10 +669,8 @@
             } catch (e) { alert("PDF Error: " + e.message); }
         };
 
-        // STATUS DASHBOARD DATA LOADER
         async function loadStatus() {
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            // Fetch latest 30 applications based on created_at descending
             const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(30);
             let html = '';
             for(let to of tos || []) {
@@ -715,7 +678,6 @@
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                // Sleek, compressed UI specific updates applied here (no rogue <br> tags, tighter CSS)
                 html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
@@ -733,7 +695,6 @@
             list.innerHTML = html || "No records found.";
         }
 
-        // CALENDAR DATA AGGREGATOR
         window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
         async function renderCalendar() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
@@ -741,7 +702,6 @@
             const tbody = document.getElementById('cal-table-body');
             tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
 
-            // Aggregate data from 3 distinct sources
             const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
             const { data: itins } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', tos?.map(t => t.to_no) || []);
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
@@ -757,7 +717,6 @@
                 let activityHtml = "";
                 if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
                 
-                // Updated Calendar PSO formatting to strictly match the pso_records table schema
                 if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
                 
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.to_no} - ${i.destination}</div>`);
@@ -767,7 +726,6 @@
             }
         }
 
-        // SECURITY MODULE
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
             if(curr !== currentUser.pass) return alert("Wrong current password.");
