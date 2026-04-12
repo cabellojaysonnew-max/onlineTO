@@ -25,7 +25,7 @@
                 <div class="bg-gold h-2 w-full"></div>
                 <div class="p-8">
                     <h1 class="text-dar font-bold text-2xl font-serif mb-1 text-center">DAR ACCOUNTING</h1>
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Intelligent Verification</p>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Intelligent Audit Engine</p>
                     <div class="space-y-4">
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="un" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
@@ -60,7 +60,7 @@
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
             <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
-                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Accounting Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
+                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Verifier Core</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
                 <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
             </header>
             
@@ -68,17 +68,12 @@
                 <div class="max-w-2xl mx-auto space-y-6">
                     
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-center border-b pb-2 mb-4">
-                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">Verification Filters</h2>
-                            <span class="text-[9px] bg-dar text-white px-2 py-0.5 rounded-full font-bold uppercase">Approved Only</span>
-                        </div>
-                        
                         <div class="space-y-4">
                             <div class="relative">
                                 <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee Search</label>
                                 <div class="relative">
-                                    <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search employee..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar" autocomplete="off">
-                                    <button id="clearEmpBtn" onclick="clearEmpSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 hidden transition-colors">
+                                    <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search employee..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar font-bold uppercase" autocomplete="off">
+                                    <button id="clearEmpBtn" onclick="clearEmpSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 hidden transition-colors">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                                         </svg>
@@ -98,11 +93,11 @@
                                 </div>
                             </div>
 
-                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Run Intelligent Analysis</button>
+                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Execute Daily Intelligence Audit</button>
                         </div>
                     </div>
 
-                    <div id="resultsArea" class="hidden"></div>
+                    <div id="resultsArea" class="hidden space-y-4 pb-10"></div>
                 </div>
             </main>`;
         }
@@ -112,7 +107,6 @@
             const clearBtn = document.getElementById('clearEmpBtn');
             const val = inp.value.toLowerCase().trim();
             
-            // Toggle clear button
             if (val.length > 0) clearBtn.classList.remove('hidden');
             else clearBtn.classList.add('hidden');
 
@@ -128,7 +122,6 @@
             const clearBtn = document.getElementById('clearEmpBtn');
             const resId = document.getElementById('empResults');
             const resultsArea = document.getElementById('resultsArea');
-            
             inp.value = '';
             selectedEmp = null;
             clearBtn.classList.add('hidden');
@@ -153,146 +146,92 @@
             if(!sDate || !eDate) return alert("Select start and end dates.");
 
             const resArea = document.getElementById('resultsArea');
-            resArea.innerHTML = `<div class="text-center p-10"><p class="text-sm font-bold text-slate-400 animate-pulse uppercase tracking-widest">Checking Approved Records...</p></div>`;
+            resArea.innerHTML = `<div class="text-center p-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Cross-referencing Specific Dates...</div>`;
             resArea.classList.remove('hidden');
 
-            const empId = selectedEmp.id;
-
             try {
-                // 1. Fetch Itineraries in range
-                const { data: itins } = await db.from('itinerary').select('*')
-                    .gte('travel_date', sDate)
-                    .lte('travel_date', eDate);
-                
-                const toNosForRange = itins.map(i => i.to_no);
+                // Fetch All relevant data for the whole range in parallel
+                const [itins, hols, bookings, psos, leaves, orders] = await Promise.all([
+                    db.from('itinerary').select('*').gte('travel_date', sDate).lte('travel_date', eDate),
+                    db.from('holidays').select('*').gte('date', sDate).lte('date', eDate),
+                    db.from('fleet_bookings').select('*').eq('emp_id', selectedEmp.id).gte('travel_date', sDate).lte('travel_date', eDate),
+                    db.from('pso_records').select('*').eq('emp_id', selectedEmp.id).lte('start_date', eDate).gte('end_date', sDate),
+                    db.from('leave_ledger').select('*').eq('emp_id', selectedEmp.id).eq('transaction_type', 'APPROVED').lte('start_date', eDate).gte('end_date', sDate),
+                    db.from('travel_orders').select('*').eq('emp_id', selectedEmp.id).eq('status', 'APPROVED')
+                ]);
 
-                // 2. Intelligence Update: Strict filter on 'APPROVED' status only. 
-                let approvedTOs = [];
-                if (toNosForRange.length > 0) {
-                    const { data: tos } = await db.from('travel_orders')
-                        .select('*')
-                        .eq('emp_id', empId)
-                        .in('to_no', toNosForRange)
-                        .eq('status', 'APPROVED');
-                    
-                    approvedTOs = (tos || []).map(to => {
-                        const specItins = itins.filter(i => i.to_no === to.to_no);
-                        return { ...to, itineraries: specItins };
-                    });
+                // Generate array of specific dates between range
+                const dates = [];
+                let curr = new Date(sDate);
+                const end = new Date(eDate);
+                while(curr <= end) {
+                    dates.push(curr.toISOString().split('T')[0]);
+                    curr.setDate(curr.getDate() + 1);
                 }
 
-                const { data: bookings } = await db.from('fleet_bookings')
-                    .select('*')
-                    .eq('emp_id', empId)
-                    .gte('travel_date', sDate)
-                    .lte('travel_date', eDate);
-
-                const { data: psos } = await db.from('pso_records')
-                    .select('*')
-                    .eq('emp_id', empId)
-                    .lte('start_date', eDate)
-                    .gte('end_date', sDate);
-
-                const { data: leaves } = await db.from('leave_ledger')
-                    .select('*')
-                    .eq('emp_id', empId)
-                    .eq('transaction_type', 'APPROVED')
-                    .lte('start_date', eDate)
-                    .gte('end_date', sDate);
-
-                renderResults(approvedTOs, bookings || [], psos || [], leaves || []);
+                renderDailyBreakdown(dates, itins.data, hols.data, bookings.data, psos.data, leaves.data, orders.data);
 
             } catch (err) {
-                resArea.innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-xl border border-red-200 text-sm font-bold">Error: ${err.message}</div>`;
+                resArea.innerHTML = `<div class="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-200">Audit Error: ${err.message}</div>`;
             }
         }
 
-        function renderResults(tos, bookings, psos, leaves) {
+        function renderDailyBreakdown(dates, itins, hols, bookings, psos, leaves, orders) {
             const resArea = document.getElementById('resultsArea');
-            
-            let usedGovVehicle = bookings.length > 0 || tos.some(to => to.transport === "GOV'T VEHICLE");
-            let onLeave = leaves.length > 0;
-            let hasConflicts = usedGovVehicle || onLeave;
+            let html = `<div class="space-y-4">`;
 
-            let verdictHTML = "";
-            if (onLeave) {
-                verdictHTML = `<div class="bg-red-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">🚫 REIMBURSEMENT DENIED</h2><p class="text-xs font-bold mt-1 opacity-90">APPROVED LEAVE DETECTED WITHIN THIS RANGE.</p></div>`;
-            } else if (usedGovVehicle) {
-                verdictHTML = `<div class="bg-red-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">🚫 REIMBURSEMENT DENIED</h2><p class="text-xs font-bold mt-1 opacity-90">GOV'T VEHICLE USE DETECTED. NOT ELIGIBLE FOR TRANSPORT CLAIM.</p></div>`;
-            } else if (tos.length > 0) {
-                verdictHTML = `<div class="bg-green-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">✅ VERIFIED - ELIGIBLE</h2><p class="text-xs font-bold mt-1 opacity-90">APPROVED LAND TRAVEL ORDERS FOUND. NO CONFLICTS DETECTED.</p></div>`;
-            } else if (psos.length > 0) {
-                 verdictHTML = `<div class="bg-yellow-500 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚠️ CAUTION - PSO ONLY</h2><p class="text-xs font-bold mt-1 opacity-90">ONLY POSTED PSO FOUND. VERIFY TRAVEL ITINERARY ATTACHMENTS.</p></div>`;
-            } else {
-                verdictHTML = `<div class="bg-slate-700 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚪ NO APPROVED RECORDS</h2><p class="text-xs font-bold mt-1 opacity-90">NO APPROVED TRAVEL, LEAVE, OR BOOKINGS IN THIS RANGE.</p></div>`;
-            }
+            dates.forEach(date => {
+                const dayHols = hols.filter(h => h.date === date);
+                const dayBookings = bookings.filter(b => b.travel_date === date);
+                const dayItins = itins.filter(i => i.travel_date === date);
+                const dayTOs = orders.filter(to => dayItins.some(i => i.to_no === to.to_no));
+                const dayLeaves = leaves.filter(l => date >= l.start_date && date <= l.end_date);
+                const dayPSOs = psos.filter(p => date >= p.start_date && date <= p.end_date);
 
-            let html = verdictHTML + `<div class="space-y-4">`;
+                // Specific Date Logic Determination
+                let conflictType = null;
+                if (dayLeaves.length > 0) conflictType = "LEAVE";
+                else if (dayHols.length > 0) conflictType = "HOLIDAY";
+                else if (dayBookings.length > 0 || dayTOs.some(t => t.transport === "GOV'T VEHICLE")) conflictType = "GOV VEHICLE";
 
-            if (tos.length > 0) {
+                const isEligible = dayTOs.length > 0 && !conflictType;
+
                 html += `
-                <div class="bg-white p-5 rounded-xl border-l-4 border-dar shadow-sm">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">Official Approved Travel Orders</h3>
-                    ${tos.map(t => `
-                        <div class="mb-4 last:mb-0 pb-3 border-b border-dashed border-slate-100 last:border-0">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-sm font-black text-dar uppercase">${t.to_no}</span>
-                                <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest bg-green-100 text-green-700">APPROVED</span>
-                            </div>
-                            <p class="text-xs font-bold text-slate-700 mb-1">Transport: <span class="${t.transport === "GOV'T VEHICLE" ? 'text-red-600' : 'text-blue-600'}">${t.transport}</span></p>
-                            <div class="mt-2 space-y-1">
-                                ${t.itineraries.map(i => `<p class="text-[10px] text-slate-500 italic leading-tight"><b>${i.travel_date}:</b> ${i.destination}</p>`).join('')}
-                            </div>
+                <div class="bg-white rounded-2xl border-l-8 ${isEligible ? 'border-green-500' : conflictType ? 'border-red-500' : 'border-slate-300'} p-5 shadow-sm transition-all">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'long'})}</p>
+                            <h3 class="text-sm font-black text-slate-800">${date}</h3>
                         </div>
-                    `).join('')}
-                </div>`;
-            }
+                        <div class="text-right">
+                            <span class="text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest ${isEligible ? 'bg-green-100 text-green-700' : conflictType ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}">
+                                ${isEligible ? '🟢 ELIGIBLE' : conflictType ? `🔴 CONFLICT: ${conflictType}` : '⚪ NO ACTIVITY'}
+                            </span>
+                        </div>
+                    </div>
 
-            if (bookings.length > 0) {
-                html += `
-                <div class="bg-white p-5 rounded-xl border-l-4 border-red-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-red-500 uppercase tracking-widest border-b pb-2 mb-3">Conflict: Official Vehicle Booking</h3>
-                    ${bookings.map(b => `
-                        <div class="mb-2 last:mb-0">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-sm font-black text-slate-800 uppercase">${b.vehicle}</span>
-                                <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest bg-red-100 text-red-700">${b.travel_date}</span>
-                            </div>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase leading-tight">Driver: ${b.driver} | Purpose: ${b.purpose}</p>
-                        </div>
-                    `).join('')}
-                </div>`;
-            }
+                    <div class="space-y-2">
+                        ${dayHols.map(h => `<div class="text-[10px] bg-red-50 text-red-700 p-2 rounded-lg font-bold border border-red-100">📌 HOLIDAY: ${h.name}</div>`).join('')}
+                        ${dayLeaves.map(l => `<div class="text-[10px] bg-red-50 text-red-700 p-2 rounded-lg font-bold border border-red-100">🏖️ ON APPROVED LEAVE (${l.type})</div>`).join('')}
+                        ${dayBookings.map(b => `<div class="text-[10px] bg-amber-50 text-amber-700 p-2 rounded-lg font-bold border border-amber-100">🚗 FLEET: ${b.vehicle} (${b.driver})</div>`).join('')}
+                        
+                        ${dayTOs.map(t => {
+                            const itin = dayItins.find(i => i.to_no === t.to_no);
+                            return `
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[10px] font-black text-dar uppercase">📄 ${t.to_no}</span>
+                                    <span class="text-[9px] font-black ${t.transport === "GOV'T VEHICLE" ? 'text-red-600' : 'text-blue-600'} uppercase">${t.transport}</span>
+                                </div>
+                                <p class="text-[10px] text-slate-600 font-bold leading-tight">📍 ${itin ? itin.destination : 'Multiple destinations'}</p>
+                                <p class="text-[9px] text-slate-400 italic">Purpose: ${itin ? itin.purpose : 'Refer to order'}</p>
+                            </div>`;
+                        }).join('')}
 
-            if (psos.length > 0) {
-                html += `
-                <div class="bg-white p-5 rounded-xl border-l-4 border-yellow-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-yellow-600 uppercase tracking-widest border-b pb-2 mb-3">Posted Special Orders (PSO)</h3>
-                    ${psos.map(p => `
-                        <div class="mb-2 last:mb-0">
-                            <span class="text-sm font-black text-slate-800 uppercase block mb-1">${p.pso_no}</span>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">Period: ${p.start_date} to ${p.end_date}</p>
-                            <p class="text-[10px] text-slate-400 italic leading-tight">${p.subject}</p>
-                        </div>
-                    `).join('')}
+                        ${dayPSOs.map(p => `<div class="text-[10px] bg-blue-50 text-blue-700 p-2 rounded-lg font-bold border border-blue-100">ℹ️ PSO RECORD: ${p.pso_no}</div>`).join('')}
+                    </div>
                 </div>`;
-            }
-
-            if (leaves.length > 0) {
-                html += `
-                <div class="bg-white p-5 rounded-xl border-l-4 border-purple-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-purple-600 uppercase tracking-widest border-b pb-2 mb-3">Conflict: Approved Leaves</h3>
-                    ${leaves.map(l => `
-                        <div class="mb-2 last:mb-0 flex justify-between items-center">
-                            <div>
-                                <span class="text-sm font-black text-slate-800 uppercase">${l.type}</span>
-                                <p class="text-[10px] text-slate-500 font-bold uppercase">${l.start_date} to ${l.end_date}</p>
-                            </div>
-                            <span class="text-[8px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">APPROVED</span>
-                        </div>
-                    `).join('')}
-                </div>`;
-            }
+            });
 
             html += `</div>`;
             resArea.innerHTML = html;
