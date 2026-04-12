@@ -61,7 +61,10 @@
             document.getElementById('app').innerHTML = `
             <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
                 <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Overlap Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
-                <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
+                <div class="flex gap-2">
+                    <button onclick="showChangePassword()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Password</button>
+                    <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
+                </div>
             </header>
             
             <main class="flex-grow w-full overflow-y-auto p-4 md:p-8 relative z-10 scroll-smooth">
@@ -87,7 +90,58 @@
                     </div>
                     <div id="resultsArea" class="hidden space-y-4 pb-10"></div>
                 </div>
+
+                <div id="pwdModal" class="hidden fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+                        <button onclick="document.getElementById('pwdModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 font-black">✕</button>
+                        <h2 class="text-dar font-black text-lg mb-4 uppercase tracking-widest border-b pb-2">Change Password</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-dar uppercase mb-1 tracking-widest">Current Password</label>
+                                <input type="password" id="cpw" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-dar">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-dar uppercase mb-1 tracking-widest">New Password</label>
+                                <input type="password" id="npw" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-dar">
+                            </div>
+                            <button onclick="executePasswordChange(this)" class="w-full btn-primary text-xs py-3 mt-2 tracking-widest">UPDATE PASSWORD</button>
+                        </div>
+                    </div>
+                </div>
+
             </main>`;
+        }
+
+        function showChangePassword() {
+            document.getElementById('cpw').value = '';
+            document.getElementById('npw').value = '';
+            document.getElementById('pwdModal').classList.remove('hidden');
+        }
+
+        async function executePasswordChange(btn) {
+            const cpw = document.getElementById('cpw').value.trim();
+            const npw = document.getElementById('npw').value.trim();
+            
+            if (!cpw || !npw) return alert("Please fill all fields.");
+            if (String(cpw) !== String(user.password)) return alert("Current password is incorrect.");
+            if (cpw === npw) return alert("New password must be different from current.");
+
+            btn.innerText = "UPDATING...";
+            btn.disabled = true;
+
+            try {
+                const { error } = await db.from('users').update({ password: npw }).eq('id', user.id);
+                if (error) throw error;
+                
+                user.password = npw;
+                alert("Password successfully updated!");
+                document.getElementById('pwdModal').classList.add('hidden');
+            } catch (err) {
+                alert("Database Error: " + err.message);
+            } finally {
+                btn.innerText = "UPDATE PASSWORD";
+                btn.disabled = false;
+            }
         }
 
         function runEmpSearch(inp, resId) {
@@ -127,7 +181,6 @@
             resArea.classList.remove('hidden');
 
             try {
-                // Fetch All data covering the range, NOW INCLUDING CTO
                 const [itins, hols, bookings, psos, leaves, orders, ctos] = await Promise.all([
                     db.from('itinerary').select('*').gte('travel_date', sDate).lte('travel_date', eDate),
                     db.from('holidays').select('*').gte('date', sDate).lte('date', eDate),
@@ -166,7 +219,6 @@
                     activeItems.push({ type: 'holiday', title: `📍 HOLIDAY`, subtitle: h.name, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' });
                 });
 
-                // NEW: CTO Extraction
                 ctos.filter(c => c.leave_date === date).forEach(c => {
                     activeItems.push({ type: 'cto', title: `⏳ CTO: COMPENSATORY TIME-OFF`, subtitle: `Purpose: ${c.purpose || 'N/A'} | Remarks: ${c.remarks || 'None'}`, color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' });
                 });
@@ -194,4 +246,41 @@
                     const isConflict = activeItems.length > 1;
 
                     html += `
-                    <div class="bg-white rounded-2xl border shadow-sm p-5 ${isConflict ? 'border-red
+                    <div class="bg-white rounded-2xl border shadow-sm p-5 ${isConflict ? 'border-red-500' : 'border-slate-200'} transition-all relative overflow-hidden">
+                        ${isConflict ? '<div class="absolute top-0 left-0 w-1 h-full bg-red-500"></div>' : ''}
+                        <div class="flex justify-between items-center border-b pb-3 mb-3">
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'long'})}</p>
+                                <h4 class="text-sm font-black text-slate-800">${date}</h4>
+                            </div>
+                            <div>
+                                ${isConflict ? 
+                                    '<span class="bg-red-600 text-white text-[9px] px-3 py-1.5 rounded-full font-black uppercase animate-pulse shadow-md">⚠️ OVERLAP FLAG</span>' : 
+                                    '<span class="bg-slate-100 text-slate-500 text-[9px] px-3 py-1 rounded-full font-black uppercase">CLEAR LOG</span>'
+                                }
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            ${activeItems.map(item => `
+                                <div class="p-3 rounded-xl border ${item.bg} ${item.border}">
+                                    <h5 class="text-[10px] font-black uppercase ${item.color} mb-1">${item.title}</h5>
+                                    <p class="text-[10px] text-slate-600 italic leading-tight">${item.subtitle}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+                }
+            });
+
+            if (!eventsFound) {
+                html = `<div class="bg-white p-10 rounded-2xl text-center border border-dashed border-slate-300">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">No activities logged in this range.</p>
+                </div>`;
+            }
+
+            html += `</div>`;
+            resArea.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
