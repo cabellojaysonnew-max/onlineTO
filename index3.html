@@ -25,11 +25,11 @@
                 <div class="bg-gold h-2 w-full"></div>
                 <div class="p-8">
                     <h1 class="text-dar font-bold text-2xl font-serif mb-1 text-center">DAR ACCOUNTING</h1>
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Intelligent Audit Engine</p>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Overlap Audit System</p>
                     <div class="space-y-4">
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="un" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
-                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary text-xs py-3.5">ENTER VERIFIER</button>
+                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary text-xs py-3.5">ENTER AUDITOR</button>
                     </div>
                 </div>
             </div>
@@ -49,108 +49,85 @@
             const { data } = await db.from('users').select('*');
             const found = data.find(x => x.username === u && String(x.password) === String(p));
             
-            if (found && (found.role === 'ACCOUNTANT' || found.role === 'ADMIN' || found.role === 'VEHICLE_APPROVER')) { 
+            if (found && (found.role === 'ACCOUNTANT' || found.role === 'ADMIN')) { 
                 user = found; 
                 const {data: e} = await db.from('employees').select('*');
                 emps = e || []; 
                 renderDashboard(); 
-            } else alert("Invalid Login. You must be authorized for Accounting.");
+            } else alert("Invalid Login.");
         }
 
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
             <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
-                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Verifier Core</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
+                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Overlap Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
                 <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
             </header>
             
             <main class="flex-grow w-full overflow-y-auto p-4 md:p-8 relative z-10 scroll-smooth">
                 <div class="max-w-2xl mx-auto space-y-6">
-                    
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="space-y-4">
                             <div class="relative">
-                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee Search</label>
+                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee</label>
                                 <div class="relative">
-                                    <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search employee..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar font-bold uppercase" autocomplete="off">
-                                    <button id="clearEmpBtn" onclick="clearEmpSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 hidden transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                                        </svg>
-                                    </button>
+                                    <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 font-bold uppercase" autocomplete="off">
+                                    <button id="clearEmpBtn" onclick="clearEmpSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg></button>
                                 </div>
                                 <div id="empResults" class="search-results-box hidden"></div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Range Start</label>
-                                    <input id="startDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Range End</label>
-                                    <input id="endDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar">
-                                </div>
+                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">From</label><input id="startDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
+                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">To</label><input id="endDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
                             </div>
 
-                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Execute Daily Intelligence Audit</button>
+                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Audit Specific Dates</button>
                         </div>
                     </div>
-
-                    <div id="resultsArea" class="hidden space-y-4 pb-10"></div>
+                    <div id="resultsArea" class="hidden space-y-3 pb-10"></div>
                 </div>
             </main>`;
         }
 
         function runEmpSearch(inp, resId) {
             const div = document.getElementById(resId);
-            const clearBtn = document.getElementById('clearEmpBtn');
             const val = inp.value.toLowerCase().trim();
-            
-            if (val.length > 0) clearBtn.classList.remove('hidden');
-            else clearBtn.classList.add('hidden');
-
+            document.getElementById('clearEmpBtn').classList.toggle('hidden', val.length === 0);
             if (val.length < 2) { div.classList.add('hidden'); return; }
             const match = emps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
-            
-            div.innerHTML = match.map(e => `<div onclick="pickEmp('${safeStr(e.full_name)}','${resId}','${inp.id}','${safeStr(e.emp_id)}')" class="p-4 border-b border-slate-100 text-[11px] font-black active:bg-slate-100 cursor-pointer uppercase text-slate-700 hover:bg-slate-50 transition">${e.full_name}</div>`).join('');
+            div.innerHTML = match.map(e => `<div onclick="pickEmp('${safeStr(e.full_name)}','${resId}','${inp.id}','${safeStr(e.emp_id)}')" class="p-4 border-b border-slate-100 text-[11px] font-black cursor-pointer uppercase hover:bg-slate-50">${e.full_name}</div>`).join('');
             div.classList.remove('hidden');
         }
 
         function clearEmpSearch() {
-            const inp = document.getElementById('empSearch');
-            const clearBtn = document.getElementById('clearEmpBtn');
-            const resId = document.getElementById('empResults');
-            const resultsArea = document.getElementById('resultsArea');
-            inp.value = '';
+            document.getElementById('empSearch').value = '';
             selectedEmp = null;
-            clearBtn.classList.add('hidden');
-            resId.classList.add('hidden');
-            resultsArea.classList.add('hidden');
-            inp.focus();
+            document.getElementById('clearEmpBtn').classList.add('hidden');
+            document.getElementById('empResults').classList.add('hidden');
+            document.getElementById('resultsArea').classList.add('hidden');
         }
 
         function pickEmp(n, rId, iId, eId) {
             document.getElementById(iId).value = n;
             document.getElementById(rId).classList.add('hidden');
-            document.getElementById('clearEmpBtn').classList.remove('hidden');
             selectedEmp = { n, id: eId };
         }
 
         function safeStr(str) { return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
         async function runVerification() {
-            if(!selectedEmp) return alert("Please select an employee.");
+            if(!selectedEmp) return alert("Select employee.");
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
-            if(!sDate || !eDate) return alert("Select start and end dates.");
+            if(!sDate || !eDate) return alert("Select range.");
 
             const resArea = document.getElementById('resultsArea');
-            resArea.innerHTML = `<div class="text-center p-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Cross-referencing Specific Dates...</div>`;
+            resArea.innerHTML = `<div class="text-center p-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Scanning Overlaps...</div>`;
             resArea.classList.remove('hidden');
 
             try {
-                // Fetch All relevant data for the whole range in parallel
+                // Fetch All data covering the range
                 const [itins, hols, bookings, psos, leaves, orders] = await Promise.all([
                     db.from('itinerary').select('*').gte('travel_date', sDate).lte('travel_date', eDate),
                     db.from('holidays').select('*').gte('date', sDate).lte('date', eDate),
@@ -160,7 +137,7 @@
                     db.from('travel_orders').select('*').eq('emp_id', selectedEmp.id).eq('status', 'APPROVED')
                 ]);
 
-                // Generate array of specific dates between range
+                // Create date timeline
                 const dates = [];
                 let curr = new Date(sDate);
                 const end = new Date(eDate);
@@ -169,68 +146,56 @@
                     curr.setDate(curr.getDate() + 1);
                 }
 
-                renderDailyBreakdown(dates, itins.data, hols.data, bookings.data, psos.data, leaves.data, orders.data);
+                renderOverlapList(dates, itins.data, hols.data, bookings.data, psos.data, leaves.data, orders.data);
 
             } catch (err) {
-                resArea.innerHTML = `<div class="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-200">Audit Error: ${err.message}</div>`;
+                resArea.innerHTML = `<div class="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-200">System Error: ${err.message}</div>`;
             }
         }
 
-        function renderDailyBreakdown(dates, itins, hols, bookings, psos, leaves, orders) {
+        function renderOverlapList(dates, itins, hols, bookings, psos, leaves, orders) {
             const resArea = document.getElementById('resultsArea');
-            let html = `<div class="space-y-4">`;
+            let html = `<div class="space-y-2">`;
 
             dates.forEach(date => {
-                const dayHols = hols.filter(h => h.date === date);
-                const dayBookings = bookings.filter(b => b.travel_date === date);
+                // Collect all items active on THIS specific date
+                const activeItems = [];
+                
+                hols.filter(h => h.date === date).forEach(h => activeItems.push(`HOLIDAY: ${h.name}`));
+                leaves.filter(l => date >= l.start_date && date <= l.end_date).forEach(l => activeItems.push(`LEAVE: ${l.type}`));
+                bookings.filter(b => b.travel_date === date).forEach(b => activeItems.push(`FLEET: ${b.vehicle}`));
+                psos.filter(p => date >= p.start_date && date <= p.end_date).forEach(p => activeItems.push(`PSO: ${p.pso_no}`));
+                
                 const dayItins = itins.filter(i => i.travel_date === date);
-                const dayTOs = orders.filter(to => dayItins.some(i => i.to_no === to.to_no));
-                const dayLeaves = leaves.filter(l => date >= l.start_date && date <= l.end_date);
-                const dayPSOs = psos.filter(p => date >= p.start_date && date <= p.end_date);
+                orders.filter(to => dayItins.some(i => i.to_no === to.to_no)).forEach(t => activeItems.push(`TO: ${t.to_no}`));
 
-                // Specific Date Logic Determination
-                let conflictType = null;
-                if (dayLeaves.length > 0) conflictType = "LEAVE";
-                else if (dayHols.length > 0) conflictType = "HOLIDAY";
-                else if (dayBookings.length > 0 || dayTOs.some(t => t.transport === "GOV'T VEHICLE")) conflictType = "GOV VEHICLE";
+                // Overlap Flag Logic
+                const isConflict = activeItems.length > 1;
 
-                const isEligible = dayTOs.length > 0 && !conflictType;
-
-                html += `
-                <div class="bg-white rounded-2xl border-l-8 ${isEligible ? 'border-green-500' : conflictType ? 'border-red-500' : 'border-slate-300'} p-5 shadow-sm transition-all">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'long'})}</p>
-                            <h3 class="text-sm font-black text-slate-800">${date}</h3>
+                if (activeItems.length > 0) {
+                    html += `
+                    <div class="bg-white rounded-xl border shadow-sm p-4 ${isConflict ? 'border-red-500 bg-red-50' : 'border-slate-200'} transition-all">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'short'})}</p>
+                                <h4 class="text-sm font-black text-slate-800">${date}</h4>
+                            </div>
+                            <div>
+                                ${isConflict ? 
+                                    '<span class="bg-red-600 text-white text-[9px] px-3 py-1 rounded-full font-black animate-pulse">⚠️ OVERLAP DETECTED</span>' : 
+                                    '<span class="bg-slate-100 text-slate-500 text-[9px] px-3 py-1 rounded-full font-black">SINGLE ACTIVITY</span>'
+                                }
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <span class="text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest ${isEligible ? 'bg-green-100 text-green-700' : conflictType ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}">
-                                ${isEligible ? '🟢 ELIGIBLE' : conflictType ? `🔴 CONFLICT: ${conflictType}` : '⚪ NO ACTIVITY'}
-                            </span>
+                        <div class="mt-2 flex flex-wrap gap-1">
+                            ${activeItems.map(item => `
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded ${isConflict ? 'bg-red-200 text-red-800 border border-red-300' : 'bg-dar text-white'}">
+                                    ${item}
+                                </span>
+                            `).join('')}
                         </div>
-                    </div>
-
-                    <div class="space-y-2">
-                        ${dayHols.map(h => `<div class="text-[10px] bg-red-50 text-red-700 p-2 rounded-lg font-bold border border-red-100">📌 HOLIDAY: ${h.name}</div>`).join('')}
-                        ${dayLeaves.map(l => `<div class="text-[10px] bg-red-50 text-red-700 p-2 rounded-lg font-bold border border-red-100">🏖️ ON APPROVED LEAVE (${l.type})</div>`).join('')}
-                        ${dayBookings.map(b => `<div class="text-[10px] bg-amber-50 text-amber-700 p-2 rounded-lg font-bold border border-amber-100">🚗 FLEET: ${b.vehicle} (${b.driver})</div>`).join('')}
-                        
-                        ${dayTOs.map(t => {
-                            const itin = dayItins.find(i => i.to_no === t.to_no);
-                            return `
-                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                <div class="flex justify-between items-center mb-1">
-                                    <span class="text-[10px] font-black text-dar uppercase">📄 ${t.to_no}</span>
-                                    <span class="text-[9px] font-black ${t.transport === "GOV'T VEHICLE" ? 'text-red-600' : 'text-blue-600'} uppercase">${t.transport}</span>
-                                </div>
-                                <p class="text-[10px] text-slate-600 font-bold leading-tight">📍 ${itin ? itin.destination : 'Multiple destinations'}</p>
-                                <p class="text-[9px] text-slate-400 italic">Purpose: ${itin ? itin.purpose : 'Refer to order'}</p>
-                            </div>`;
-                        }).join('')}
-
-                        ${dayPSOs.map(p => `<div class="text-[10px] bg-blue-50 text-blue-700 p-2 rounded-lg font-bold border border-blue-100">ℹ️ PSO RECORD: ${p.pso_no}</div>`).join('')}
-                    </div>
-                </div>`;
+                    </div>`;
+                }
             });
 
             html += `</div>`;
