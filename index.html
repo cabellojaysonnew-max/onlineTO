@@ -412,7 +412,7 @@
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
                 // Route Assignment Logic based on Transport and Employee Unit
-                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VE_APPROVER"; 
+                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER"; 
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (isMARPO) routeStatus = "PENDING_CHIEF";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
