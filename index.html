@@ -530,12 +530,15 @@
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
                     doc.text("DESTINATION:", 20, 78);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    const dests = itin_list.map(it => `${it.destination} - ${formatDestDate(it.travel_date)}`).join(", ");
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const destLines = doc.splitTextToSize(dests, 110);
-                    doc.text(destLines, 50, 78);
+                    let destY = 78;
+                    itin_list.forEach(it => {
+                        doc.text(`${formatDestDate(it.travel_date)} - ${it.destination}`, 50, destY);
+                        destY += 4.5;
+                    });
                     
-                    let curY = 78 + Math.max(5, destLines.length * 4);
+                    // Dynamic shifting based on lines printed
+                    let curY = Math.max(destY, 83);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
@@ -574,11 +577,11 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, 190, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 188, 25, 18);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
