@@ -25,17 +25,7 @@
     </style>
 </head>
 <body>
-    <div id="app">
-        <div id="login-screen" class="h-screen flex items-center justify-center p-6 bg-dar">
-            <div class="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl">
-                <h1 class="text-2xl font-bold text-dar mb-2 text-center uppercase tracking-tighter">Fleet Console</h1>
-                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6 text-center">Cam Sur 1 Official Login</p>
-                <input id="un" type="text" placeholder="Username" class="w-full p-4 bg-gray-50 border rounded-2xl mb-4 outline-none">
-                <input id="pw" type="password" placeholder="Password" class="w-full p-4 bg-gray-50 border rounded-2xl mb-6 outline-none">
-                <button onclick="handleLogin()" class="w-full bg-dar text-white p-4 rounded-2xl font-bold shadow-lg uppercase text-sm">Log In System</button>
-            </div>
-        </div>
-    </div>
+    <div id="app"></div>
 
     <script>
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
@@ -61,15 +51,35 @@
             return (u && u !== "NULL" && u !== "NAN") ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF";
         }
 
+        // --- BULLETPROOF LOGIN ---
         async function handleLogin() {
-            const u = document.getElementById('un').value, p = document.getElementById('pw').value;
-            const { data } = await supabase.from('users').select('*').eq('username', u).eq('password', p).maybeSingle();
-            if (data && data.role === 'VEHICLE_APPROVER') { 
-                user = data; 
-                const {data: e} = await supabase.from('employees').select('full_name, unit, division');
-                emps = e; 
-                renderDashboard(); 
-            } else alert("Invalid Role or Credentials.");
+            const u = document.getElementById('un').value.trim();
+            const p = document.getElementById('pw').value.trim();
+            
+            if(!u || !p) return alert("Please enter both username and password.");
+
+            try {
+                const { data, error } = await supabase.from('users').select('*');
+                if (error) throw error;
+
+                // Force string comparison to avoid integer/text mismatch issues
+                const foundUser = data.find(x => x.username === u && String(x.password) === String(p));
+
+                if (foundUser) {
+                    if (foundUser.role === 'VEHICLE_APPROVER') {
+                        user = foundUser; 
+                        const {data: e} = await supabase.from('employees').select('*');
+                        emps = e || []; 
+                        renderDashboard(); 
+                    } else {
+                        alert(`Access Denied: Your role is '${foundUser.role}'. You need 'VEHICLE_APPROVER' to access this console.`);
+                    }
+                } else {
+                    alert("Invalid Username or Password.");
+                }
+            } catch (err) {
+                alert("Database Connection Error: " + err.message);
+            }
         }
 
         async function sync() {
@@ -77,19 +87,38 @@
                 supabase.from('travel_orders').select('*').neq('status','CANCELLED'), 
                 supabase.from('itinerary').select('*')
             ]);
-            orders = o.data; itins = i.data;
+            orders = o.data || []; 
+            itins = i.data || [];
             if(tab === 'inbox') renderInbox();
             else if(tab === 'manifest') renderManifest();
             else renderSchedule();
         }
 
         // --- 2. UI ENGINE ---
+        function render() {
+            const root = document.getElementById('app');
+            if (!user) {
+                root.innerHTML = `
+                <div class="h-screen flex items-center justify-center p-6 bg-dar">
+                    <div class="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl">
+                        <h1 class="text-2xl font-bold text-dar mb-2 text-center uppercase tracking-tighter">Fleet Console</h1>
+                        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6 text-center">Cam Sur 1 Official Login</p>
+                        <input id="un" type="text" placeholder="Username" class="w-full p-4 bg-gray-50 border rounded-2xl mb-4 outline-none">
+                        <input id="pw" type="password" placeholder="Password" class="w-full p-4 bg-gray-50 border rounded-2xl mb-6 outline-none" onkeypress="if(event.key==='Enter') handleLogin()">
+                        <button onclick="handleLogin()" class="w-full bg-dar text-white p-4 rounded-2xl font-bold shadow-lg uppercase text-sm">Log In System</button>
+                    </div>
+                </div>`;
+            } else {
+                renderDashboard();
+            }
+        }
+
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
             <div class="flex flex-col h-screen overflow-hidden">
                 <header class="bg-dar text-white p-4 flex justify-between items-center no-print shadow-md">
                     <div class="leading-none"><span class="block font-bold text-sm uppercase">${user.full_name}</span><span class="text-[9px] text-dar-gold font-bold">DISPATCHER CONSOLE</span></div>
-                    <div class="flex gap-4"><button onclick="sync()" class="text-xl">🔄</button><button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">Logout</button></div>
+                    <div class="flex gap-4"><button onclick="sync()" class="text-xl active:scale-90 transition">🔄</button><button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">Logout</button></div>
                 </header>
 
                 <nav class="bg-white border-b flex no-print">
@@ -137,7 +166,7 @@
 
             <div id="transferModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 no-print">
                 <div class="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl">
-                    <h2 class="font-bold text-dar text-xs uppercase mb-1">Feature 8: Smart Transfer</h2>
+                    <h2 class="font-bold text-dar text-xs uppercase mb-1">Smart Transfer</h2>
                     <p class="text-[9px] text-gray-400 mb-4 font-bold uppercase" id="tDetails"></p>
                     <div class="space-y-2">
                         <label class="text-[10px] font-bold text-gray-500 uppercase">Available Fleet for these dates:</label>
@@ -161,7 +190,7 @@
                 <div class="bg-white p-5 rounded-3xl shadow-sm mb-4 border border-dar-gold/20">
                     <div class="flex justify-between mb-2"><span class="text-[9px] font-black text-gray-400 uppercase">#${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[9px] font-bold underline uppercase">Change to LAND</button></div>
                     <p class="font-bold text-gray-800 text-sm leading-tight">${o.emp_name}</p>
-                    <p class="text-[10px] text-dar font-bold mt-1 uppercase">📅 ${itin.travel_date}</p>
+                    <p class="text-[10px] text-dar font-bold mt-1 uppercase tracking-tighter">📅 ${itin.travel_date}</p>
                     <div class="mt-4 grid grid-cols-2 gap-2">
                         <select id="v-${o.to_no}" class="p-3 border rounded-xl text-xs bg-gray-50 font-bold text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
                         <select id="s-${o.to_no}" class="p-3 border rounded-xl text-xs bg-gray-50 font-bold"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select>
@@ -169,7 +198,7 @@
                     </div>
                     <div class="flex gap-2 mt-4">
                         <button onclick="toLand('${o.to_no}','${o.unit}')" class="flex-1 bg-red-50 text-red-600 py-4 rounded-2xl text-[10px] font-bold">REJECT</button>
-                        <button onclick="approveDispatch('${o.to_no}','${o.unit}','${o.emp_name}')" class="flex-[2] bg-dar text-white py-4 rounded-2xl text-[10px] font-bold">APPROVE & DISPATCH</button>
+                        <button onclick="approveDispatch('${o.to_no}','${o.unit}','${o.emp_name.replace(/'/g, "\\'")}')" class="flex-[2] bg-dar text-white py-4 rounded-2xl text-[10px] font-bold shadow-lg">APPROVE & DISPATCH</button>
                     </div>
                 </div>`;
             }).join('');
@@ -208,7 +237,6 @@
 
         async function handleCancel(to, status) {
             if(!confirm("Cancel Deployment?")) return;
-            // Feature 6 & 7 Logic
             if(status === 'APPROVED') await supabase.from('travel_orders').update({ transport: 'LAND' }).eq('to_no', to);
             else await supabase.from('travel_orders').update({ transport: 'LAND', status: 'PENDING_UNIT_HEAD' }).eq('to_no', to);
             sync();
@@ -217,8 +245,25 @@
         // --- 4. SCHEDULE & FEATURE 8 (Smart Transfer) ---
         function renderSchedule() {
             const m = document.getElementById('main-content');
+            
+            // Apply Filters (Daily, Weekly, Monthly)
+            const now = new Date(); now.setHours(0,0,0,0);
+            const filteredItins = itins.filter(i => {
+                if(!i.travel_date) return false;
+                const d = new Date(i.travel_date); d.setHours(0,0,0,0);
+                if (viewFilter === 'day') return d.getTime() === now.getTime();
+                if (viewFilter === 'week') {
+                    const s = new Date(now); s.setDate(now.getDate() - now.getDay());
+                    const e = new Date(s); e.setDate(s.getDate() + 6);
+                    return d >= s && d <= e;
+                }
+                if (viewFilter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                return true;
+            });
+            const validToNos = filteredItins.map(i => i.to_no);
+
             m.innerHTML = `
-            <h1 class="print-title">OFFICIAL VEHICLE DEPLOYMENT REPORT</h1>
+            <h1 class="print-title">OFFICIAL VEHICLE DEPLOYMENT REPORT (${viewFilter.toUpperCase()})</h1>
             <div class="no-print bg-white p-2 rounded-2xl mb-6 flex gap-1 shadow-sm">
                 <button onclick="setFilter('day')" class="flex-1 p-2 text-[9px] font-black rounded-xl ${viewFilter==='day'?'bg-dar text-white':'text-gray-400'} uppercase">Daily</button>
                 <button onclick="setFilter('week')" class="flex-1 p-2 text-[9px] font-black rounded-xl ${viewFilter==='week'?'bg-dar text-white':'text-gray-400'} uppercase">Weekly</button>
@@ -226,17 +271,17 @@
                 <button onclick="window.print()" class="flex-1 p-2 text-[9px] bg-dar-gold text-white font-black rounded-xl uppercase">Print Report</button>
             </div>
             <div class="print-area">` + VEHICLES.map(v => {
-                const logs = orders.filter(o => o.received === v && o.transport === "GOV'T VEHICLE");
+                const logs = orders.filter(o => o.received === v && o.transport === "GOV'T VEHICLE" && validToNos.includes(o.to_no));
                 return `<div class="mb-8 card"><h3 class="font-black text-xs text-dar mb-3 pl-2 border-l-4 border-dar-gold uppercase tracking-widest">${v} STATUS</h3>` + 
                 (logs.length ? [...new Set(logs.map(l => l.to_no))].map(to => {
                     const h = logs.find(l => l.to_no === to);
-                    const i = itins.filter(itin => itin.to_no === to).map(itin => itin.travel_date).join(', ');
+                    const i = filteredItins.filter(itin => itin.to_no === to).map(itin => itin.travel_date).join(', ');
                     const isMaint = h.remarks === 'MAINTENANCE';
-                    return `<div class="bg-white p-4 rounded-2xl mb-2 flex justify-between items-center border">
+                    return `<div class="bg-white p-4 rounded-2xl mb-2 flex justify-between items-center shadow-sm border border-gray-50">
                         <div class="overflow-hidden"><p class="text-xs font-bold ${isMaint?'text-red-600':'text-gray-800'} truncate">${h.emp_name}</p><p class="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">${i} | ${h.remarks || 'WHOLE'}</p></div>
                         <button onclick="smartTransfer('${to}','${v}')" class="text-xl no-print active:scale-90 transition">🔄</button>
                     </div>`;
-                }).join('') : `<div class="p-4 bg-white/50 rounded-2xl border border-dashed text-center text-[9px] text-gray-300 font-bold uppercase">Vehicle Available</div>`) + `</div>`;
+                }).join('') : `<div class="p-4 bg-white/50 rounded-2xl border border-dashed text-center text-[10px] text-gray-300 font-bold uppercase">Vehicle Available</div>`) + `</div>`;
             }).join('') + `</div>`;
         }
 
@@ -271,7 +316,7 @@
             const val = inp.value.toLowerCase();
             if (val.length < 2) { div.classList.add('hidden'); return; }
             const match = emps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
-            div.innerHTML = match.map(e => `<div onclick="pickPersonnel('${e.full_name}','${resId}','${inp.id}','${e.unit}','${e.division}')" class="p-3 border-b text-xs font-bold active:bg-gray-100">${e.full_name}</div>`).join('');
+            div.innerHTML = match.map(e => `<div onclick="pickPersonnel('${e.full_name.replace(/'/g, "\\'")}','${resId}','${inp.id}','${e.unit}','${e.division}')" class="p-3 border-b text-xs font-bold active:bg-gray-100">${e.full_name}</div>`).join('');
             div.classList.remove('hidden');
         }
 
@@ -332,6 +377,7 @@
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
         function setFilter(f) { viewFilter = f; renderSchedule(); }
 
+        window.onload = render;
     </script>
 </body>
 </html>
