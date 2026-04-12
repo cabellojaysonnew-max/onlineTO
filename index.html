@@ -94,6 +94,14 @@
         </div>
 
         <div id="apply-view" class="view active">
+            <div class="card" style="text-align: center;">
+                <button class="btn btn-gold btn-small" onclick="showEmployeeQR()" style="margin: 0;">Generate My QR Code</button>
+                <div id="my-qr-container" style="display: none; margin-top: 15px;">
+                    <img id="my-qr-img" src="" alt="QR Code" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--dar-green); padding: 5px;">
+                    <div style="font-size: 12px; font-weight: bold; margin-top: 5px; color: var(--dar-green);" id="my-qr-text"></div>
+                </div>
+            </div>
+
             <div class="card">
                 <h4>1. Personnel (Max 5)</h4>
                 <div style="display: flex; gap: 5px;">
@@ -239,6 +247,21 @@
             // Lazy load specific data only when tabs are clicked
             if (id === 'status-view') loadStatus();
             if (id === 'calendar-view') renderCalendar();
+        };
+
+        // QR CODE GENERATOR
+        window.showEmployeeQR = function() {
+            const container = document.getElementById('my-qr-container');
+            const img = document.getElementById('my-qr-img');
+            const text = document.getElementById('my-qr-text');
+            
+            if (container.style.display === 'none') {
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${currentUser.emp_id}`;
+                text.innerText = `EMP ID: ${currentUser.emp_id}`;
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
         };
 
         // PERSONNEL MANAGEMENT
@@ -431,7 +454,17 @@
                 await supabase.from('itinerary').insert(batchItin);
                 
                 alert("Logic Executed. Submitted: " + finalToNo);
-                location.reload(); // Refresh to clean state
+                
+                // Form reset logic and redirection to Status view instead of full page reload
+                document.getElementById('itin-from').value = '';
+                document.getElementById('itin-to').value = '';
+                document.getElementById('dynamic-itin-fields').innerHTML = '';
+                document.getElementById('to-transport').selectedIndex = 0;
+                personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
+                renderPersonnel();
+                itineraryDraft = [];
+                conflictsToProcess = [];
+                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
                 
             } catch(e) { 
                 alert("Error: " + e.message); 
@@ -682,19 +715,19 @@
                 const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                 const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                html += `<div class="card"><br>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;"><br>
-                        <div style="font-weight:bold; font-size: 15px;">${to.to_no}</div><br>
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span><br>
-                    </div><br>
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid var(--dar-gold);"><br>
-                        <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: var(--dar-green);">DETAILS:</div><br>
-                        ${itin?.map(i => `<div style="font-size: 11px; border-bottom: 1px dashed #ddd; padding: 5px 0;"><strong>📅 ${i.travel_date}</strong> - 📍 ${i.destination}<br><span style="color: gray; font-style: italic;">"${i.purpose}"</span></div>`).join('')}<br>
-                    </div><br>
-                    <div class="action-group"><br>
-                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}<br>
-                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}<br>
-                    </div><br>
+                // Sleek, compressed UI specific updates applied here (no rogue <br> tags, tighter CSS)
+                html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
+                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
+                        ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
+                    </div>
+                    <div class="action-group" style="margin-top: 0;">
+                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}
+                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                    </div>
                 </div>`;
             }
             list.innerHTML = html || "No records found.";
