@@ -578,7 +578,7 @@
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 125, 188, 25, 18);
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 188, 25, 18);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
