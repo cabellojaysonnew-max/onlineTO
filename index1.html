@@ -60,9 +60,9 @@
         };
         document.getElementById('pwa-manifest').setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData)));
 
-        // --- SUPABASE CONFIG ---
+        // --- UPDATED SUPABASE CONFIG ---
         const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SUPABASE_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
+        const SUPABASE_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // --- CONSTANTS ---
@@ -74,7 +74,7 @@
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
-        // --- LOGIN VIEW (Using Working Logic from TO App) ---
+        // --- LOGIN VIEW ---
         function renderLogin() {
             document.getElementById('app').innerHTML = `
                 <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
@@ -101,12 +101,10 @@
             const err = document.getElementById('loginError');
             
             try {
-                // Working logic: fetch all, then .find() locally to bypass parameter binding issues
                 const { data: users } = await supabaseClient.from('users').select('*');
                 const u = (users || []).find(x => x.username === uBox && x.password === pBox);
                 
                 if (u) {
-                    // Strict check for Vehicle Approver
                     if (u.role && u.role.toUpperCase() === 'VEHICLE_APPROVER') {
                         currentUser = { 
                             username: u.username, 
@@ -116,7 +114,7 @@
                         };
                         render();
                     } else {
-                        err.innerText = "Access Denied: Vehicle Approvers only.";
+                        err.innerText = "Access Denied: Only Vehicle Approvers permitted.";
                         err.classList.remove("hidden");
                     }
                 } else { 
@@ -190,7 +188,6 @@
             
             let h = `<div class="p-4 space-y-4 pb-32">`;
             
-            // Build Dropdown HTML options
             const vehOptions = `<option value="">Select Vehicle...</option>` + OFFICIAL_VEHICLES.map(v => `<option value="${v}">${v}</option>`).join('');
             const drvOptions = `<option value="">Select Driver...</option>` + OFFICIAL_DRIVERS.map(d => `<option value="${d}">${d}</option>`).join('');
 
@@ -229,12 +226,10 @@
             
             if(!veh || !drv) return alert("Please select both a Vehicle and a Driver.");
 
-            // Logic matching Python specifications
             let nextStatus = "PENDING_UNIT_HEAD";
             if (unit.toUpperCase() === "PARPO") nextStatus = "PENDING_PARPO";
             else if (!unit || unit.toUpperCase() === "NULL" || unit.toUpperCase() === "NAN") nextStatus = "PENDING_CHIEF";
 
-            // Prevent spam clicks
             document.body.style.pointerEvents = "none";
             try {
                 await supabaseClient.from('travel_orders').update({
@@ -273,7 +268,6 @@
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Loading Manifest...</p>`;
             
-            // Get all TOs that have a vehicle but aren't pending vehicle assignment
             const { data: oRes } = await supabaseClient.from('travel_orders')
                 .select('to_no, emp_name, received, driver, status, created_at')
                 .eq('transport', "GOV'T VEHICLE")
@@ -340,7 +334,6 @@
 
             document.body.style.pointerEvents = "none";
             try {
-                // 1. Insert Main Record
                 await supabaseClient.from("travel_orders").insert({
                     to_no: pseudo_to,
                     emp_id: currentUser.username,
@@ -354,7 +347,6 @@
                     division: "ADMIN"
                 });
 
-                // 2. Insert Itinerary
                 await supabaseClient.from("itinerary").insert({
                     to_no: pseudo_to,
                     travel_date: tdate,
@@ -364,7 +356,7 @@
 
                 alert("Vehicle Reserved successfully.");
                 hideReserveModal();
-                loadDispatchedTab(); // Refresh list
+                loadDispatchedTab();
             } catch (e) {
                 alert("Failed to save reservation.");
             } finally {
