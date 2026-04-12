@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAR Fleet Master</title>
+    <title>DAR Fleet Master Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { --dar-green: #003811; --dar-gold: #D4AF37; }
-        body { background: #f8fafc; font-family: 'Inter', -apple-system, sans-serif; color: #1e293b; }
+        body { background: #f1f5f9; font-family: 'Inter', -apple-system, sans-serif; color: #1e293b; }
         .bg-dar { background: var(--dar-green); }
         .text-dar { color: var(--dar-green); }
         .border-dar { border-color: var(--dar-green); }
-        .bg-gold { background: var(--dar-gold); }
         
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
-        /* FIXED CENTERED MODALS */
+        /* MODALS - CENTERED & PROFESSIONAL */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 999;
-            background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);
             display: flex; align-items: center; justify-content: center;
             padding: 20px;
         }
         .modal-box {
-            background: white; width: 100%; max-width: 550px;
-            border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+            background: white; width: 100%; max-width: 600px;
+            border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
             max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;
         }
 
@@ -34,17 +33,13 @@
             position: absolute; width: 100%; max-height: 200px; 
             overflow-y: auto; z-index: 1000; background: white; 
             border: 1px solid #e2e8f0; border-radius: 8px; 
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); 
         }
-        
-        .btn-primary { @apply bg-dar text-white px-4 py-2 rounded font-bold uppercase text-xs transition active:scale-95 hover:opacity-90; }
-        .btn-cancel { @apply bg-gray-100 text-gray-600 px-4 py-2 rounded font-bold uppercase text-xs hover:bg-gray-200; }
-        .btn-danger { @apply bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded font-bold uppercase text-[10px] hover:bg-red-100; }
 
         @media print {
             .no-print { display: none !important; }
             .print-area { display: block !important; width: 100% !important; background: white; }
-            .card-item { border: 1px solid #e2e8f0 !important; margin-bottom: 10px; break-inside: avoid; padding: 15px; border-radius: 0; }
+            .card-item { border: 1px solid #e2e8f0 !important; margin-bottom: 10px; break-inside: avoid; padding: 20px; border-radius: 0; }
         }
     </style>
 </head>
@@ -52,22 +47,21 @@
 
     <div id="app" class="flex flex-col h-full w-full">
         <div id="login-screen" class="h-full w-full flex items-center justify-center p-6 bg-dar">
-            <div class="bg-white p-8 rounded-xl w-full max-w-sm shadow-2xl">
-                <div class="text-center mb-6">
-                    <h1 class="text-2xl font-black text-dar tracking-tighter">DAR FLEET MASTER</h1>
-                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Authorized Dispatcher Login</p>
+            <div class="bg-white p-10 rounded-xl w-full max-w-sm shadow-2xl">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-black text-dar tracking-tighter uppercase">DAR Fleet</h1>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Official Dispatch Console</p>
                 </div>
                 <div class="space-y-4">
-                    <input id="un" type="text" placeholder="Username" class="w-full p-3 border rounded outline-none focus:ring-2 focus:ring-green-800">
-                    <input id="pw" type="password" placeholder="Password" class="w-full p-3 border rounded outline-none focus:ring-2 focus:ring-green-800" onkeypress="if(event.key==='Enter') handleLogin()">
-                    <button onclick="handleLogin()" class="w-full bg-dar text-white p-3 rounded font-bold uppercase tracking-widest shadow-lg active:scale-95 transition">Log In</button>
+                    <input id="un" type="text" placeholder="Username" class="w-full p-4 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-800">
+                    <input id="pw" type="password" placeholder="Password" class="w-full p-4 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-800">
+                    <button onclick="handleLogin()" class="w-full bg-dar text-white p-4 rounded-lg font-black uppercase tracking-widest shadow-lg hover:opacity-95 transition">Login</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Supabase Init (using 'db' to avoid collision)
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SB_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; 
         const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -77,17 +71,16 @@
 
         let user = null, currentTab = 'inbox', scheduleFilter = 'day'; 
         let emps = [], orders = [], itins = [];
-        let targetTO = "";
+        let activeTO = "", selectedEmpForAdd = null;
 
-        // --- CORE LOGIC ---
+        // --- 1. CORE LOGIC ---
         async function logAction(to, app, act, date = "N/A") {
             await db.from('vehicle_logs').insert({ to_no: to, applicant: app, travel_date: date, action: act });
         }
 
-        function getApprovalStep(unit) {
+        function getApprovalTarget(unit) {
             const u = (unit || "").toUpperCase();
-            if (u === "PARPO") return "PENDING_PARPO";
-            return (u && u !== "NULL" && u !== "NAN") ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF";
+            return (u === "PARPO") ? "PENDING_PARPO" : (u && u !== "NULL" && u !== "NAN") ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF";
         }
 
         async function handleLogin() {
@@ -99,7 +92,7 @@
                 const {data: e} = await db.from('employees').select('*');
                 emps = e || []; 
                 renderDashboard(); 
-            } else alert("Error: Account not found or unauthorized role.");
+            } else alert("Access Denied.");
         }
 
         async function sync() {
@@ -108,126 +101,128 @@
                 db.from('itinerary').select('*')
             ]);
             orders = o.data || []; itins = i.data || [];
-            if(currentTab === 'inbox') renderInbox();
-            else if(currentTab === 'manifest') renderManifest();
-            else renderSchedule();
+            currentTab === 'inbox' ? renderInbox() : currentTab === 'manifest' ? renderManifest() : renderSchedule();
         }
 
-        // --- DASHBOARD LAYOUT ---
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
             <div class="flex flex-col h-screen">
-                <header class="bg-dar text-white px-6 py-4 flex justify-between items-center no-print shadow-lg shrink-0">
-                    <div class="leading-none"><span class="block font-black text-lg tracking-tight uppercase">${user.full_name}</span><p class="text-[9px] text-dar-gold font-bold">DISPATCH CONSOLE</p></div>
-                    <div class="flex gap-4 items-center">
-                        <button onclick="sync()" class="text-lg">🔄</button>
-                        <button onclick="location.reload()" class="bg-white/10 px-3 py-1 rounded text-[10px] font-bold uppercase">Logout</button>
-                    </div>
+                <header class="bg-dar text-white px-8 py-4 flex justify-between items-center no-print shadow-lg shrink-0">
+                    <div class="leading-none"><span class="block font-black text-lg tracking-tight uppercase">${user.full_name}</span><p class="text-[9px] text-dar-gold font-bold">DISPATCHER CONSOLE</p></div>
+                    <div class="flex gap-6 items-center"><button onclick="sync()" class="text-xl">🔄</button><button onclick="location.reload()" class="bg-white/10 px-4 py-2 rounded font-bold text-xs uppercase hover:bg-white/20 transition">Log Out</button></div>
                 </header>
-
-                <nav class="bg-white border-b flex no-print shadow-sm overflow-x-auto shrink-0">
-                    <button onclick="switchTab('inbox')" class="flex-1 p-4 text-xs font-black ${currentTab==='inbox'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Inbox</button>
-                    <button onclick="switchTab('manifest')" class="flex-1 p-4 text-xs font-black ${currentTab==='manifest'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Manifest</button>
-                    <button onclick="switchTab('schedule')" class="flex-1 p-4 text-xs font-black ${currentTab==='schedule'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Schedule</button>
+                <nav class="bg-white border-b flex no-print shadow-sm shrink-0">
+                    <button onclick="switchTab('inbox')" class="flex-1 p-5 text-xs font-black ${currentTab==='inbox'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Inbox</button>
+                    <button onclick="switchTab('manifest')" class="flex-1 p-5 text-xs font-black ${currentTab==='manifest'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Manifest</button>
+                    <button onclick="switchTab('schedule')" class="flex-1 p-5 text-xs font-black ${currentTab==='schedule'?'border-b-4 border-green-900 text-dar':'text-gray-400'} uppercase">Fleet View</button>
                 </nav>
-
-                <main id="main-content" class="flex-1 overflow-y-auto p-6 no-scrollbar print-area"></main>
-
-                <footer class="p-4 no-print bg-white border-t flex justify-end gap-3 shrink-0">
-                    <button onclick="openModal('bookModal')" class="bg-dar text-white px-6 py-3 rounded shadow-lg font-bold text-xs uppercase">+ Create Booking</button>
+                <main id="main-content" class="flex-1 overflow-y-auto p-10 no-scrollbar print-area bg-slate-50"></main>
+                <footer class="p-6 no-print bg-white border-t flex justify-end gap-3 shrink-0 shadow-lg">
+                    <button onclick="openModal('bookModal')" class="bg-dar text-white px-10 py-3 rounded font-bold text-xs uppercase tracking-widest hover:opacity-90 active:scale-95 transition">+ Create Booking</button>
                 </footer>
             </div>
-            ${modalsContainer()}`;
+            ${allModals()}`;
             sync();
         }
 
-        function modalsContainer() {
+        function allModals() {
             return `
             <div id="bookModal" class="hidden modal-overlay">
                 <div class="modal-box">
-                    <div class="p-6 border-b flex justify-between items-center">
-                        <h2 class="font-black text-dar uppercase text-sm">Manual Trip Reservation</h2>
-                        <button onclick="closeModal('bookModal')" class="text-gray-400 hover:text-red-500">✕</button>
-                    </div>
-                    <div class="p-6 space-y-4 overflow-y-auto no-scrollbar flex-1">
-                        <div class="relative"><label class="text-[10px] font-black text-gray-400 uppercase">Personnel Name</label><input id="resN" oninput="liveEmpSearch(this, 'resResults')" placeholder="Search Employee..." class="w-full p-3 border rounded text-sm outline-none"><div id="resResults" class="search-results-box hidden"></div></div>
+                    <div class="p-5 border-b flex justify-between items-center bg-slate-50"><h2 class="font-black text-dar uppercase text-xs">Manual Reservation</h2><button onclick="closeModal('bookModal')" class="text-gray-400 hover:text-red-500 text-xl">✕</button></div>
+                    <div class="p-8 space-y-4 overflow-y-auto no-scrollbar flex-1">
+                        <div class="relative"><label class="text-[10px] font-black text-gray-400 uppercase">Personnel Lead</label><input id="resN" oninput="runEmpSearch(this, 'resResults')" placeholder="Type name..." class="w-full p-3 border rounded text-sm outline-none focus:border-dar shadow-sm"><div id="resResults" class="search-results-box hidden"></div></div>
                         <div class="grid grid-cols-2 gap-4">
                             <div><label class="text-[10px] font-black text-gray-400 uppercase">Start Date</label><input id="resD1" type="date" class="w-full p-3 border rounded text-sm"></div>
                             <div><label class="text-[10px] font-black text-gray-400 uppercase">End Date</label><input id="resD2" type="date" class="w-full p-3 border rounded text-sm"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[10px] font-black text-gray-400 uppercase">Assignment</label><select id="resS" class="w-full p-3 border rounded text-sm font-bold"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                            <div><label class="text-[10px] font-black text-gray-400 uppercase">Vehicle</label><select id="resV" class="w-full p-3 border rounded text-sm font-bold">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                            <div><label class="text-[10px] font-black text-gray-400 uppercase">Assignment</label><select id="resS" class="w-full p-3 border rounded text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
+                            <div><label class="text-[10px] font-black text-gray-400 uppercase">Vehicle</label><select id="resV" class="w-full p-3 border rounded text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
                         </div>
-                        <div><label class="text-[10px] font-black text-gray-400 uppercase">Driver Name (Editable)</label><input id="resDr" list="drivers" placeholder="Type or Select..." class="w-full p-3 border rounded text-sm font-bold"></div>
-                        <div><label class="text-[10px] font-black text-gray-400 uppercase">Purpose / RSO #</label><input id="resP" placeholder="Required detail..." class="w-full p-3 border rounded text-sm outline-none"></div>
+                        <div><label class="text-[10px] font-black text-gray-400 uppercase">Driver Name (Editable)</label><input id="resDr" list="drivers" placeholder="Pick or type..." class="w-full p-3 border rounded text-sm font-bold outline-none focus:border-dar shadow-sm"></div>
+                        <div><label class="text-[10px] font-black text-gray-400 uppercase">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-3 border rounded text-sm outline-none shadow-sm"></div>
                     </div>
-                    <div class="p-6 border-t bg-gray-50 flex gap-2">
-                        <button onclick="closeModal('bookModal')" class="btn-cancel">Cancel</button>
-                        <button onclick="saveManualBooking()" class="flex-1 btn-primary">Save Deployment</button>
+                    <div class="p-6 border-t flex gap-3 bg-slate-50">
+                        <button onclick="closeModal('bookModal')" class="flex-1 bg-gray-200 text-gray-600 py-3 rounded font-bold text-xs uppercase">Cancel</button>
+                        <button onclick="saveManual()" class="flex-[2] bg-dar text-white py-3 rounded font-bold text-xs uppercase shadow-lg">Save Booking</button>
                     </div>
                 </div>
             </div>
 
             <div id="peopleModal" class="hidden modal-overlay">
                 <div class="modal-box">
-                    <div class="p-6 border-b flex justify-between items-center">
-                        <div><h2 class="font-black text-dar uppercase text-sm">Deployment Manifest</h2><p id="pSub" class="text-[10px] text-gray-400 font-bold uppercase"></p></div>
-                        <button onclick="closeModal('peopleModal')" class="text-gray-400">✕</button>
+                    <div class="p-5 border-b flex justify-between items-center bg-slate-50 shrink-0">
+                        <div><h2 class="font-black text-dar uppercase text-xs">Manage Personnel</h2><p id="pSub" class="text-[10px] text-gray-400 font-bold uppercase mt-1"></p></div>
+                        <button onclick="closeModal('peopleModal')" class="text-gray-400 hover:text-red-500 text-xl">✕</button>
                     </div>
-                    <div id="pList" class="p-6 flex-1 space-y-2 overflow-y-auto no-scrollbar bg-gray-50"></div>
-                    <div class="p-6 border-t bg-white relative">
-                        <label class="text-[10px] font-black text-gray-400 uppercase mb-2 block">Search Employee to Add:</label>
-                        <div class="flex gap-2">
-                            <input id="pAdd" oninput="liveEmpSearch(this, 'pResults')" placeholder="Enter name..." class="flex-1 p-3 border rounded text-sm outline-none">
-                            <button id="pBtnAdd" class="bg-dar text-white px-6 rounded font-bold text-xs uppercase disabled:opacity-50">Add</button>
+                    <div id="pList" class="p-8 flex-1 space-y-3 overflow-y-auto no-scrollbar bg-slate-100/50"></div>
+                    <div class="p-8 border-t bg-white relative shrink-0">
+                        <label class="text-[10px] font-black text-gray-400 uppercase mb-2 block">Search and Add Person:</label>
+                        <div class="flex gap-3">
+                            <div class="relative flex-1">
+                                <input id="pAdd" oninput="runEmpSearch(this, 'pResults')" placeholder="Enter name..." class="w-full p-3 border rounded text-sm outline-none shadow-inner bg-slate-50 focus:bg-white focus:ring-2 focus:ring-dar transition">
+                                <div id="pResults" class="search-results-box hidden bottom-full mb-2"></div>
+                            </div>
+                            <button id="pAddBtn" onclick="handleAddPersonnel()" class="bg-dar text-white px-8 rounded font-bold text-xs uppercase shadow-md active:scale-95 transition">Add Personnel</button>
                         </div>
-                        <div id="pResults" class="search-results-box hidden bottom-full mb-2"></div>
                     </div>
-                    <div class="p-4 border-t text-right bg-gray-100">
-                        <button onclick="closeModal('peopleModal')" class="bg-gray-800 text-white px-8 py-2 rounded font-bold text-xs uppercase">Done / OK</button>
+                    <div class="p-5 border-t text-right bg-slate-50">
+                        <button onclick="closeModal('peopleModal')" class="bg-gray-800 text-white px-16 py-3 rounded font-bold text-[10px] uppercase tracking-widest hover:bg-black transition">Done / OK</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="maintModal" class="hidden modal-overlay">
+                <div class="modal-box max-w-sm">
+                    <div class="p-6 border-b bg-slate-50"><h2 class="font-black text-dar text-xs uppercase">Set Vehicle Off-Road</h2></div>
+                    <div class="p-8 space-y-4">
+                        <label class="text-[10px] font-black text-dar uppercase">Pick Maintenance Date:</label>
+                        <input id="maintDate" type="date" class="w-full p-4 border rounded font-black text-dar outline-none bg-slate-50 shadow-inner">
+                        <p class="text-[10px] text-gray-400 italic font-medium mt-2 leading-relaxed">This will block all deployments for this vehicle on the selected date.</p>
+                    </div>
+                    <div class="p-6 border-t flex gap-3">
+                        <button onclick="closeModal('maintModal')" class="flex-1 bg-gray-100 text-gray-600 py-3 rounded font-bold text-xs uppercase tracking-widest">Cancel</button>
+                        <button id="maintExec" class="flex-1 bg-red-600 text-white py-3 rounded font-bold text-xs uppercase shadow-lg tracking-widest">Confirm</button>
                     </div>
                 </div>
             </div>
 
             <div id="transferModal" class="hidden modal-overlay">
                 <div class="modal-box max-w-sm">
-                    <div class="p-6 border-b">
-                        <h2 class="font-black text-dar text-sm uppercase">Smart Transfer</h2>
-                        <p id="tSub" class="text-[10px] text-gray-400 font-bold mt-1 uppercase"></p>
+                    <div class="p-6 border-b bg-slate-50"><h2 class="font-black text-dar text-xs uppercase tracking-widest">Smart Transfer</h2><p id="tSub" class="text-[10px] text-gray-400 font-bold mt-1 uppercase"></p></div>
+                    <div class="p-8 space-y-4">
+                        <label class="text-[10px] font-black text-dar uppercase">Available / Same-Route Vehicles:</label>
+                        <select id="tSelect" class="w-full p-5 border rounded font-black text-dar outline-none bg-slate-50 text-base shadow-inner"></select>
                     </div>
-                    <div class="p-6 space-y-4">
-                        <label class="text-[10px] font-black text-dar uppercase">Available Vehicles (Matching Dates):</label>
-                        <select id="tSelect" class="w-full p-4 border rounded font-black text-dar outline-none bg-gray-50"></select>
-                    </div>
-                    <div class="p-6 border-t flex gap-2">
-                        <button onclick="closeModal('transferModal')" class="btn-cancel">Cancel</button>
-                        <button id="tExec" class="flex-1 btn-primary">Confirm Transfer</button>
+                    <div class="p-6 border-t flex gap-3">
+                        <button onclick="closeModal('transferModal')" class="flex-1 bg-gray-100 text-gray-600 py-3 rounded font-bold text-xs uppercase">Cancel</button>
+                        <button id="tExec" class="btn-primary flex-1 py-4">Execute</button>
                     </div>
                 </div>
             </div>
             <datalist id="drivers">${DRIVERS.map(d=>`<option value="${d}">`).join('')}</datalist>`;
         }
 
-        // --- 4. INBOX (Approvals) ---
+        // --- INBOX ---
         function renderInbox() {
             const m = document.getElementById('main-content');
             const data = orders.filter(x => x.status === 'PENDING_VEHICLE_APPROVER' && x.transport === "GOV'T VEHICLE");
-            if (!data.length) { m.innerHTML = `<div class="p-20 text-center opacity-30 uppercase font-black text-xs mt-20">No Pending Tasks</div>`; return; }
-            m.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + data.map(o => {
+            if (!data.length) { m.innerHTML = `<div class="p-20 text-center opacity-20 uppercase font-black text-xs mt-20">Inbox Clear</div>`; return; }
+            m.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">` + data.map(o => {
                 const itin = itins.find(i => i.to_no === o.to_no) || {travel_date: '?'};
                 return `
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:border-green-800 transition">
-                    <div class="flex justify-between mb-4"><span class="text-[10px] font-black text-dar bg-green-50 px-2 py-0.5 rounded uppercase">#${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase">Switch to LAND</button></div>
-                    <h3 class="font-black text-gray-800 text-lg mb-4">${o.emp_name}</h3>
-                    <div class="space-y-3 mb-6">
-                        <div class="flex justify-between"><label class="text-[9px] font-black text-gray-400 uppercase">Vehicle</label><select id="v-${o.to_no}" class="border rounded text-[11px] font-bold text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
-                        <div class="flex justify-between"><label class="text-[9px] font-black text-gray-400 uppercase">Assignment</label><select id="s-${o.to_no}" class="border rounded text-[11px] font-bold text-gray-600"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                        <div class="flex flex-col"><label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border rounded p-2 text-xs font-bold"></div>
+                <div class="bg-white p-8 rounded-xl shadow-md border border-gray-200 hover:border-green-800 transition-colors">
+                    <div class="flex justify-between mb-5 border-b pb-3"><span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-1 rounded">ID: ${o.to_no}</span><button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button></div>
+                    <h3 class="font-black text-gray-800 text-xl mb-6 leading-tight">${o.emp_name}</h3>
+                    <div class="space-y-4 mb-8 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Unit</label><select id="v-${o.to_no}" class="border rounded font-bold p-1 text-xs text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                        <div class="flex justify-between items-center"><label class="text-[9px] font-black text-gray-400 uppercase">Slot</label><select id="s-${o.to_no}" class="border rounded font-bold p-1 text-xs text-gray-600"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
+                        <div class="flex flex-col"><label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label><input id="d-${o.to_no}" list="drivers" placeholder="Edit Name..." class="border rounded p-3 text-xs font-bold outline-none shadow-inner"></div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="btn-cancel text-[10px] flex-1">Reject</button>
-                        <button onclick="approveTrip('${o.to_no}','${o.unit}','${o.emp_name.replace(/'/g, "\\'")}')" class="btn-primary flex-1">Dispatch</button>
+                    <div class="flex gap-3">
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-gray-100 text-gray-500 py-3 rounded text-[10px] font-bold uppercase flex-1 hover:bg-gray-200 transition">Reject</button>
+                        <button onclick="approveTrip('${o.to_no}','${o.unit}','${o.emp_name.replace(/'/g, "\\'")}')" class="bg-dar text-white py-3 rounded text-[10px] font-bold uppercase flex-[2] shadow-lg active:scale-95 transition">Assign Vehicle</button>
                     </div>
                 </div>`;
             }).join('') + `</div>`;
@@ -235,48 +230,54 @@
 
         async function approveTrip(to, unit, name) {
             const v = document.getElementById(`v-${to}`).value, s = document.getElementById(`s-${to}`).value, d = document.getElementById(`d-${to}`).value || "TBD";
-            const next = getApprovalStep(unit);
+            const next = getApprovalTarget(unit);
             await db.from('travel_orders').update({ received: v, driver: d, remarks: s, status: next }).eq('to_no', to);
-            await logAction(to, name, `APPROVED: ${v} (${s}) - Driver: ${d}`);
+            await logAction(to, name, `ASSIGNED: ${v} (${s}) | Driver: ${d}`);
             sync();
         }
 
         async function toLand(to, unit) {
-            if(!confirm("Change to LAND? This resets the routing process.")) return;
-            const next = getApprovalStep(unit);
+            if(!confirm("Change to LAND? Restarts routing process.")) return;
+            const next = getApprovalTarget(unit);
             await db.from('travel_orders').update({ transport: 'LAND', status: next, received: null, driver: null }).eq('to_no', to);
             sync();
         }
 
-        // --- 5. MANIFEST (Active Trips) ---
+        // --- MANIFEST ---
         function renderManifest() {
-            const m = document.getElementById('main-content');
+            const container = document.getElementById('main-content');
             const data = orders.filter(x => x.transport === "GOV'T VEHICLE" && x.status !== 'PENDING_VEHICLE_APPROVER');
             const grp = {}; data.forEach(x => { if(!grp[x.to_no]) grp[x.to_no] = []; grp[x.to_no].push(x); });
-            m.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + Object.entries(grp).map(([to, list]) => `
-            <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-dar relative">
-                <div class="flex justify-between items-start mb-2"><span class="text-[9px] font-black text-gray-400">TRIP #${to}</span><span class="text-[9px] bg-green-50 text-dar font-black px-2 py-1 rounded uppercase">${list[0].remarks||'WHOLE'}</span></div>
-                <h3 class="font-black text-gray-800 text-sm uppercase mb-4">${list[0].emp_name}</h3>
-                <p class="text-[10px] text-gray-400 font-bold mb-4 uppercase tracking-tighter">🚙 ${list[0].received} | 👤 ${list[0].driver}</p>
-                <div class="flex gap-2">
-                    <button onclick="cancelTrip('${to}','${list[0].status}')" class="btn-danger flex-1">Cancel Trip</button>
-                    <button onclick="managePersonnel('${to}')" class="bg-gray-100 text-dar font-bold px-4 py-2 rounded text-[10px] uppercase flex-1">People (${list.length})</button>
+            
+            if (Object.keys(grp).length === 0) { container.innerHTML = `<div class="p-20 text-center opacity-30 uppercase font-black text-xs mt-20">No active manifest</div>`; return; }
+
+            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">` + Object.entries(grp).map(([to, list]) => `
+            <div class="bg-white p-6 rounded-xl shadow-md border-l-8 border-dar flex flex-col justify-between h-full">
+                <div>
+                    <div class="flex justify-between items-start mb-4"><span class="text-[10px] font-black text-gray-400">TRIP ID: ${to}</span><span class="text-[10px] bg-green-50 text-dar font-black px-2 py-1 rounded uppercase tracking-wider">${list[0].remarks||'WHOLE'}</span></div>
+                    <h3 class="font-black text-gray-800 text-sm uppercase mb-4 leading-tight">${list[0].emp_name}</h3>
+                    <p class="text-[11px] text-gray-500 font-bold mb-6 uppercase tracking-widest">🚙 ${list[0].received} | 👤 ${list[0].driver}</p>
+                </div>
+                <div class="flex gap-3 pt-4 border-t border-slate-100 mt-auto">
+                    <button onclick="cancelTrip('${to}','${list[0].status}')" class="bg-red-50 text-red-600 border border-red-100 font-bold px-4 py-2 rounded text-[10px] uppercase flex-1">Cancel Trip</button>
+                    <button onclick="openManagePeeps('${to}')" class="bg-slate-100 text-dar font-bold px-4 py-2 rounded text-[10px] uppercase flex-1 shadow-sm active:bg-slate-200 transition">Personnel (${list.length})</button>
                 </div>
             </div>`).join('') + `</div>`;
         }
 
         async function cancelTrip(to, status) {
-            if(!confirm("Cancel deployment? Status will reset based on approval levels.")) return;
+            if(!confirm("Change this trip back to LAND? Approved requests maintain status but switch to LAND.")) return;
             if(status === 'APPROVED') await db.from('travel_orders').update({ transport: 'LAND' }).eq('to_no', to);
             else await db.from('travel_orders').update({ transport: 'LAND', status: 'PENDING_UNIT_HEAD' }).eq('to_no', to);
             sync();
         }
 
-        // --- 6. SCHEDULE (Feature 8, 11, 12) ---
+        // --- SCHEDULE (Feature 8, 11, 12) ---
         function renderSchedule() {
-            const m = document.getElementById('main-content');
+            const container = document.getElementById('main-content');
             const now = new Date(); now.setHours(0,0,0,0);
-            const validIds = itins.filter(i => {
+            const filteredItins = itins.filter(i => {
+                if(!i || !i.travel_date) return false;
                 const d = new Date(i.travel_date); d.setHours(0,0,0,0);
                 if (scheduleFilter === 'day') return d.getTime() === now.getTime();
                 if (scheduleFilter === 'week') {
@@ -285,28 +286,30 @@
                     return d >= s && d <= e;
                 }
                 return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-            }).map(i => i.to_no);
+            });
+            const validToNos = filteredItins.map(i => i.to_no);
 
-            m.innerHTML = `
-            <div class="no-print bg-white p-2 rounded-lg mb-8 flex gap-1 shadow-sm border w-full max-w-xl mx-auto">
-                <button onclick="setFilter('day')" class="flex-1 py-2 text-[10px] font-black rounded ${scheduleFilter==='day'?'bg-dar text-white':'text-gray-400'} uppercase transition">Daily</button>
-                <button onclick="setFilter('week')" class="flex-1 py-2 text-[10px] font-black rounded ${scheduleFilter==='week'?'bg-dar text-white':'text-gray-400'} uppercase transition">Weekly</button>
-                <button onclick="setFilter('month')" class="flex-1 py-2 text-[10px] font-black rounded ${scheduleFilter==='month'?'bg-dar text-white':'text-gray-400'} uppercase transition">Monthly</button>
-                <button onclick="window.print()" class="flex-1 py-2 text-[10px] bg-dar-gold text-white font-black rounded uppercase">Print</button>
+            container.innerHTML = `
+            <div class="no-print bg-white p-2 rounded-lg mb-10 flex gap-1 shadow-sm border w-full max-w-xl mx-auto">
+                <button onclick="setFilter('day')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='day'?'bg-dar text-white shadow-md':'text-gray-400 hover:bg-slate-50'} uppercase transition">Daily</button>
+                <button onclick="setFilter('week')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='week'?'bg-dar text-white shadow-md':'text-gray-400 hover:bg-slate-50'} uppercase transition">Weekly</button>
+                <button onclick="setFilter('month')" class="flex-1 py-3 text-[11px] font-black rounded ${scheduleFilter==='month'?'bg-dar text-white shadow-md':'text-gray-400 hover:bg-slate-50'} uppercase transition">Monthly</button>
+                <button onclick="window.print()" class="flex-1 py-3 text-[11px] bg-dar-gold text-white font-black rounded uppercase shadow-md active:scale-95 transition">Print Report</button>
             </div>
-            <div class="print-area grid grid-cols-1 md:grid-cols-2 gap-8"><h1 class="print-header text-dar uppercase font-black col-span-full mb-4">DAR Official Fleet Status (${scheduleFilter.toUpperCase()})</h1>` + VEHICLES.map(v => {
-                const logs = orders.filter(o => o.received === v && validIds.includes(o.to_no));
-                const uniqueIds = [...new Set(logs.map(l => l.to_no))];
-                return `<div class="card-item bg-white p-4 rounded-lg border shadow-sm"><div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="font-black text-sm text-dar uppercase border-l-4 border-dar-gold pl-2">${v}</h3><button onclick="setOffRoad('${v}')" class="no-print bg-red-600 text-white text-[8px] px-2 py-1 rounded font-black">OFF-ROAD</button></div>` + 
-                (uniqueIds.length ? uniqueIds.map(toNo => {
+            <div class="print-area grid grid-cols-1 md:grid-cols-2 gap-10"><h1 class="print-header text-dar uppercase font-black col-span-full mb-6 border-b-2 border-dar pb-2 text-2xl text-center">Official Fleet Deployment (${scheduleFilter.toUpperCase()})</h1>` + VEHICLES.map(v => {
+                const logs = orders.filter(o => o.received === v && validToNos.includes(o.to_no));
+                const uniqueTo = [...new Set(logs.map(l => l.to_no))];
+                return `<div class="card-item bg-white p-8 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden"><div class="flex justify-between items-center mb-6 border-b pb-3"><h3 class="font-black text-base text-dar uppercase border-l-8 border-dar-gold pl-3 tracking-widest">${v}</h3><button onclick="openOffRoadModal('${v}')" class="no-print bg-red-600 text-white text-[9px] px-3 py-1.5 rounded font-black tracking-tighter shadow active:scale-95 transition">SET OFF-ROAD</button></div>` + 
+                (uniqueTo.length ? uniqueTo.map(toNo => {
                     const h = logs.find(l => l.to_no === toNo);
-                    const dates = itins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date).join(', ');
+                    const iList = filteredItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date).join(', ');
+                    const allPeople = orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join(', ');
                     const isMaint = h.remarks === 'MAINTENANCE';
-                    return `<div class="bg-gray-50 p-4 rounded-lg mb-2 flex justify-between items-center border">
-                        <div class="overflow-hidden leading-tight"><p class="text-xs font-black ${isMaint?'text-red-600':'text-gray-800'} uppercase truncate">${h.emp_name}</p><p class="text-[9px] text-gray-400 font-bold mt-1">${dates} | ${h.remarks || 'WHOLE'}</p></div>
-                        <button onclick="openSmartTransfer('${h.to_no}','${v}')" class="text-xl no-print">🔄</button>
+                    return `<div class="bg-slate-50 p-5 rounded-lg mb-3 flex justify-between items-center border border-slate-200 hover:bg-white transition-all shadow-inner">
+                        <div class="overflow-hidden leading-tight pr-4"><p class="text-sm font-black ${isMaint?'text-red-600':'text-gray-800'} uppercase truncate">${allPeople}</p><p class="text-[9px] text-slate-500 font-bold mt-2 tracking-wide font-mono uppercase">${iList} | ${h.remarks || 'WHOLE'}</p></div>
+                        <button onclick="openSmartTransfer('${h.to_no}','${v}')" class="text-3xl no-print active:scale-[0.8] transition hover:opacity-70">🔄</button>
                     </div>`;
-                }).join('') : `<p class="p-6 text-center text-[10px] text-gray-300 font-black uppercase">Fleet Available</p>`) + `</div>`;
+                }).join('') : `<p class="p-10 text-center text-[10px] text-slate-300 font-black uppercase tracking-widest italic">Fleet Available</p>`) + `</div>`;
             }).join('') + `</div>`;
         }
 
@@ -320,10 +323,10 @@
 
             const opts = VEHICLES.filter(v => v !== curV).map(v => {
                 const m = busy.find(b => b.v === v);
-                return `<option value="${v}" data-drv="${m?m.drv:''}">${v} ${m ? `(Join TO #${m.to})` : '(Available)'}</option>`;
+                return `<option value="${v}" data-drv="${m?m.drv:''}">${v} ${m ? `(Join TRIP #${m.to})` : '(Available)'}</option>`;
             }).join('');
 
-            document.getElementById('tSub').innerText = `Transfer Trip #${toNo} | Dates: ${dates.join(', ')}`;
+            document.getElementById('tSub').innerText = `Moving Trip #${toNo} for Dates: ${dates.join(', ')}`;
             document.getElementById('tSelect').innerHTML = opts;
             document.getElementById('tExec').onclick = async () => {
                 const targetV = document.getElementById('tSelect').value;
@@ -331,75 +334,107 @@
                 const payload = { received: targetV };
                 if(targetD) payload.driver = targetD; 
                 await db.from('travel_orders').update(payload).eq('to_no', toNo);
-                await logAction(toNo, "Dispatcher", `Smart Transfer: ${curV} to ${targetV}`);
+                await logAction(toNo, "System", `Smart Transfer: ${curV} to ${targetV}`);
                 closeModal('transferModal'); sync();
             };
             openModal('transferModal');
         }
 
-        async function setOffRoad(v) {
-            const d = prompt("Enter Maintenance Date (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
-            if(!d) return;
-            const to = `MAINT-${Math.floor(Math.random()*1000)}`;
-            await db.from('travel_orders').insert({ to_no: to, emp_name: 'OFF-ROAD', received: v, remarks: 'MAINTENANCE', status: 'APPROVED', transport: "GOV'T VEHICLE" });
-            await db.from('itinerary').insert({ to_no: to, travel_date: d, destination: "Garage", purpose: "Maintenance" });
-            sync();
+        async function openOffRoadModal(veh) {
+            document.getElementById('maintDate').valueAsDate = new Date();
+            document.getElementById('maintExec').onclick = async () => {
+                const d = document.getElementById('maintDate').value;
+                if(!d) return;
+                const to = `OFF-${Math.floor(Math.random()*1000)}`;
+                await db.from('travel_orders').insert({ to_no: to, emp_name: 'MAINTENANCE (OFF-ROAD)', received: veh, remarks: 'MAINTENANCE', status: 'APPROVED', transport: "GOV'T VEHICLE" });
+                await db.from('itinerary').insert({ to_no: to, travel_date: d, destination: "AUTHORIZED SHOP", purpose: "Fleet Maintenance" });
+                closeModal('maintModal'); sync();
+            };
+            openModal('maintModal');
         }
 
-        // --- 7. PERSONNEL (Feature 10) ---
-        function liveEmpSearch(inp, resId) {
+        // --- PERSONNEL MANAGEMENT (The FIX) ---
+        function runEmpSearch(inp, resId) {
             const div = document.getElementById(resId);
             const val = inp.value.toLowerCase().trim();
             if (val.length < 2) { div.classList.add('hidden'); return; }
             const match = emps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
-            div.innerHTML = match.map(e => `<div onclick="pickEmp('${e.full_name.replace(/'/g, "\\'")}','${resId}','${inp.id}','${e.unit||''}','${e.division||''}')" class="p-3 border-b text-[11px] font-black active:bg-gray-100 cursor-pointer uppercase">${e.full_name}</div>`).join('');
+            div.innerHTML = match.map(e => `<div onclick="pickPersonnel('${e.full_name.replace(/'/g, "\\'")}','${resId}','${inp.id}','${e.unit||''}','${e.division||''}')" class="p-4 border-b text-xs font-black active:bg-slate-100 cursor-pointer uppercase text-slate-700">${e.full_name}</div>`).join('');
             div.classList.remove('hidden');
         }
 
-        function pickEmp(n, rId, iId, u, d) {
+        function pickPersonnel(n, rId, iId, u, d) {
             document.getElementById(iId).value = n;
             document.getElementById(rId).classList.add('hidden');
-            if(iId === 'pAdd') document.getElementById('pBtnAdd').onclick = () => doAddPerson(n, u, d);
+            selectedEmpForAdd = { n, u, d };
         }
 
-        async function managePersonnel(to) {
-            targetTO = to;
-            document.getElementById('pSub').innerText = `Ordering ID: ${to}`;
+        async function openManagePeeps(to) {
+            activeTO = to;
+            document.getElementById('pSub').innerText = `ID Reference: ${to}`;
             openModal('peopleModal');
             renderPList();
         }
 
         async function renderPList() {
-            const { data } = await db.from('travel_orders').select('id, emp_name').eq('to_no', targetTO);
+            const { data } = await db.from('travel_orders').select('id, emp_name').eq('to_no', activeTO);
             document.getElementById('pList').innerHTML = (data || []).map((p, idx) => `
-                <div class="flex justify-between items-center p-4 bg-white rounded border">
-                    <span class="text-xs font-black text-gray-700 uppercase">${p.emp_name} ${idx===0?'(LEAD)':''}</span>
-                    ${idx!==0?`<button onclick="doRemovePerson('${p.id}')" class="btn-danger">Remove</button>`:''}
+                <div class="flex justify-between items-center p-4 bg-white rounded border border-slate-200 shadow-sm transition">
+                    <span class="text-xs font-black text-slate-800 uppercase tracking-wider">${p.emp_name} ${idx===0?'<span class="ml-2 bg-dar text-[8px] text-white px-2 py-0.5 rounded tracking-tighter">LEAD</span>':''}</span>
+                    ${idx!==0?`<button onclick="doRemovePerson('${p.id}')" class="bg-red-50 text-red-600 border border-red-100 px-3 py-1 rounded font-bold uppercase text-[9px] hover:bg-red-100 transition shadow-sm">Remove</button>`:''}
                 </div>`).join('');
         }
 
-        async function doAddPerson(n, u, d) {
-            const head = orders.find(o => o.to_no === targetTO);
-            const row = { ...head }; delete row.id; delete row.created_at;
-            row.emp_name = n; row.unit = u; row.division = d;
+        async function handleAddPersonnel() {
+            if(!selectedEmpForAdd) return alert("Search and select a name from the list first.");
+            
+            // CONFLICT CHECK
+            const targetTOData = orders.find(o => o.to_no === activeTO);
+            const targetItins = itins.filter(i => i.to_no === activeTO).map(i => i.travel_date);
+            const targetSlot = targetTOData.remarks || 'WHOLE DAY';
+
+            // Scan all existing orders for this person on these dates
+            const existing = orders.filter(o => o.emp_name === selectedEmpForAdd.n && o.status !== 'CANCELLED');
+            let conflict = false;
+
+            for(let o of existing) {
+                const oItins = itins.filter(i => i.to_no === o.to_no).map(i => i.travel_date);
+                const hasDateOverlap = oItins.some(d => targetItins.includes(d));
+                if(hasDateOverlap) {
+                    const oSlot = o.remarks || 'WHOLE DAY';
+                    if (targetSlot === 'WHOLE DAY' || oSlot === 'WHOLE DAY' || targetSlot === oSlot) {
+                        conflict = true;
+                        break;
+                    }
+                }
+            }
+
+            if(conflict) return alert(`CONFLICT ERROR: ${selectedEmpForAdd.n} is already assigned to a vehicle during this time slot on one or more of the selected dates.`);
+
+            const btn = document.getElementById('pAddBtn');
+            btn.disabled = true; btn.innerText = "...";
+            const row = { ...targetTOData }; delete row.id; delete row.created_at;
+            row.emp_name = selectedEmpForAdd.n; row.unit = selectedEmpForAdd.u; row.division = selectedEmpForAdd.d;
+            
             await db.from('travel_orders').insert(row);
+            btn.disabled = false; btn.innerText = "Add Personnel";
             document.getElementById('pAdd').value = "";
+            selectedEmpForAdd = null;
             renderPList();
+            sync();
         }
 
-        async function doRemovePerson(id) { await db.from('travel_orders').delete().eq('id', id); renderPList(); }
+        async function doRemovePerson(id) { await db.from('travel_orders').delete().eq('id', id); renderPList(); sync(); }
 
-        // --- 8. MANUAL BOOKING ---
-        async function saveManualBooking() {
+        async function saveManual() {
             const n = document.getElementById('resN').value, d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
-            const s = document.getElementById('resS').value, v = document.getElementById('resV').value, dr = document.getElementById('resDr').value;
-            const p = document.getElementById('resP').value;
+            const s = document.getElementById('resS').value, v = document.getElementById('resV').value, dr = document.getElementById('resDr').value, p = document.getElementById('resP').value;
             if(!n || !d1 || !p) return alert("Required: Personnel, Date, Purpose.");
-            const to = document.getElementById('resR').value || `RES-${Math.floor(Date.now()%10000)}`;
+            const to = document.getElementById('resR').value || `MAN-${Math.floor(Date.now()%10000)}`;
             await db.from('travel_orders').insert({ to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: s, status: "APPROVED" });
             let st = new Date(d1), en = new Date(d2 || d1);
             while(st <= en) {
-                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Manual Reserve", purpose: p });
+                await db.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Manual Booking", purpose: p });
                 st.setDate(st.getDate() + 1);
             }
             closeModal('bookModal'); sync();
