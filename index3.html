@@ -25,7 +25,7 @@
                 <div class="bg-gold h-2 w-full"></div>
                 <div class="p-8">
                     <h1 class="text-dar font-bold text-2xl font-serif mb-1 text-center">DAR ACCOUNTING</h1>
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Reimbursement Verification</p>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Intelligent Verification</p>
                     <div class="space-y-4">
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="un" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
                         <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
@@ -60,7 +60,7 @@
         function renderDashboard() {
             document.getElementById('app').innerHTML = `
             <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
-                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Reimbursement Check</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
+                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Accounting Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
                 <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
             </header>
             
@@ -68,27 +68,30 @@
                 <div class="max-w-2xl mx-auto space-y-6">
                     
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-4">Target Parameters</h2>
+                        <div class="flex justify-between items-center border-b pb-2 mb-4">
+                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">Verification Filters</h2>
+                            <span class="text-[9px] bg-dar text-white px-2 py-0.5 rounded-full font-bold uppercase">Approved Only</span>
+                        </div>
                         
                         <div class="space-y-4">
                             <div class="relative">
-                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee Name</label>
+                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee Search</label>
                                 <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search employee..." class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar" autocomplete="off">
                                 <div id="empResults" class="search-results-box hidden"></div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Start Date</label>
+                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Range Start</label>
                                     <input id="startDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">End Date</label>
+                                    <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Range End</label>
                                     <input id="endDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 focus:ring-2 focus:ring-dar">
                                 </div>
                             </div>
 
-                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Execute Range Scan</button>
+                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Run Intelligent Analysis</button>
                         </div>
                     </div>
 
@@ -119,60 +122,60 @@
             if(!selectedEmp) return alert("Please select an employee.");
             const sDate = document.getElementById('startDate').value;
             const eDate = document.getElementById('endDate').value;
-            if(!sDate || !eDate) return alert("Please select both start and end dates.");
+            if(!sDate || !eDate) return alert("Select start and end dates.");
 
             const resArea = document.getElementById('resultsArea');
-            resArea.innerHTML = `<div class="text-center p-10"><p class="text-sm font-bold text-slate-400 animate-pulse uppercase tracking-widest">Scanning Date Range...</p></div>`;
+            resArea.innerHTML = `<div class="text-center p-10"><p class="text-sm font-bold text-slate-400 animate-pulse uppercase tracking-widest">Checking Approved Records...</p></div>`;
             resArea.classList.remove('hidden');
 
             const empId = selectedEmp.id;
 
             try {
-                // 1. Fetch Itineraries within range
+                // 1. Fetch Itineraries in range
                 const { data: itins } = await db.from('itinerary').select('*')
                     .gte('travel_date', sDate)
                     .lte('travel_date', eDate);
                 
                 const toNosForRange = itins.map(i => i.to_no);
 
-                // 2. Fetch Travel Orders
-                let foundTOs = [];
+                // 2. Intelligence Update: Strict filter on 'APPROVED' status only. 
+                let approvedTOs = [];
                 if (toNosForRange.length > 0) {
                     const { data: tos } = await db.from('travel_orders')
                         .select('*')
                         .eq('emp_id', empId)
                         .in('to_no', toNosForRange)
-                        .neq('status', 'CANCELLED');
+                        .eq('status', 'APPROVED'); // STRICT: Disapproved/Pending ignored
                     
-                    foundTOs = (tos || []).map(to => {
+                    approvedTOs = (tos || []).map(to => {
                         const specItins = itins.filter(i => i.to_no === to.to_no);
                         return { ...to, itineraries: specItins };
                     });
                 }
 
-                // 3. Fetch Fleet Bookings within range
+                // 3. Fleet Bookings (Official Bookings)
                 const { data: bookings } = await db.from('fleet_bookings')
                     .select('*')
                     .eq('emp_id', empId)
                     .gte('travel_date', sDate)
                     .lte('travel_date', eDate);
 
-                // 4. Fetch PSO Records (Overlap search)
+                // 4. Posted PSO Records (Special Orders)
                 const { data: psos } = await db.from('pso_records')
                     .select('*')
                     .eq('emp_id', empId)
                     .lte('start_date', eDate)
                     .gte('end_date', sDate);
 
-                // 5. Fetch Leave Ledger (Overlap search)
+                // 5. Approved Leave Ledger
                 const { data: leaves } = await db.from('leave_ledger')
                     .select('*')
                     .eq('emp_id', empId)
-                    .eq('transaction_type', 'APPROVED')
+                    .eq('transaction_type', 'APPROVED') // STRICT: Only approved leave
                     .lte('start_date', eDate)
                     .gte('end_date', sDate);
 
-                renderResults(foundTOs, bookings || [], psos || [], leaves || []);
+                renderResults(approvedTOs, bookings || [], psos || [], leaves || []);
 
             } catch (err) {
                 resArea.innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-xl border border-red-200 text-sm font-bold">Error: ${err.message}</div>`;
@@ -182,81 +185,90 @@
         function renderResults(tos, bookings, psos, leaves) {
             const resArea = document.getElementById('resultsArea');
             
-            let hasGovVehicle = bookings.length > 0 || tos.some(to => to.transport === "GOV'T VEHICLE");
-            let hasLeave = leaves.length > 0;
-            let hasConflicts = hasGovVehicle || hasLeave;
+            // Conflict Logic: Gov Vehicle or Leave on ANY day in range
+            let usedGovVehicle = bookings.length > 0 || tos.some(to => to.transport === "GOV'T VEHICLE");
+            let onLeave = leaves.length > 0;
+            let hasConflicts = usedGovVehicle || onLeave;
 
             let verdictHTML = "";
-            if (hasConflicts) {
-                verdictHTML = `<div class="bg-amber-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚠️ RANGE CONFLICTS FOUND</h2><p class="text-xs font-bold mt-1 opacity-90">Review details below. Some dates in this range involve Gov't Vehicles or Leave.</p></div>`;
+            if (onLeave) {
+                verdictHTML = `<div class="bg-red-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">🚫 REIMBURSEMENT DENIED</h2><p class="text-xs font-bold mt-1 opacity-90">APPROVED LEAVE DETECTED WITHIN THIS RANGE.</p></div>`;
+            } else if (usedGovVehicle) {
+                verdictHTML = `<div class="bg-red-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">🚫 REIMBURSEMENT DENIED</h2><p class="text-xs font-bold mt-1 opacity-90">GOV'T VEHICLE USE DETECTED. NOT ELIGIBLE FOR TRANSPORT CLAIM.</p></div>`;
             } else if (tos.length > 0) {
-                verdictHTML = `<div class="bg-green-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">🟢 RANGE VERIFIED</h2><p class="text-xs font-bold mt-1 opacity-90">All found travel in this range uses Land transport with no leave conflicts.</p></div>`;
+                verdictHTML = `<div class="bg-green-600 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">✅ VERIFIED - ELIGIBLE</h2><p class="text-xs font-bold mt-1 opacity-90">APPROVED LAND TRAVEL ORDERS FOUND. NO CONFLICTS DETECTED.</p></div>`;
+            } else if (psos.length > 0) {
+                 verdictHTML = `<div class="bg-yellow-500 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚠️ CAUTION - PSO ONLY</h2><p class="text-xs font-bold mt-1 opacity-90">ONLY POSTED PSO FOUND. VERIFY TRAVEL ITINERARY ATTACHMENTS.</p></div>`;
             } else {
-                verdictHTML = `<div class="bg-slate-700 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚪ NO ACTIVITY FOUND</h2><p class="text-xs font-bold mt-1 opacity-90">No records exist for the selected employee in this date range.</p></div>`;
+                verdictHTML = `<div class="bg-slate-700 text-white p-5 rounded-2xl shadow-lg mb-6"><h2 class="text-xl font-black uppercase tracking-widest">⚪ NO APPROVED RECORDS</h2><p class="text-xs font-bold mt-1 opacity-90">NO APPROVED TRAVEL, LEAVE, OR BOOKINGS IN THIS RANGE.</p></div>`;
             }
 
             let html = verdictHTML + `<div class="space-y-4">`;
 
+            // Approved TOs
             if (tos.length > 0) {
                 html += `
                 <div class="bg-white p-5 rounded-xl border-l-4 border-dar shadow-sm">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">Travel Orders in Range</h3>
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">Official Approved Travel Orders</h3>
                     ${tos.map(t => `
                         <div class="mb-4 last:mb-0 pb-3 border-b border-dashed border-slate-100 last:border-0">
                             <div class="flex justify-between items-center mb-1">
                                 <span class="text-sm font-black text-dar uppercase">${t.to_no}</span>
-                                <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest ${t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${t.status}</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest bg-green-100 text-green-700">APPROVED</span>
                             </div>
-                            <p class="text-xs font-bold text-slate-700 mb-1">Transport: <span class="${t.transport === "GOV'T VEHICLE" ? 'text-red-600' : 'text-blue-600'}">${t.transport || 'NOT SET'}</span></p>
+                            <p class="text-xs font-bold text-slate-700 mb-1">Transport: <span class="${t.transport === "GOV'T VEHICLE" ? 'text-red-600' : 'text-blue-600'}">${t.transport}</span></p>
                             <div class="mt-2 space-y-1">
-                                ${t.itineraries.map(i => `<p class="text-[10px] text-slate-500 italic leading-tight"><b>${i.travel_date}:</b> ${i.destination} — ${i.purpose}</p>`).join('')}
+                                ${t.itineraries.map(i => `<p class="text-[10px] text-slate-500 italic leading-tight"><b>${i.travel_date}:</b> ${i.destination}</p>`).join('')}
                             </div>
                         </div>
                     `).join('')}
                 </div>`;
             }
 
+            // Bookings
             if (bookings.length > 0) {
                 html += `
                 <div class="bg-white p-5 rounded-xl border-l-4 border-red-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3 text-red-500">Fleet Activity (Gov't Vehicle)</h3>
+                    <h3 class="text-[10px] font-black text-red-500 uppercase tracking-widest border-b pb-2 mb-3">Conflict: Official Vehicle Booking</h3>
                     ${bookings.map(b => `
                         <div class="mb-2 last:mb-0">
                             <div class="flex justify-between items-center mb-1">
-                                <span class="text-sm font-black text-slate-800 uppercase">${b.ref_no}</span>
+                                <span class="text-sm font-black text-slate-800 uppercase">${b.vehicle}</span>
                                 <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest bg-red-100 text-red-700">${b.travel_date}</span>
                             </div>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase">Vehicle: ${b.vehicle} | Driver: ${b.driver}</p>
+                            <p class="text-[10px] text-slate-500 font-bold uppercase leading-tight">Driver: ${b.driver} | Purpose: ${b.purpose}</p>
                         </div>
                     `).join('')}
                 </div>`;
             }
 
+            // PSOs
             if (psos.length > 0) {
                 html += `
                 <div class="bg-white p-5 rounded-xl border-l-4 border-yellow-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3 text-yellow-600">Personnel Special Orders (PSO)</h3>
+                    <h3 class="text-[10px] font-black text-yellow-600 uppercase tracking-widest border-b pb-2 mb-3">Posted Special Orders (PSO)</h3>
                     ${psos.map(p => `
                         <div class="mb-2 last:mb-0">
                             <span class="text-sm font-black text-slate-800 uppercase block mb-1">${p.pso_no}</span>
                             <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">Period: ${p.start_date} to ${p.end_date}</p>
-                            <p class="text-[10px] text-slate-500 italic leading-tight">${p.subject}</p>
+                            <p class="text-[10px] text-slate-400 italic leading-tight">${p.subject}</p>
                         </div>
                     `).join('')}
                 </div>`;
             }
 
+            // Leaves
             if (leaves.length > 0) {
                 html += `
                 <div class="bg-white p-5 rounded-xl border-l-4 border-purple-500 shadow-sm">
-                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3 text-purple-600">Approved Leave within Range</h3>
+                    <h3 class="text-[10px] font-black text-purple-600 uppercase tracking-widest border-b pb-2 mb-3">Conflict: Approved Leaves</h3>
                     ${leaves.map(l => `
-                        <div class="mb-2 last:mb-0">
-                            <div class="flex justify-between items-center mb-1">
+                        <div class="mb-2 last:mb-0 flex justify-between items-center">
+                            <div>
                                 <span class="text-sm font-black text-slate-800 uppercase">${l.type}</span>
-                                <span class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest bg-purple-100 text-purple-700">APPROVED</span>
+                                <p class="text-[10px] text-slate-500 font-bold uppercase">${l.start_date} to ${l.end_date}</p>
                             </div>
-                            <p class="text-[10px] text-slate-500 font-bold uppercase mb-1">Period: ${l.start_date} to ${l.end_date}</p>
+                            <span class="text-[8px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">APPROVED</span>
                         </div>
                     `).join('')}
                 </div>`;
