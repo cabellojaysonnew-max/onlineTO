@@ -20,24 +20,26 @@
         .text-dar-gold { color: var(--dar-gold); }
         .border-dar-gold { border-color: var(--dar-gold); }
         .tab-active { border-bottom: 4px solid var(--dar-gold); color: var(--dar-gold); font-weight: bold; }
-        /* Hide scrollbars for cleaner mobile look */
         .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
-    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-dar">
+    <div id="login-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-dar">
         <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md mx-4">
             <div class="text-center mb-6">
                 <h1 class="text-2xl font-bold text-dar">DAR CAM SUR 1</h1>
-                <p class="text-gray-500 text-sm">Authorized Access Only</p>
+                <p class="text-gray-500 text-sm">Vehicle Dispatch Control</p>
             </div>
             <div class="space-y-4">
                 <input type="text" id="username" placeholder="Username" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-900">
                 <input type="password" id="password" placeholder="Password" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-green-900">
                 <button onclick="handleLogin()" class="w-full bg-dar text-white p-3 rounded font-bold hover:bg-opacity-90 transition">ENTER SYSTEM</button>
             </div>
-            <p id="login-error" class="text-red-500 text-sm mt-4 hidden text-center">Invalid credentials. Please try again.</p>
+            <p id="login-error" class="text-red-500 text-sm mt-4 hidden text-center"></p>
+        </div>
+        <div class="text-white text-xs mt-8 opacity-50 text-center max-w-md px-4">
+            <p>&copy; System Intellectual Property remains personally with the Developer.</p>
         </div>
     </div>
 
@@ -100,7 +102,7 @@
     <script>
         // --- CONFIG ---
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SB_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; // Note: Use Environment variables for real production
+        const SB_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
         const supabase = exports.supabase.createClient(SB_URL, SB_KEY);
 
         let currentUser = null;
@@ -108,20 +110,47 @@
         let itinerary = [];
         let employees = [];
 
+        // Helper: Format Date/Time to strictly use 12-hour format
+        function formatTo12Hour(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', { 
+                year: 'numeric', month: 'short', day: 'numeric', 
+                hour: 'numeric', minute: '2-digit', hour12: true 
+            });
+        }
+
         // --- AUTH ---
         async function handleLogin() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
-            const { data, error } = await supabase.table('users').select('*').eq('username', u).eq('password', p).single();
+            const errEl = document.getElementById('login-error');
+            
+            errEl.classList.add('hidden');
+
+            // Query the exact 'users' table structure
+            const { data, error } = await supabase
+                .table('users')
+                .select('id, username, password, role, division, full_name, unit')
+                .eq('username', u)
+                .eq('password', p)
+                .single();
 
             if (data) {
-                currentUser = data;
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('main-app').classList.remove('hidden');
-                document.getElementById('user-display').innerText = data.full_name;
-                syncData();
+                // Strict validation for VEHICLE_APPROVER role
+                if (data.role === 'VEHICLE_APPROVER') {
+                    currentUser = data;
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('main-app').classList.remove('hidden');
+                    document.getElementById('user-display').innerText = `${data.full_name} (${data.role})`;
+                    syncData();
+                } else {
+                    errEl.innerText = "Access Denied: Account lacks VEHICLE_APPROVER privileges.";
+                    errEl.classList.remove('hidden');
+                }
             } else {
-                document.getElementById('login-error').classList.remove('hidden');
+                errEl.innerText = "Invalid credentials. Please try again.";
+                errEl.classList.remove('hidden');
             }
         }
 
@@ -221,7 +250,6 @@
 
         function renderCalendar() {
             const container = document.getElementById('calendar-view');
-            // Simplified grid for mobile logic
             container.innerHTML = '<p class="text-center text-xs p-4 text-gray-400">Weekly Grid rendering based on data...</p>';
         }
 
@@ -229,8 +257,10 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('l', 'mm', 'a4');
             doc.text("DAR CAM SUR 1 - DISPATCH MANIFEST", 14, 15);
-            // AutoTable usage for professional reports
-            doc.save(`Dispatch_${new Date().getTime()}.pdf`);
+            // 12-hour format used for the generated timestamp
+            const now = new Date();
+            const timeString = now.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(':', '');
+            doc.save(`Dispatch_${now.toISOString().slice(0,10)}_${timeString}.pdf`);
         }
 
     </script>
