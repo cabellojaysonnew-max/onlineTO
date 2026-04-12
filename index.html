@@ -187,6 +187,7 @@
         const todayStr = new Date().toISOString().split('T')[0];
         let calDate = new Date();
         let isSubmitting = false;
+        let conflictsToProcess = [];
 
         const urlToBase64 = async (url) => {
             try {
@@ -268,7 +269,7 @@
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = [];
+            container.innerHTML = ''; itineraryDraft = []; conflictsToProcess = [];
             if (!fromDate || !toDate) return;
             if (fromDate < todayStr) return alert("No backdating allowed.");
             if (toDate < fromDate) return alert("End date cannot be before Start date.");
@@ -279,27 +280,34 @@
             if (diffDays > 5) return alert("Maximum of 5 days allowed.");
 
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            const { data: active } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            let toNos = active?.map(a => a.to_no) || [];
+            const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            let hasPSO = false;
 
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
+                
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`Conflict: Existing PSO for ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+                    if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
+                    hasPSO = true;
                 }
-                if(toNos.length > 0) {
-                    const { data: conf } = await supabase.from('itinerary').select('to_no').in('to_no', toNos).eq('travel_date', dateStr);
-                    if(conf?.length > 0) {
-                        if(!confirm(`Conflict: Existing TO on ${dateStr}. Continue?`)) { container.innerHTML = ""; return; }
+
+                for (let to of activeTOs || []) {
+                    const { data: itins } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
+                    if (itins && itins.length > 0) {
+                        const isApproved = to.status === 'APPROVED';
+                        const promptMsg = isApproved ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)` : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
+                        if (confirm(promptMsg)) {
+                            conflictsToProcess.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
+                        } else { container.innerHTML = ""; return; }
                     }
                 }
-                
+
                 const cardId = `card-${i}`;
                 container.innerHTML += `<br>
                     <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);"><br>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><br>
-                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr}</h5><br>
+                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5><br>
                             <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button><br>
                         </div><br>
                         <input type="text" id="dest-${i}" placeholder="Destination"><br>
@@ -307,7 +315,7 @@
                         <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea><br>
                         <input type="text" id="rep-${i}" placeholder="Report To"><br>
                     </div>`;
-                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId });
+                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId, hasPSO });
                 currentDt.setDate(currentDt.getDate() + 1);
             }
         };
@@ -321,6 +329,7 @@
         window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
+            
             const batchItin = []; const reportTos = new Set();
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
@@ -333,37 +342,65 @@
 
             isSubmitting = true;
             const submitBtn = document.getElementById('btn-submit-to');
-            if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Submitting..."; }
+            if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
             try {
+                // SPLIT / OVERWRITE EXECUTION
+                for (let conflict of conflictsToProcess) {
+                    if (conflict.status.includes("PENDING")) {
+                        await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
+                        await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
+                    } else if (conflict.status === "APPROVED") {
+                        const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
+                        const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
+                        
+                        // Cancel Original
+                        await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
+
+                        // Notify lowest officer
+                        let notifyTarget = currentUser.unit ? "UNIT HEAD" : "CHIEF";
+                        await supabase.from('notifications').insert({ 
+                            emp_id: currentUser.emp_id, 
+                            message: `Approved TO ${conflict.to_no} was split/overwritten by ${currentUser.full_name}. Affected date: ${conflict.affected_date}`,
+                            sender: currentUser.full_name
+                        });
+
+                        // Re-generate approved portion if multi-day
+                        if (remainingDays.length > 0) {
+                            const remainderToNo = await generateToNo();
+                            const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
+                            const batchRemainder = origTO.map(p => ({ ...p, id: undefined, to_no: remainderToNo, status: 'APPROVED' }));
+                            const batchRemainderItin = remainingDays.map(i => ({ ...i, id: undefined, to_no: remainderToNo }));
+                            await supabase.from('travel_orders').insert(batchRemainder);
+                            await supabase.from('itinerary').insert(batchRemainderItin);
+                        }
+                    }
+                }
+
+                // SUBMIT NEW TO
                 const finalToNo = await generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
-                
                 let routeStatus = "PENDING_CHIEF";
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER";
+                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VE_APPROVER"; // Simplified key for logic
                 else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
                 else if (isMARPO) routeStatus = "PENDING_CHIEF";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, report_to: Array.from(reportTos).join(", ")
+                    division: currentUser.division, status: routeStatus, transport, 
+                    report_to: Array.from(reportTos).join(", "),
+                    remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
+                
                 batchItin.forEach(it => it.to_no = finalToNo);
                 await supabase.from('travel_orders').insert(batchPersonnel);
                 await supabase.from('itinerary').insert(batchItin);
                 
-                alert("Submitted: " + finalToNo);
-                
-                document.getElementById('itin-from').value = '';
-                document.getElementById('itin-to').value = '';
-                document.getElementById('dynamic-itin-fields').innerHTML = '';
-                itineraryDraft = [];
-                personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
-                renderPersonnel();
-                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
+                alert("Logic Executed. Submitted: " + finalToNo);
+                location.reload();
                 
             } catch(e) { 
                 alert("Error: " + e.message); 
@@ -459,8 +496,6 @@
                 const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
-
-                // Extract base division
                 const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
 
                 let uh_data = null;
@@ -537,7 +572,6 @@
                         destY += 4.5;
                     });
                     
-                    // Dynamic shifting based on lines printed
                     let curY = Math.max(destY, 83);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
@@ -562,7 +596,6 @@
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    // SIGNATORIES BLOCK COMPRESSION
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 156);
                     
