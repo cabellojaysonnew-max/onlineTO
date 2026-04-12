@@ -32,7 +32,7 @@
         ::-webkit-scrollbar { display: none; /* Mobile app feel */ }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
-        /* MODALS (Kept from original but styled to match) */
+        /* MODALS */
         .modal-fade { animation: fadeIn 0.2s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -56,7 +56,7 @@
             top: 100%; left: 0;
         }
 
-        .btn-primary { background-color: var(--dar-green); color: white; border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; font-size: 0.75rem; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .btn-primary { background-color: var(--dar-green); color: white; border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
         .btn-gold { background-color: var(--dar-gold); color: var(--dar-green); border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; font-size: 0.75rem; }
 
@@ -85,7 +85,7 @@
                             <label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label>
                             <input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar">
                         </div>
-                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary py-3.5">ENTER CONSOLE</button>
+                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary text-xs py-3.5">ENTER CONSOLE</button>
                     </div>
                 </div>
             </div>
@@ -161,32 +161,33 @@
                         <h2 class="font-black text-dar uppercase text-sm tracking-widest">Manual Reservation</h2>
                         <button onclick="closeModal('bookModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light leading-none">✕</button>
                     </div>
-                    <div class="p-6 space-y-5 overflow-y-auto no-scrollbar flex-1 bg-white">
-                        <div class="relative"><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Lead Passenger</label><input id="resN" oninput="runEmpSearch(this, 'resResults')" placeholder="Search and click a name..." class="w-full p-3 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50"><div id="resResults" class="search-results-box hidden"></div></div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50"></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment</label><select id="resS" class="w-full p-3 border rounded-xl text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
-                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-3 border rounded-xl text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
-                        </div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-3 border rounded-xl text-sm font-bold bg-slate-50"></div>
-                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-3 border rounded-xl text-sm outline-none bg-slate-50"></div>
-                        
-                        <div class="border-t pt-4">
-                            <label class="text-[10px] font-black text-dar uppercase mb-2 block tracking-widest">Add Additional Passengers:</label>
+                    
+                    <div class="p-5 space-y-4 overflow-y-auto no-scrollbar flex-1 bg-white">
+                        <div class="border border-dar/20 bg-dar/5 p-3 rounded-xl mb-2">
+                            <label class="text-[10px] font-black text-dar uppercase mb-2 block tracking-widest">Queue Passengers (First is Lead):</label>
                             <div class="flex gap-2 relative">
-                                <input id="resPAdd" oninput="runEmpSearch(this, 'resPResults')" placeholder="Search extra people..." class="flex-1 p-3 border rounded-xl text-sm outline-none bg-slate-50 focus:bg-white focus:ring-2 focus:ring-dar">
-                                <button onclick="queuePassenger()" class="bg-dar text-white px-4 rounded-xl font-bold text-[10px] uppercase">Queue</button>
+                                <input id="resPAdd" oninput="runEmpSearch(this, 'resPResults')" placeholder="Search and click a name..." class="flex-1 p-2.5 border border-slate-300 rounded-lg text-sm outline-none bg-white focus:ring-2 focus:ring-dar">
+                                <button onclick="queuePassenger()" class="bg-dar text-white px-4 rounded-lg font-bold text-[10px] uppercase shadow-md active:scale-95">Queue</button>
                                 <div id="resPResults" class="search-results-box hidden"></div>
                             </div>
-                            <div id="manualPList" class="mt-4 space-y-1"></div>
+                            <div id="manualPList" class="mt-3 space-y-1 max-h-32 overflow-y-auto"></div>
                         </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="resD1" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="resD2" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment</label><select id="resS" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="resV" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white text-dar">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+                        </div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver (Editable)</label><input id="resDr" list="drivers" value="Driver 1" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50"></div>
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / RSO Number</label><input id="resP" placeholder="Trip details..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50"></div>
                     </div>
+                    
                     <div class="p-5 border-t flex gap-4 bg-slate-50 shrink-0 rounded-b-2xl">
                         <button onclick="closeModal('bookModal')" class="flex-1 text-slate-500 font-bold uppercase text-[10px]">Cancel</button>
-                        <button onclick="saveManual()" class="btn-primary flex-[2] py-4 tracking-widest">Confirm Trip</button>
+                        <button onclick="saveManual()" class="btn-primary text-xs flex-[2] py-3.5 tracking-widest">Confirm Trip</button>
                     </div>
                 </div>
             </div>
@@ -205,7 +206,7 @@
                                 <input id="pAdd" oninput="runEmpSearch(this, 'pResults')" placeholder="Enter name..." class="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50" autocomplete="off">
                                 <div id="pResults" class="search-results-box hidden"></div>
                             </div>
-                            <button id="pAddBtn" onclick="handleAddPersonnel()" class="btn-primary px-6 rounded-xl tracking-widest">Add</button>
+                            <button id="pAddBtn" onclick="handleAddPersonnel()" class="btn-primary text-xs px-6 rounded-xl tracking-widest">Add</button>
                         </div>
                     </div>
                 </div>
@@ -220,7 +221,7 @@
                     </div>
                     <div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl">
                         <button onclick="closeModal('transferModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button>
-                        <button id="tExec" class="btn-primary flex-1 py-3 tracking-widest shadow-lg rounded-xl">Confirm</button>
+                        <button id="tExec" class="btn-primary text-xs flex-1 py-3 tracking-widest shadow-lg rounded-xl">Confirm</button>
                     </div>
                 </div>
             </div>
@@ -256,52 +257,31 @@
             }
             
             m.innerHTML = `<div class="space-y-4">` + data.map(o => {
-                // Get all itinerary items for this specific TO and sort them by date
                 const tripItins = itins.filter(i => i.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                 
-                // Construct Date String (Single day vs Range)
-                const dateStr = tripItins.length > 0 ? (tripItins.length === 1 ? tripItins[0].travel_date : `${tripItins[0].travel_date} to ${tripItins[tripItins.length-1].travel_date}`) : '?';
-                
-                // Construct Detailed Itinerary HTML block
-                const itinHTML = tripItins.map(i => `
-                    <div class="text-[10px] leading-tight border-l-2 border-dar-gold pl-2 mb-1.5">
-                        <span class="font-black text-slate-700">${i.travel_date}</span>: ${i.destination} <br>
-                        <span class="text-slate-500 italic">${i.purpose}</span>
-                    </div>
-                `).join('');
-
+                // COMPRESSED INBOX CARD
                 return `
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                    <div class="flex justify-between mb-3 border-b pb-2">
-                        <span class="text-[10px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">ID: ${o.to_no}</span>
-                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[10px] font-bold underline uppercase tracking-tighter">LAND</button>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                        <span class="text-[9px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">ID: ${o.to_no}</span>
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[9px] font-bold underline uppercase tracking-tighter">LAND</button>
                     </div>
-                    <h3 class="font-black text-slate-800 text-base leading-tight mb-1">${o.emp_name}</h3>
-                    <p class="text-[11px] text-dar-gold font-bold mb-3 uppercase tracking-widest leading-none">📅 ${dateStr}</p>
                     
-                    <div class="mb-4 bg-slate-50/50 p-3 rounded-lg border border-slate-100">
-                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Trip Details:</p>
-                        ${itinHTML}
+                    <h3 class="font-black text-slate-800 text-sm leading-tight mb-2 truncate pr-2">${o.emp_name}</h3>
+                    
+                    <div class="mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100 max-h-20 overflow-y-auto no-scrollbar">
+                        ${tripItins.map(i => `<p class="text-[9px] leading-tight mb-1 last:mb-0"><b class="text-dar">${i.travel_date}</b>: ${i.destination} <span class="text-slate-400 italic">(${i.purpose})</span></p>`).join('')}
                     </div>
 
-                    <div class="space-y-3 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <div class="flex justify-between items-center">
-                            <label class="text-[9px] font-black text-gray-400 uppercase">Unit</label>
-                            <select id="v-${o.to_no}" class="border rounded font-bold p-1 text-xs text-dar outline-none bg-white">${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <label class="text-[9px] font-black text-gray-400 uppercase">Slot</label>
-                            <select id="s-${o.to_no}" class="border rounded font-bold p-1 text-xs text-slate-600 outline-none bg-white"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select>
-                        </div>
-                        <div class="flex flex-col pt-1">
-                            <label class="text-[9px] font-black text-gray-400 uppercase mb-1">Driver</label>
-                            <input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded p-2 text-xs font-bold outline-none shadow-inner">
-                        </div>
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <select id="v-${o.to_no}" class="border border-slate-200 rounded-md font-bold p-1.5 text-[10px] text-dar bg-white outline-none"><option disabled selected hidden>Vehicle</option>${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
+                        <select id="s-${o.to_no}" class="border border-slate-200 rounded-md font-bold p-1.5 text-[10px] text-slate-600 bg-white outline-none"><option>WHOLE DAY</option><option>AM</option><option>PM</option></select>
+                        <input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="col-span-2 border border-slate-200 rounded-md p-1.5 text-[10px] font-bold outline-none bg-white">
                     </div>
                     
-                    <div class="flex gap-2">
-                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-[10px] font-bold uppercase flex-1 active:scale-95 transition">Reject</button>
-                        <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary flex-[2] py-3 rounded-xl shadow-md">Approve</button>
+                    <div class="flex gap-2 mt-auto">
+                        <button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-red-50 text-red-600 rounded-lg px-3 py-2.5 text-[9px] font-bold uppercase flex-1 active:scale-95 transition border border-red-100">Reject</button>
+                        <button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary text-[10px] flex-[2] py-2.5 rounded-lg shadow-sm">Approve</button>
                     </div>
                 </div>`;
             }).join('') + `</div>`;
@@ -309,6 +289,7 @@
 
         async function approveTrip(to, unit) {
             const v = document.getElementById(`v-${to}`).value, s = document.getElementById(`s-${to}`).value, d = document.getElementById(`d-${to}`).value || "TBD";
+            if(v === "Vehicle") return alert("Please select a vehicle.");
             const next = getApprovalTarget(unit);
             await db.from('travel_orders').update({ received: v, driver: d, remarks: s, status: next }).eq('to_no', to);
             sync();
@@ -497,8 +478,9 @@
 
         function renderManualPList() {
             document.getElementById('manualPList').innerHTML = manualPassengerQueue.map((p, idx) => `
-                <div class="flex justify-between items-center bg-white p-3 rounded-xl text-[10px] font-black uppercase border border-slate-200 shadow-sm">
-                    <span>${p.n}</span><button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500 font-bold hover:scale-110 text-sm">✕</button>
+                <div class="flex justify-between items-center bg-white p-2.5 rounded-lg text-[10px] font-black uppercase border ${idx===0 ? 'border-dar shadow-sm' : 'border-slate-200'}">
+                    <span>${p.n} ${idx===0 ? '<span class="ml-1 bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>' : ''}</span>
+                    <button onclick="manualPassengerQueue.splice(${idx},1);renderManualPList();" class="text-red-500 font-bold hover:scale-110 text-xs px-2">✕</button>
                 </div>`).join('');
         }
 
@@ -537,9 +519,15 @@
         async function doRemovePerson(id) { await db.from('travel_orders').delete().eq('id', id); await renderPList(); sync(); }
 
         async function saveManual() {
-            const n = document.getElementById('resN').value, d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
+            const d1 = document.getElementById('resD1').value, d2 = document.getElementById('resD2').value;
             const s = document.getElementById('resS').value, v = document.getElementById('resV').value, dr = document.getElementById('resDr').value, p = document.getElementById('resP').value;
-            if(!n || !d1 || !p) return alert("Missing Details.");
+            
+            if(!d1 || !p) return alert("Missing Dates or Purpose.");
+            if(manualPassengerQueue.length === 0) return alert("Please queue at least one passenger.");
+
+            // The first queued person is automatically the lead
+            const headPass = manualPassengerQueue[0];
+            const n = headPass.n;
 
             let st = new Date(d1), en = new Date(d2 || d1), dates = [];
             while(st <= en) { dates.push(st.toISOString().split('T')[0]); st.setDate(st.getDate() + 1); }
@@ -547,18 +535,22 @@
             if (await isDoubleBooked(n, dates)) return alert(`Lead Passenger ${n} is already booked on these dates!`);
 
             const to = `MAN-${Math.floor(Date.now()%10000)}`;
-            const head = { to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: s, status: "APPROVED" };
+            const head = { to_no: to, emp_name: n, transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: s, status: "APPROVED", unit: headPass.u, division: headPass.d };
             
             await db.from('travel_orders').insert([head]);
-            if(manualPassengerQueue.length) await db.from('travel_orders').insert(manualPassengerQueue.map(pass => ({ ...head, emp_name: pass.n, unit: pass.u, division: pass.d })));
+            
+            if(manualPassengerQueue.length > 1) {
+                const extraPass = manualPassengerQueue.slice(1).map(pass => ({ ...head, emp_name: pass.n, unit: pass.u, division: pass.d }));
+                await db.from('travel_orders').insert(extraPass);
+            }
             
             for(let date of dates) {
                 await db.from('itinerary').insert({ to_no: to, travel_date: date, destination: "Manual Booking", purpose: p });
             }
             
             manualPassengerQueue = []; 
-            document.getElementById('resN').value = "";
             document.getElementById('resP').value = "";
+            renderManualPList();
             closeModal('bookModal'); 
             sync();
         }
@@ -571,8 +563,6 @@
         function safeStr(str) { return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
         function getApprovalTarget(u) { const unit = (u || "").toUpperCase(); if (unit === "PARPO") return "PENDING_PARPO"; return (unit && unit !== "NULL") ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF"; }
         
-        // Auto-initialize if needed
-        // renderDashboard();
     </script>
 </body>
 </html>
