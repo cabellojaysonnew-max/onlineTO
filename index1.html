@@ -103,7 +103,9 @@
         // --- CONFIG ---
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SB_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
-        const supabase = exports.supabase.createClient(SB_URL, SB_KEY);
+        
+        // FIXED: Browser-compatible Supabase initialization
+        const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
         let currentUser = null;
         let orders = [];
@@ -128,37 +130,45 @@
             
             errEl.classList.add('hidden');
 
-            // Query the exact 'users' table structure
-            const { data, error } = await supabase
-                .table('users')
-                .select('id, username, password, role, division, full_name, unit')
-                .eq('username', u)
-                .eq('password', p)
-                .single();
+            try {
+                // Query the exact 'users' table structure
+                const { data, error } = await supabaseClient
+                    .table('users')
+                    .select('id, username, password, role, division, full_name, unit')
+                    .eq('username', u)
+                    .eq('password', p)
+                    .single();
 
-            if (data) {
-                // Strict validation for VEHICLE_APPROVER role
-                if (data.role === 'VEHICLE_APPROVER') {
-                    currentUser = data;
-                    document.getElementById('login-screen').classList.add('hidden');
-                    document.getElementById('main-app').classList.remove('hidden');
-                    document.getElementById('user-display').innerText = `${data.full_name} (${data.role})`;
-                    syncData();
-                } else {
-                    errEl.innerText = "Access Denied: Account lacks VEHICLE_APPROVER privileges.";
+                if (error) {
+                    errEl.innerText = "Invalid credentials or network error.";
                     errEl.classList.remove('hidden');
+                    return;
                 }
-            } else {
-                errEl.innerText = "Invalid credentials. Please try again.";
+
+                if (data) {
+                    // Strict validation for VEHICLE_APPROVER role
+                    if (data.role === 'VEHICLE_APPROVER') {
+                        currentUser = data;
+                        document.getElementById('login-screen').classList.add('hidden');
+                        document.getElementById('main-app').classList.remove('hidden');
+                        document.getElementById('user-display').innerText = `${data.full_name} (${data.role})`;
+                        syncData();
+                    } else {
+                        errEl.innerText = "Access Denied: Account lacks VEHICLE_APPROVER privileges.";
+                        errEl.classList.remove('hidden');
+                    }
+                }
+            } catch (err) {
+                errEl.innerText = "System error: " + err.message;
                 errEl.classList.remove('hidden');
             }
         }
 
         // --- DATA SYNC ---
         async function syncData() {
-            const ordReq = supabase.table('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
-            const itinReq = supabase.table('itinerary').select('*');
-            const empReq = supabase.table('employees').select('*');
+            const ordReq = supabaseClient.table('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
+            const itinReq = supabaseClient.table('itinerary').select('*');
+            const empReq = supabaseClient.table('employees').select('*');
 
             const [ordRes, itinRes, empRes] = await Promise.all([ordReq, itinReq, empReq]);
             orders = ordRes.data || [];
@@ -219,7 +229,7 @@
             if (unit === "PARPO") nextStatus = "PENDING_PARPO";
             else if (!unit || unit === "NULL") nextStatus = "PENDING_CHIEF";
 
-            const { error } = await supabase.table('travel_orders').update({
+            const { error } = await supabaseClient.table('travel_orders').update({
                 received: veh,
                 driver: drv,
                 status: nextStatus
@@ -228,6 +238,8 @@
             if (!error) {
                 alert(`Approved! Routed to: ${nextStatus}`);
                 syncData();
+            } else {
+                alert("Error updating order: " + error.message);
             }
         }
 
