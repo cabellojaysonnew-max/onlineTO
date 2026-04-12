@@ -3,284 +3,1402 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DAR Accounting Verifier</title>
+    <title>DAR CS I - Unified Command Portal</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#003811">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
     <style>
-        :root { --dar-green: #003811; --dar-gold: #D4AF37; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: #f3f4f6; }
+        /* GLOBAL BRANDING */
+        :root { --dar-green: #003811; --dar-gold: #D4AF37; --dar-light: #006400; --danger: #dc2626; --card-bg: #ffffff; --bg-main: #f3f4f6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-main); -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .bg-dar { background-color: var(--dar-green); } .text-dar { color: var(--dar-green); } .bg-gold { background-color: var(--dar-gold); }
-        .search-results-box { position: absolute; width: 100%; max-height: 200px; overflow-y: auto; z-index: 2000; background: white; border: 2px solid var(--dar-gold); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); top: 100%; left: 0; }
+        .dar-green { background-color: #003811; } .text-dar-green { color: #003811; } .dar-gold { background-color: #D4AF37; } .text-dar-gold { color: #D4AF37; }
+        
+        ::-webkit-scrollbar { display: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .modal-fade { animation: fadeIn 0.2s ease-in-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
         .btn-primary { background-color: var(--dar-green); color: white; border-radius: 0.75rem; font-weight: bold; text-transform: uppercase; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
         .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
-        ::-webkit-scrollbar { display: none; }
+        .search-results-box { position: absolute; width: 100%; max-height: 200px; overflow-y: auto; z-index: 2000; background: white; border: 2px solid var(--dar-gold); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); top: 100%; left: 0; }
+
+        /* EMPLOYEE SPECIFIC */
+        .emp-card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
+        .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; font-weight: bold; }
+        .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+        .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
+        .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; }
+        .entry-to { background: var(--dar-green); } .entry-pso { background: var(--dar-gold); color: #003811; } .entry-holiday { background: var(--danger); }
+        .emp-badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
+        .bg-pending { background: #fefce8; color: #854d0e; } .bg-approved { background: #ecfdf5; color: #166534; } .bg-cancelled { background: #fef2f2; color: #991b1b; }
+        .qr-maximized { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 85vw !important; height: 85vw !important; max-width: 400px !important; max-height: 400px !important; z-index: 9999 !important; box-shadow: 0 0 0 2000px rgba(0,0,0,0.85) !important; background: white !important; border: 4px solid var(--dar-gold) !important; cursor: pointer; }
+
+        /* FLEET SPECIFIC MODALS */
+        .modal-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-box { background: white; width: 100%; max-width: 600px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); max-height: 90vh; display: flex; flex-direction: column; overflow: visible; }
+
+        /* PRINT STYLES */
+        @media print { 
+            .no-print { display: none !important; } 
+            body:not(.printing-table) .print-area { display: block !important; width: 100% !important; background: white; padding: 0 !important; }
+            body:not(.printing-table) .card-item { border: 1px solid #e2e8f0 !important; margin-bottom: 10px; break-inside: avoid; padding: 20px; border-radius: 0; box-shadow: none !important; }
+            body.printing-table #app, body.printing-table #master-landing, body.printing-table #login-container { display: none !important; }
+            body.printing-table #print-table-section { display: block !important; width: 100%; background: white; padding: 20px; position: absolute; inset: 0; z-index: 99999; }
+            @page { size: portrait; margin: 10mm; }
+        }
+        #print-table-section { display: none; }
     </style>
 </head>
 <body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800 relative">
 
-    <div id="app" class="w-full h-full flex flex-col relative">
-        <div id="login-screen" class="flex-grow flex flex-col justify-center items-center px-6 bg-dar h-full">
-            <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-                <div class="bg-gold h-2 w-full"></div>
-                <div class="p-8">
-                    <h1 class="text-dar font-bold text-2xl font-serif mb-1 text-center">DAR ACCOUNTING</h1>
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Detailed Overlap Audit</p>
-                    <div class="space-y-4">
-                        <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="un" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
-                        <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="pw" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-dar"></div>
-                        <button onclick="handleLogin()" class="w-full mt-2 btn-primary text-xs py-3.5">ENTER AUDITOR</button>
-                    </div>
-                </div>
-            </div>
+    <div id="master-landing" class="h-full w-full flex flex-col justify-center items-center bg-[#f4f7f6] p-6 z-[100] absolute inset-0 transition-all duration-300">
+        <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border-t-8 border-[#D4AF37] text-center">
+            <h1 class="text-4xl font-black text-[#003811] mb-1">DAR</h1>
+            <p class="text-[10px] text-gray-500 mb-8 font-bold tracking-widest uppercase">Camarines Sur I - Unified Portal</p>
+            <button onclick="showPortal('employee')" class="w-full mb-4 py-4 bg-[#003811] text-white rounded-xl font-bold text-lg shadow-md transition active:scale-95 flex justify-center items-center gap-2">
+                👤 EMPLOYEE PORTAL
+            </button>
+            <button onclick="showPortal('console')" class="w-full py-4 bg-[#D4AF37] text-[#003811] rounded-xl font-bold text-lg shadow-md transition active:scale-95 flex justify-center items-center gap-2">
+                ⚙️ SYSTEM CONSOLE
+            </button>
         </div>
     </div>
 
+    <div id="login-container" class="hidden h-full w-full flex flex-col justify-center items-center px-6 bg-dar z-[90] absolute inset-0 transition-all duration-300">
+        <button onclick="backToMaster()" class="absolute top-10 left-6 text-white font-bold text-sm">← Back</button>
+        <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div class="bg-gold h-2 w-full"></div>
+            <div class="p-8" id="login-form-content"></div>
+        </div>
+    </div>
+
+    <div id="app" class="hidden w-full h-full flex flex-col relative overflow-hidden bg-gray-100"></div>
+
+    <div id="global-modals" class="z-[200]"></div>
+    <div id="print-table-section"></div>
+
     <script>
+        // ==========================================
+        // SHARED SYSTEM CONFIGURATION
+        // ==========================================
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SB_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; 
-        const db = window.supabase.createClient(SB_URL, SB_KEY);
+        const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
-        let user = null, emps = [];
-        let selectedEmp = null;
-
-        async function handleLogin() {
-            const u = document.getElementById('un').value.trim(), p = document.getElementById('pw').value.trim();
-            const { data } = await db.from('users').select('*');
-            const found = data.find(x => x.username === u && String(x.password) === String(p));
-            
-            if (found && (found.role === 'ACCOUNTANT' || found.role === 'ADMIN')) { 
-                user = found; 
-                const {data: e} = await db.from('employees').select('*');
-                emps = e || []; 
-                renderDashboard(); 
-            } else alert("Invalid Login. Authorized personnel only.");
+        let currentUser = null; 
+        let userRole = null; // 'EMPLOYEE', 'ACCOUNTANT', 'VEHICLE_APPROVER', 'ADMIN', 'CHIEF', 'UNIT_HEAD', 'PARPO'
+        let currentSystem = null; // 'employee', 'accounting', 'fleet', 'admin'
+        
+        // Format Time Helper
+        function formatTo12Hour(timeStr) {
+            if (!timeStr) return "";
+            let [h, m] = timeStr.split(':');
+            let ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${m} ${ampm}`;
         }
+        function safeStr(str) { return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
-        function renderDashboard() {
-            document.getElementById('app').innerHTML = `
-            <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
-                <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">Overlap Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${user.full_name}</p></div>
-                <div class="flex gap-2">
-                    <button onclick="showChangePassword()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Password</button>
-                    <button onclick="location.reload()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
-                </div>
-            </header>
+        // ==========================================
+        // NAVIGATION & AUTHENTICATION
+        // ==========================================
+        function showPortal(type) {
+            document.getElementById('master-landing').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+            const loginBox = document.getElementById('login-form-content');
             
-            <main class="flex-grow w-full overflow-y-auto p-4 md:p-8 relative z-10 scroll-smooth">
-                <div class="max-w-2xl mx-auto space-y-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="space-y-4">
-                            <div class="relative">
-                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee</label>
-                                <div class="relative">
-                                    <input id="empSearch" oninput="runEmpSearch(this, 'empResults')" placeholder="Search..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 font-bold uppercase" autocomplete="off">
-                                    <button id="clearEmpBtn" onclick="clearEmpSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg></button>
-                                </div>
-                                <div id="empResults" class="search-results-box hidden"></div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-3">
-                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">From</label><input id="startDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
-                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">To</label><input id="endDate" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
-                            </div>
-
-                            <button onclick="runVerification()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Execute Detailed Audit</button>
-                        </div>
-                    </div>
-                    <div id="resultsArea" class="hidden space-y-4 pb-10"></div>
-                </div>
-
-                <div id="pwdModal" class="hidden fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
-                        <button onclick="document.getElementById('pwdModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 font-black">✕</button>
-                        <h2 class="text-dar font-black text-lg mb-4 uppercase tracking-widest border-b pb-2">Change Password</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-[10px] font-black text-dar uppercase mb-1 tracking-widest">Current Password</label>
-                                <input type="password" id="cpw" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-dar">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-black text-dar uppercase mb-1 tracking-widest">New Password</label>
-                                <input type="password" id="npw" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-dar">
-                            </div>
-                            <button onclick="executePasswordChange(this)" class="w-full btn-primary text-xs py-3 mt-2 tracking-widest">UPDATE PASSWORD</button>
-                        </div>
-                    </div>
-                </div>
-
-            </main>`;
-        }
-
-        function showChangePassword() {
-            document.getElementById('cpw').value = '';
-            document.getElementById('npw').value = '';
-            document.getElementById('pwdModal').classList.remove('hidden');
-        }
-
-        async function executePasswordChange(btn) {
-            const cpw = document.getElementById('cpw').value.trim();
-            const npw = document.getElementById('npw').value.trim();
-            
-            if (!cpw || !npw) return alert("Please fill all fields.");
-            if (String(cpw) !== String(user.password)) return alert("Current password is incorrect.");
-            if (cpw === npw) return alert("New password must be different from current.");
-
-            btn.innerText = "UPDATING...";
-            btn.disabled = true;
-
-            try {
-                const { error } = await db.from('users').update({ password: npw }).eq('id', user.id);
-                if (error) throw error;
-                
-                user.password = npw;
-                alert("Password successfully updated!");
-                document.getElementById('pwdModal').classList.add('hidden');
-            } catch (err) {
-                alert("Database Error: " + err.message);
-            } finally {
-                btn.innerText = "UPDATE PASSWORD";
-                btn.disabled = false;
+            if (type === 'employee') {
+                loginBox.innerHTML = `
+                    <h2 class="text-dar font-black text-2xl text-center mb-1">EMPLOYEE LOGIN</h2>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Camarines Sur I</p>
+                    <div class="space-y-4">
+                        <input type="text" id="log-id" placeholder="Employee ID Number" inputmode="numeric" class="w-full px-4 py-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-dar">
+                        <input type="password" id="log-pass" placeholder="Password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-dar">
+                        <button onclick="handleLogin('EMPLOYEE')" class="w-full mt-2 btn-primary py-3.5">SECURE LOGIN</button>
+                    </div>`;
+            } else {
+                loginBox.innerHTML = `
+                    <h2 class="text-dar font-black text-2xl text-center mb-1">DAR CONSOLE</h2>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Authorized Access Only</p>
+                    <div class="space-y-4">
+                        <input type="text" id="log-id" placeholder="Username" class="w-full px-4 py-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-dar">
+                        <input type="password" id="log-pass" placeholder="Password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-dar">
+                        <button onclick="handleLogin('CONSOLE')" class="w-full mt-2 btn-primary py-3.5">ENTER CONSOLE</button>
+                    </div>`;
             }
         }
 
-        function runEmpSearch(inp, resId) {
-            const div = document.getElementById(resId);
+        function backToMaster() {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('master-landing').classList.remove('hidden');
+        }
+
+        async function handleLogin(portalType) {
+            const id = document.getElementById('log-id').value.trim();
+            const pass = document.getElementById('log-pass').value.trim();
+
+            if (portalType === 'EMPLOYEE') {
+                const { data } = await supabaseClient.from('employees').select('*').eq('emp_id', id).single();
+                if (data && data.pass === pass) {
+                    currentUser = data; userRole = 'EMPLOYEE'; currentSystem = 'employee';
+                    launchSystem();
+                } else alert("Invalid Employee Credentials");
+            } else {
+                const { data: users } = await supabaseClient.from('users').select('*');
+                const u = (users || []).find(x => x.username === id && String(x.password) === String(pass));
+                if (u) {
+                    currentUser = u; 
+                    currentUser.role = u.role.toUpperCase();
+                    currentUser.divisions = u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [];
+                    currentUser.unit = u.unit ? u.unit.trim().toUpperCase() : '';
+                    userRole = currentUser.role;
+
+                    if (userRole === 'ACCOUNTANT') currentSystem = 'accounting';
+                    else if (userRole === 'VEHICLE_APPROVER') currentSystem = 'fleet';
+                    else currentSystem = 'admin';
+                    
+                    launchSystem();
+                } else alert("Invalid Console Credentials");
+            }
+        }
+
+        function launchSystem() {
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            
+            if (currentSystem === 'employee') emp_initPortal();
+            else if (currentSystem === 'accounting') acc_initVerifier();
+            else if (currentSystem === 'fleet') fleet_initMaster();
+            else admin_initConsole();
+        }
+
+        function globalLogout() { location.reload(); }
+
+        function showGlobalChangePwd() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 modal-fade z-[300]';
+            modal.id = 'global-pwd-modal';
+            modal.innerHTML = `
+                <div class="bg-white w-full max-w-sm rounded-3xl p-8 relative shadow-2xl border-t-4 border-dar">
+                    <button onclick="this.closest('#global-pwd-modal').remove()" class="absolute top-4 right-4 text-slate-400 font-bold hover:text-red-500">✕</button>
+                    <h2 class="text-dar font-black text-xl mb-1 text-center uppercase tracking-tighter">Security</h2>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center border-b pb-2">Change Password</p>
+                    <input type="password" id="global-old-pw" placeholder="Current Password" class="w-full p-4 border border-slate-200 rounded-xl mb-3 text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50">
+                    <input type="password" id="global-new-pw" placeholder="New Password" class="w-full p-4 border border-slate-200 rounded-xl mb-4 text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50">
+                    <button onclick="executeGlobalPwdUpdate(this)" class="w-full btn-primary py-4 text-xs tracking-widest">Update Password</button>
+                </div>`;
+            document.getElementById('global-modals').appendChild(modal);
+        }
+
+        async function executeGlobalPwdUpdate(btn) {
+            const opw = document.getElementById('global-old-pw').value.trim();
+            const npw = document.getElementById('global-new-pw').value.trim();
+            if(!opw || !npw) return alert("Fill all fields.");
+            
+            const currentPass = currentSystem === 'employee' ? currentUser.pass : currentUser.password;
+            if (String(opw) !== String(currentPass)) return alert("Current password is incorrect.");
+
+            btn.innerText = "UPDATING..."; btn.disabled = true;
+            try {
+                const table = currentSystem === 'employee' ? 'employees' : 'users';
+                const col = currentSystem === 'employee' ? 'pass' : 'password';
+                const filterCol = currentSystem === 'employee' ? 'emp_id' : 'id';
+                const filterVal = currentSystem === 'employee' ? currentUser.emp_id : currentUser.id;
+                
+                const { error } = await supabaseClient.from(table).update({ [col]: npw }).eq(filterCol, filterVal);
+                if(error) throw error;
+                alert("Password updated successfully. Please log in again.");
+                globalLogout();
+            } catch (e) {
+                alert("Error: " + e.message);
+                btn.innerText = "Update Password"; btn.disabled = false;
+            }
+        }
+
+        // ==========================================
+        // SYSTEM 1: ACCOUNTING VERIFIER (Overlap Audit)
+        // ==========================================
+        let accEmps = [], accSelected = null;
+        
+        async function acc_initVerifier() {
+            document.getElementById('app').innerHTML = `
+            <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md z-50">
+                <div class="text-left"><h1 class="font-bold text-lg leading-tight truncate">Overlap Verifier</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.full_name}</p></div>
+                <div class="flex gap-2">
+                    <button onclick="showGlobalChangePwd()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Password</button>
+                    <button onclick="globalLogout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
+                </div>
+            </header>
+            <main class="flex-grow w-full overflow-y-auto p-4 md:p-8 relative z-10 scroll-smooth">
+                <div class="max-w-2xl mx-auto space-y-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-center border-b pb-2 mb-4">
+                            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest">Verification Filters</h2>
+                            <span class="text-[9px] bg-dar text-white px-2 py-0.5 rounded-full font-bold uppercase">Approved Only</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="relative">
+                                <label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">Employee Search</label>
+                                <div class="relative">
+                                    <input id="accSearch" oninput="acc_runSearch(this)" placeholder="Search..." class="w-full p-3 pr-10 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50 font-bold uppercase" autocomplete="off">
+                                    <button id="accClearBtn" onclick="acc_clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500 hidden font-bold text-lg leading-none">✕</button>
+                                </div>
+                                <div id="accResults" class="search-results-box hidden"></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">From</label><input id="accD1" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
+                                <div><label class="text-[10px] font-black text-dar uppercase mb-1 block tracking-widest">To</label><input id="accD2" type="date" class="w-full p-3 border border-slate-300 rounded-xl text-sm outline-none bg-slate-50"></div>
+                            </div>
+                            <button onclick="acc_runAudit()" class="w-full btn-primary text-xs py-4 tracking-widest mt-2">🔍 Execute Detailed Audit</button>
+                        </div>
+                    </div>
+                    <div id="accResultsArea" class="hidden space-y-4 pb-10"></div>
+                </div>
+            </main>`;
+            const { data } = await supabaseClient.from('employees').select('*');
+            accEmps = data || [];
+        }
+
+        function acc_runSearch(inp) {
+            const div = document.getElementById('accResults');
+            const clearBtn = document.getElementById('accClearBtn');
             const val = inp.value.toLowerCase().trim();
-            document.getElementById('clearEmpBtn').classList.toggle('hidden', val.length === 0);
+            clearBtn.classList.toggle('hidden', val.length === 0);
             if (val.length < 2) { div.classList.add('hidden'); return; }
-            const match = emps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
-            div.innerHTML = match.map(e => `<div onclick="pickEmp('${safeStr(e.full_name)}','${resId}','${inp.id}','${safeStr(e.emp_id)}')" class="p-4 border-b border-slate-100 text-[11px] font-black cursor-pointer uppercase hover:bg-slate-50">${e.full_name}</div>`).join('');
+            const match = accEmps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
+            div.innerHTML = match.map(e => `<div onclick="acc_pickEmp('${safeStr(e.full_name)}','${e.emp_id}')" class="p-4 border-b border-slate-100 text-[11px] font-black cursor-pointer uppercase text-slate-700 hover:bg-slate-50 transition">${e.full_name}</div>`).join('');
             div.classList.remove('hidden');
         }
 
-        function clearEmpSearch() {
-            document.getElementById('empSearch').value = '';
-            selectedEmp = null;
-            document.getElementById('clearEmpBtn').classList.add('hidden');
-            document.getElementById('empResults').classList.add('hidden');
-            document.getElementById('resultsArea').classList.add('hidden');
+        function acc_clearSearch() {
+            document.getElementById('accSearch').value = '';
+            accSelected = null;
+            document.getElementById('accClearBtn').classList.add('hidden');
+            document.getElementById('accResults').classList.add('hidden');
+            document.getElementById('accResultsArea').classList.add('hidden');
         }
 
-        function pickEmp(n, rId, iId, eId) {
-            document.getElementById(iId).value = n;
-            document.getElementById(rId).classList.add('hidden');
-            selectedEmp = { n, id: eId };
+        function acc_pickEmp(n, id) {
+            document.getElementById('accSearch').value = n;
+            document.getElementById('accResults').classList.add('hidden');
+            accSelected = { n, id };
         }
 
-        function safeStr(str) { return (str || "").replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
-
-        async function runVerification() {
-            if(!selectedEmp) return alert("Select employee.");
-            const sDate = document.getElementById('startDate').value;
-            const eDate = document.getElementById('endDate').value;
+        async function acc_runAudit() {
+            if(!accSelected) return alert("Select employee.");
+            const sDate = document.getElementById('accD1').value;
+            const eDate = document.getElementById('accD2').value;
             if(!sDate || !eDate) return alert("Select range.");
 
-            const resArea = document.getElementById('resultsArea');
+            const resArea = document.getElementById('accResultsArea');
             resArea.innerHTML = `<div class="text-center p-10 font-bold animate-pulse text-slate-400 uppercase text-xs tracking-widest">Extracting Record Details...</div>`;
             resArea.classList.remove('hidden');
 
             try {
                 const [itins, hols, bookings, psos, leaves, orders, ctos] = await Promise.all([
-                    db.from('itinerary').select('*').gte('travel_date', sDate).lte('travel_date', eDate),
-                    db.from('holidays').select('*').gte('date', sDate).lte('date', eDate),
-                    db.from('fleet_bookings').select('*').eq('emp_id', selectedEmp.id).gte('travel_date', sDate).lte('travel_date', eDate),
-                    db.from('pso_records').select('*').eq('emp_id', selectedEmp.id).lte('start_date', eDate).gte('end_date', sDate),
-                    db.from('leave_ledger').select('*').eq('emp_id', selectedEmp.id).eq('transaction_type', 'APPROVED').lte('start_date', eDate).gte('end_date', sDate),
-                    db.from('travel_orders').select('*').eq('emp_id', selectedEmp.id).eq('status', 'APPROVED'),
-                    db.from('cto_records').select('*').eq('emp_id', selectedEmp.id).gte('leave_date', sDate).lte('leave_date', eDate)
+                    supabaseClient.from('itinerary').select('*').gte('travel_date', sDate).lte('travel_date', eDate),
+                    supabaseClient.from('holidays').select('*').gte('date', sDate).lte('date', eDate),
+                    supabaseClient.from('fleet_bookings').select('*').eq('emp_id', accSelected.id).gte('travel_date', sDate).lte('travel_date', eDate),
+                    supabaseClient.from('pso_records').select('*').eq('emp_id', accSelected.id).lte('start_date', eDate).gte('end_date', sDate),
+                    supabaseClient.from('leave_ledger').select('*').eq('emp_id', accSelected.id).eq('transaction_type', 'APPROVED').lte('start_date', eDate).gte('end_date', sDate),
+                    supabaseClient.from('travel_orders').select('*').eq('emp_id', accSelected.id).eq('status', 'APPROVED'),
+                    supabaseClient.from('cto_records').select('*').eq('emp_id', accSelected.id).gte('leave_date', sDate).lte('leave_date', eDate)
                 ]);
 
-                const dates = [];
-                let curr = new Date(sDate);
-                const end = new Date(eDate);
-                while(curr <= end) {
-                    dates.push(curr.toISOString().split('T')[0]);
-                    curr.setDate(curr.getDate() + 1);
-                }
+                const dates = []; let curr = new Date(sDate); const end = new Date(eDate);
+                while(curr <= end) { dates.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate() + 1); }
 
-                renderOverlapList(dates, itins.data, hols.data, bookings.data, psos.data, leaves.data, orders.data, ctos.data);
+                let html = `<div class="space-y-4">`;
+                let eventsFound = false;
 
+                dates.forEach(date => {
+                    const activeItems = [];
+                    
+                    hols.data.filter(h => h.date === date).forEach(h => activeItems.push({ title: `📍 HOLIDAY`, subtitle: h.name, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' }));
+                    ctos.data.filter(c => c.leave_date === date).forEach(c => activeItems.push({ title: `⏳ CTO: COMPENSATORY TIME-OFF`, subtitle: `Purpose: ${c.purpose || 'N/A'}`, color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' }));
+                    leaves.data.filter(l => date >= l.start_date && date <= l.end_date).forEach(l => activeItems.push({ title: `🏖️ LEAVE: ${l.type}`, subtitle: l.remarks || 'Approved System Ledger', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' }));
+                    bookings.data.filter(b => b.travel_date === date).forEach(b => activeItems.push({ title: `🚗 FLEET: ${b.vehicle}`, subtitle: `Driver: ${b.driver} | Dest: ${b.destination || b.assignment || 'N/A'}`, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' }));
+                    psos.data.filter(p => date >= p.start_date && date <= p.end_date).forEach(p => activeItems.push({ title: `ℹ️ PSO: ${p.pso_no}`, subtitle: p.subject, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' }));
+                    
+                    const dayItins = itins.data.filter(i => i.travel_date === date);
+                    orders.data.filter(to => dayItins.some(i => i.to_no === to.to_no)).forEach(t => {
+                        const specItin = dayItins.find(i => i.to_no === t.to_no);
+                        activeItems.push({ title: `📄 TO: ${t.to_no}`, subtitle: `Dest: ${specItin ? specItin.destination : 'Various'} | Trans: ${t.transport}`, color: 'text-dar', bg: 'bg-green-50', border: 'border-green-200' });
+                    });
+
+                    if (activeItems.length > 0) {
+                        eventsFound = true;
+                        const isConflict = activeItems.length > 1;
+
+                        html += `
+                        <div class="bg-white rounded-2xl border shadow-sm p-5 ${isConflict ? 'border-red-500' : 'border-slate-200'} transition-all relative overflow-hidden">
+                            ${isConflict ? '<div class="absolute top-0 left-0 w-1 h-full bg-red-500"></div>' : ''}
+                            <div class="flex justify-between items-center border-b pb-3 mb-3">
+                                <div>
+                                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'long'})}</p>
+                                    <h4 class="text-sm font-black text-slate-800">${date}</h4>
+                                </div>
+                                <div>
+                                    ${isConflict ? 
+                                        '<span class="bg-red-600 text-white text-[9px] px-3 py-1.5 rounded-full font-black uppercase animate-pulse shadow-md">⚠️ OVERLAP FLAG</span>' : 
+                                        '<span class="bg-slate-100 text-slate-500 text-[9px] px-3 py-1 rounded-full font-black uppercase">CLEAR LOG</span>'
+                                    }
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                ${activeItems.map(item => `
+                                    <div class="p-3 rounded-xl border ${item.bg} ${item.border}">
+                                        <h5 class="text-[10px] font-black uppercase ${item.color} mb-1">${item.title}</h5>
+                                        <p class="text-[10px] text-slate-600 italic leading-tight">${item.subtitle}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>`;
+                    }
+                });
+
+                if (!eventsFound) html = `<div class="bg-white p-10 rounded-2xl text-center border border-dashed border-slate-300"><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">No activities logged.</p></div>`;
+                
+                html += `</div>`;
+                resArea.innerHTML = html;
             } catch (err) {
                 resArea.innerHTML = `<div class="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-200">System Error: ${err.message}</div>`;
             }
         }
 
-        function renderOverlapList(dates, itins, hols, bookings, psos, leaves, orders, ctos) {
-            const resArea = document.getElementById('resultsArea');
-            let html = `<div class="space-y-4">`;
-            let eventsFound = false;
+        // ==========================================
+        // SYSTEM 2: FLEET MASTER PRO (Dispatch Command)
+        // ==========================================
+        const FLEET_VEHICLES = ["MAZDA", "REVO", "INNOVA", "SKY", "BLACK"];
+        const FLEET_DRIVERS = ["Driver 1", "Driver 2", "Driver 3", "Driver 4", "Driver 5"];
+        let fleetTab = 'inbox', fleetSchedFilter = 'day', fleetData = { orders:[], itins:[], bookings:[], emps:[] };
+        let fleetActiveRef = "", fleetIsBooking = false, fleetSelectedEmp = null, fleetVehMaint = "";
+        let fleetQueue = [];
 
-            dates.forEach(date => {
-                const activeItems = [];
-                
-                // Detailed Extracts
-                hols.filter(h => h.date === date).forEach(h => {
-                    activeItems.push({ type: 'holiday', title: `📍 HOLIDAY`, subtitle: h.name, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' });
-                });
+        function fleet_initMaster() {
+            document.getElementById('app').innerHTML = `
+            <header class="flex-none w-full h-16 bg-dar text-white px-5 flex justify-between items-center shadow-md no-print">
+                <div class="text-left"><h1 class="font-bold text-lg">Dispatch Command</h1><p class="text-[10px] text-dar-gold font-bold uppercase">${currentUser.full_name}</p></div>
+                <div class="flex gap-2">
+                    <button onclick="fleet_sync()" class="text-lg px-2">🔄</button>
+                    <button onclick="globalLogout()" class="text-[10px] font-bold bg-white/20 px-3 py-1.5 rounded-full">Logout</button>
+                </div>
+            </header>
+            <main id="fleet-content" class="flex-grow w-full overflow-y-auto p-4 pb-32 print-area"></main>
+            <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow no-print">
+                <button onclick="fleet_switchTab('inbox')" class="flex-1 flex flex-col items-center justify-center text-[10px] uppercase font-bold text-gray-400" id="ftab-inbox">📥 Inbox</button>
+                <button onclick="fleet_switchTab('res')" class="flex-1 flex flex-col items-center justify-center text-[10px] uppercase font-bold text-gray-400" id="ftab-res">📋 List</button>
+                <button onclick="fleet_switchTab('sched')" class="flex-1 flex flex-col items-center justify-center text-[10px] uppercase font-bold text-gray-400" id="ftab-sched">📅 Schedule</button>
+            </nav>
+            <div class="fixed bottom-20 right-4 z-40 no-print">
+                <button onclick="fleet_openModal('fleetBookModal')" class="bg-dar text-white shadow-[0_8px_30px_rgb(0,0,0,0.3)] border-2 border-dar-gold px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest flex items-center gap-2 active:scale-90 transition">
+                    <span class="text-lg leading-none">+</span> Special Booking
+                </button>
+            </div>`;
+            fleet_injectModals();
+            fleet_sync();
+        }
 
-                ctos.filter(c => c.leave_date === date).forEach(c => {
-                    activeItems.push({ type: 'cto', title: `⏳ CTO: COMPENSATORY TIME-OFF`, subtitle: `Purpose: ${c.purpose || 'N/A'} | Remarks: ${c.remarks || 'None'}`, color: 'text-teal-700', bg: 'bg-teal-50', border: 'border-teal-200' });
-                });
-
-                leaves.filter(l => date >= l.start_date && date <= l.end_date).forEach(l => {
-                    activeItems.push({ type: 'leave', title: `🏖️ LEAVE: ${l.type}`, subtitle: l.remarks || 'Approved System Ledger', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' });
-                });
-
-                bookings.filter(b => b.travel_date === date).forEach(b => {
-                    activeItems.push({ type: 'fleet', title: `🚗 FLEET: ${b.vehicle}`, subtitle: `Driver: ${b.driver} | Dest: ${b.destination || b.assignment || 'N/A'}`, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' });
-                });
-
-                psos.filter(p => date >= p.start_date && date <= p.end_date).forEach(p => {
-                    activeItems.push({ type: 'pso', title: `ℹ️ PSO: ${p.pso_no}`, subtitle: p.subject, color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' });
-                });
-                
-                const dayItins = itins.filter(i => i.travel_date === date);
-                orders.filter(to => dayItins.some(i => i.to_no === to.to_no)).forEach(t => {
-                    const specItin = dayItins.find(i => i.to_no === t.to_no);
-                    activeItems.push({ type: 'to', title: `📄 TO: ${t.to_no}`, subtitle: `Dest: ${specItin ? specItin.destination : 'Various'} | Trans: ${t.transport}`, color: 'text-dar', bg: 'bg-green-50', border: 'border-green-200' });
-                });
-
-                if (activeItems.length > 0) {
-                    eventsFound = true;
-                    const isConflict = activeItems.length > 1;
-
-                    html += `
-                    <div class="bg-white rounded-2xl border shadow-sm p-5 ${isConflict ? 'border-red-500' : 'border-slate-200'} transition-all relative overflow-hidden">
-                        ${isConflict ? '<div class="absolute top-0 left-0 w-1 h-full bg-red-500"></div>' : ''}
-                        <div class="flex justify-between items-center border-b pb-3 mb-3">
-                            <div>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${new Date(date).toLocaleDateString('en-US', {weekday:'long'})}</p>
-                                <h4 class="text-sm font-black text-slate-800">${date}</h4>
+        function fleet_injectModals() {
+            document.getElementById('global-modals').innerHTML = `
+            <div id="fleetBookModal" class="hidden modal-overlay modal-fade">
+                <div class="modal-box">
+                    <div class="p-5 border-b flex justify-between items-center bg-slate-50 shrink-0 rounded-t-2xl">
+                        <h2 class="font-black text-dar uppercase text-sm tracking-widest">Special Fleet Booking</h2>
+                        <button onclick="fleet_closeModal('fleetBookModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light leading-none">✕</button>
+                    </div>
+                    <div class="p-5 space-y-4 overflow-y-auto no-scrollbar flex-1 bg-white">
+                        <div class="border border-dar/20 bg-dar/5 p-3 rounded-xl mb-2">
+                            <label class="text-[10px] font-black text-dar uppercase mb-2 block tracking-widest">Queue Passengers (First is Lead):</label>
+                            <div class="flex gap-2 relative">
+                                <input id="fResPAdd" oninput="fleet_runSearch(this, 'fResPResults')" placeholder="Search name..." class="flex-1 p-2.5 border border-slate-300 rounded-lg text-sm outline-none bg-white focus:ring-2 focus:ring-dar">
+                                <button onclick="fleet_queuePass()" class="bg-dar text-white px-4 rounded-lg font-bold text-[10px] uppercase shadow-md active:scale-95">Queue</button>
+                                <div id="fResPResults" class="search-results-box hidden"></div>
                             </div>
-                            <div>
-                                ${isConflict ? 
-                                    '<span class="bg-red-600 text-white text-[9px] px-3 py-1.5 rounded-full font-black uppercase animate-pulse shadow-md">⚠️ OVERLAP FLAG</span>' : 
-                                    '<span class="bg-slate-100 text-slate-500 text-[9px] px-3 py-1 rounded-full font-black uppercase">CLEAR LOG</span>'
-                                }
+                            <div id="fManualPList" class="mt-3 space-y-1 max-h-32 overflow-y-auto"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="fResD1" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="fResD2" type="date" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Departure Time</label><input id="fResDepTime" type="time" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Arrival Time</label><input id="fResArrTime" type="time" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm bg-slate-50 outline-none"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Assignment / Type</label>
+                                <select id="fResS" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white text-dar outline-none">
+                                    <option>WHOLE DAY</option><option>AM</option><option>PM</option>
+                                    <option class="text-red-600 font-bold">DROP-OFF ONLY</option><option class="text-blue-600 font-bold">PICK-UP ONLY</option>
+                                </select>
                             </div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Vehicle</label><select id="fResV" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white text-dar outline-none">${FLEET_VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select></div>
                         </div>
-                        <div class="space-y-2">
-                            ${activeItems.map(item => `
-                                <div class="p-3 rounded-xl border ${item.bg} ${item.border}">
-                                    <h5 class="text-[10px] font-black uppercase ${item.color} mb-1">${item.title}</h5>
-                                    <p class="text-[10px] text-slate-600 italic leading-tight">${item.subtitle}</p>
-                                </div>
-                            `).join('')}
+                        <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Driver</label><input id="fResDr" list="fDrivers" value="Driver 1" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-slate-50 outline-none"></div>
+                        <div class="space-y-3 pt-2 border-t">
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Destination</label><input id="fResDest" placeholder="e.g., DAR Regional Office" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50"></div>
+                            <div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Purpose / Details</label><input id="fResP" placeholder="Reason for travel..." class="w-full p-2.5 border border-slate-200 rounded-lg text-sm outline-none bg-slate-50"></div>
                         </div>
-                    </div>`;
-                }
+                    </div>
+                    <div class="p-5 border-t flex gap-4 bg-slate-50 shrink-0 rounded-b-2xl">
+                        <button onclick="fleet_closeModal('fleetBookModal')" class="flex-1 text-slate-500 font-bold uppercase text-[10px]">Cancel</button>
+                        <button onclick="fleet_saveManual()" class="btn-primary text-xs flex-[2] py-3.5 tracking-widest">Confirm Booking</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fleetPeopleModal" class="hidden modal-overlay modal-fade"><div class="modal-box h-[600px]"><div class="p-5 border-b flex justify-between items-center bg-slate-50 rounded-t-2xl"><div><h2 class="font-black text-dar uppercase text-sm tracking-widest">Manage Passengers</h2><p id="fPSub" class="text-[10px] text-slate-500 font-bold uppercase mt-1"></p></div><button onclick="fleet_closeModal('fleetPeopleModal')" class="text-slate-400 hover:text-red-500 text-2xl font-light">✕</button></div><div id="fPList" class="p-6 flex-1 space-y-3 overflow-y-auto no-scrollbar bg-slate-100/50"></div><div class="p-6 border-t bg-white relative shrink-0"><label class="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Add Passenger:</label><div class="flex gap-3"><div class="relative flex-1"><input id="fPAdd" oninput="fleet_runSearch(this, 'fPAddResults')" placeholder="Enter name..." class="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-dar bg-slate-50" autocomplete="off"><div id="fPAddResults" class="search-results-box hidden"></div></div><button onclick="fleet_addPersonnel()" class="btn-primary text-xs px-6 rounded-xl tracking-widest">Add</button></div></div></div></div>
+
+            <div id="fleetTransferModal" class="hidden modal-overlay modal-fade"><div class="modal-box max-w-sm"><div class="p-5 border-b bg-slate-50 rounded-t-2xl"><h2 class="font-black text-dar text-xs uppercase tracking-widest">Smart Transfer</h2><p id="fTSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p></div><div class="p-8 space-y-4 bg-white"><label class="text-[10px] font-black text-slate-400 uppercase">Available Fleet (Matching Dates):</label><select id="fTSelect" class="w-full p-4 border border-slate-200 rounded-xl font-black text-dar outline-none bg-slate-50 text-base shadow-inner"></select></div><div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl"><button onclick="fleet_closeModal('fleetTransferModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button><button id="fTExec" class="btn-primary text-xs flex-1 py-3 tracking-widest shadow-lg rounded-xl">Confirm</button></div></div></div>
+            
+            <div id="fleetMaintModal" class="hidden modal-overlay modal-fade"><div class="modal-box max-w-sm"><div class="p-5 border-b bg-slate-50 rounded-t-2xl"><h2 class="font-black text-dar text-xs uppercase tracking-widest">Schedule Maintenance</h2><p id="fMaintSub" class="text-[10px] text-slate-500 font-bold mt-1 uppercase"></p></div><div class="p-6 space-y-4 bg-white"><div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Reason</label><input id="fMaintReason" placeholder="Change Oil..." class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none"></div><div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">Start Date</label><input id="fMaintD1" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none"></div><div><label class="text-[10px] font-black text-slate-400 uppercase mb-1 block">End Date</label><input id="fMaintD2" type="date" class="w-full p-3 border rounded-xl text-sm bg-slate-50 outline-none"></div></div><div class="p-5 border-t flex gap-4 bg-slate-50 rounded-b-2xl"><button onclick="fleet_closeModal('fleetMaintModal')" class="flex-1 py-3 text-[10px] font-bold uppercase text-slate-500">Cancel</button><button onclick="fleet_saveMaint()" class="bg-red-600 text-white rounded-xl font-bold uppercase text-[10px] flex-1 py-3 tracking-widest shadow-lg hover:bg-red-700">Off-Road</button></div></div></div>
+            <datalist id="fDrivers">${FLEET_DRIVERS.map(d=>`<option value="${d}">`).join('')}</datalist>`;
+        }
+
+        function fleet_openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function fleet_closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        async function fleet_sync() {
+            const [o, i, b, e] = await Promise.all([
+                supabaseClient.from('travel_orders').select('*').neq('status','CANCELLED'), 
+                supabaseClient.from('itinerary').select('*'), 
+                supabaseClient.from('fleet_bookings').select('*'),
+                supabaseClient.from('employees').select('*')
+            ]);
+            fleetData = { orders: o.data||[], itins: i.data||[], bookings: b.data||[], emps: e.data||[] };
+            fleet_updateView();
+        }
+
+        function fleet_switchTab(t) { fleetTab = t; fleet_updateView(); }
+        
+        function fleet_updateView() {
+            const m = document.getElementById('fleet-content');
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('text-dar'));
+            document.getElementById(`ftab-${fleetTab}`).classList.add('text-dar');
+            
+            if(fleetTab === 'inbox') fleet_renderInbox(m);
+            else if(fleetTab === 'res') fleet_renderRes(m);
+            else fleet_renderSched(m);
+        }
+
+        function fleet_renderInbox(m) {
+            const pending = fleetData.orders.filter(x => x.status === 'PENDING_VEHICLE_APPROVER');
+            if(!pending.length) { m.innerHTML = `<p class="text-center p-20 text-slate-300 font-bold uppercase text-xs">Inbox Clear</p>`; return; }
+            m.innerHTML = `<div class="space-y-4">` + pending.map(o => {
+                const tr = fleetData.itins.filter(i=>i.to_no === o.to_no).sort((a,b)=>new Date(a.travel_date)-new Date(b.travel_date));
+                return `
+                <div class="bg-white p-4 rounded-xl border shadow-sm">
+                    <div class="flex justify-between items-center mb-2 pb-2 border-b"><span class="text-[9px] font-black text-dar uppercase bg-green-50 px-2 py-0.5 rounded">TO: ${o.to_no}</span><button onclick="fleet_toLand('${o.to_no}','${o.unit}')" class="text-blue-600 text-[9px] font-bold underline uppercase">LAND</button></div>
+                    <h3 class="font-black text-sm uppercase mb-2">${o.emp_name}</h3>
+                    <div class="mb-3 bg-slate-50 p-2 rounded-lg text-[9px] max-h-20 overflow-y-auto no-scrollbar">${tr.map(i=>`<b>${i.travel_date}</b>: ${i.destination} <i>(${i.purpose})</i><br>`).join('')}</div>
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <select id="fv-${o.to_no}" class="border rounded p-2 text-[10px] font-bold text-dar outline-none"><option disabled selected hidden>Vehicle</option>${FLEET_VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
+                        <select id="fs-${o.to_no}" class="border rounded p-2 text-[10px] font-bold text-slate-600 outline-none"><option>WHOLE DAY</option><option>AM</option><option>PM</option><option>DROP-OFF ONLY</option><option>PICK-UP ONLY</option></select>
+                        <input id="fd-${o.to_no}" list="fDrivers" placeholder="Driver..." class="col-span-2 border rounded p-2 text-[10px] font-bold outline-none">
+                    </div>
+                    <div class="flex gap-2"><button onclick="fleet_toLand('${o.to_no}','${o.unit}')" class="border border-red-200 text-red-600 rounded-lg px-3 py-2.5 text-[9px] font-bold uppercase flex-1 active:scale-95">Reject</button><button onclick="fleet_approve('${o.to_no}','${o.unit}')" class="btn-primary text-[10px] flex-[2] py-2.5 rounded-lg">Approve</button></div>
+                </div>`;
+            }).join('') + `</div>`;
+        }
+
+        async function fleet_approve(to, unit) {
+            const v = document.getElementById(`fv-${to}`).value, s = document.getElementById(`fs-${to}`).value, d = document.getElementById(`fd-${to}`).value || "TBD";
+            if(v === "Vehicle") return alert("Select Vehicle");
+            const route = (unit === "PARPO") ? "PENDING_PARPO" : (unit && unit !== "NULL" ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF");
+            await supabaseClient.from('travel_orders').update({ received: v, driver: d, remarks: s, status: route }).eq('to_no', to);
+            fleet_sync();
+        }
+
+        async function fleet_toLand(to, unit) {
+            const route = (unit === "PARPO") ? "PENDING_PARPO" : (unit && unit !== "NULL" ? "PENDING_UNIT_HEAD" : "PENDING_CHIEF");
+            await supabaseClient.from('travel_orders').update({ transport: 'LAND', status: route, received: null, driver: null }).eq('to_no', to);
+            fleet_sync();
+        }
+
+        function fleet_renderRes(m) {
+            const tos = fleetData.orders.filter(x => x.transport === "GOV'T VEHICLE" && x.status !== 'PENDING_VEHICLE_APPROVER' && x.status !== 'OFF_ROAD' && x.remarks !== 'MAINTENANCE');
+            const toGrp = {}; tos.forEach(x => { if(!toGrp[x.to_no]) toGrp[x.to_no] = []; toGrp[x.to_no].push(x); });
+            const bkGrp = {}; fleetData.bookings.forEach(x => { if(!bkGrp[x.ref_no]) bkGrp[x.ref_no] = []; bkGrp[x.ref_no].push(x); });
+
+            if(Object.keys(toGrp).length===0 && Object.keys(bkGrp).length===0) { m.innerHTML = `<p class="text-center p-20 text-slate-300 font-bold uppercase text-xs">No Reservations</p>`; return; }
+            
+            let html = `<div class="space-y-6">`;
+            if(Object.keys(toGrp).length > 0) {
+                html += `<div><h2 class="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-2 mb-3">Official Travel Orders</h2><div class="space-y-4">` + 
+                Object.entries(toGrp).map(([to, list]) => `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-dar flex flex-col"><div class="flex justify-between items-start mb-2 border-b pb-2"><span class="text-[9px] font-black text-slate-400 uppercase">TO: ${to}</span><span class="text-[9px] bg-green-50 text-dar font-black px-2 py-0.5 rounded uppercase">${list[0].remarks||'WHOLE'}</span></div><h3 class="font-black text-sm uppercase mb-1">${list[0].emp_name} <span class="bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span></h3>${list.length>1?`<div class="text-[10px] text-slate-500 font-bold uppercase mb-3 pl-2 border-l-2">${list.slice(1).map(x=>x.emp_name).join('<br>')}</div>`:''}<div class="bg-slate-50 p-2.5 rounded-lg border flex justify-between mt-auto mb-3"><p class="text-[10px] text-dar font-black uppercase">🚙 ${list[0].received}</p><p class="text-[10px] text-slate-500 font-bold uppercase">👤 ${list[0].driver}</p></div><div class="flex gap-2"><button onclick="fleet_cancelTO('${to}','${list[0].status}')" class="border border-red-200 text-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase flex-1 active:scale-95">Cancel</button><button onclick="fleet_openPeople('${to}', false)" class="bg-slate-100 text-dar font-black px-3 py-2 rounded-lg text-[9px] uppercase flex-[2] active:bg-slate-200">Personnel (${list.length})</button></div></div>`).join('') + `</div></div>`;
+            }
+            if(Object.keys(bkGrp).length > 0) {
+                html += `<div><h2 class="text-xs font-black text-blue-600 uppercase tracking-widest border-b pb-2 mb-3 mt-4">Special Fleet Bookings</h2><div class="space-y-4">` + 
+                Object.entries(bkGrp).map(([ref, list]) => {
+                    const dates = [...new Set(list.map(l => l.travel_date))].join(', ');
+                    const seenNames = new Set(); const pass = []; list.forEach(i => { if(!seenNames.has(i.emp_name)){ seenNames.add(i.emp_name); pass.push(i); } });
+                    return `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 flex flex-col"><div class="flex justify-between items-start mb-2 border-b pb-2"><span class="text-[9px] font-black text-slate-400 uppercase">REF: ${ref}</span><span class="text-[9px] bg-blue-50 text-blue-600 font-black px-2 py-0.5 rounded uppercase">${list[0].assignment}</span></div><h3 class="font-black text-sm uppercase mb-1">${pass[0].emp_name} <span class="bg-blue-600 text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span></h3>${pass.length>1?`<div class="text-[10px] text-slate-500 font-bold uppercase mb-2 pl-2 border-l-2">${pass.slice(1).map(x=>x.emp_name).join('<br>')}</div>`:''}<p class="text-[9px] text-slate-400 font-bold uppercase mb-3"><span class="text-blue-500">Dates:</span> ${dates}</p><div class="bg-slate-50 p-2.5 rounded-lg border flex justify-between mt-auto mb-3"><p class="text-[10px] text-dar font-black uppercase">🚙 ${list[0].vehicle}</p><p class="text-[10px] text-slate-500 font-bold uppercase">👤 ${list[0].driver}</p></div><div class="flex gap-2"><button onclick="fleet_cancelBooking('${ref}')" class="border border-red-200 text-red-600 px-3 py-2 rounded-lg text-[9px] font-black uppercase flex-1 active:scale-95">Delete</button><button onclick="fleet_openPeople('${ref}', true)" class="bg-slate-100 text-blue-600 font-black px-3 py-2 rounded-lg text-[9px] uppercase flex-[2] active:bg-slate-200">Personnel (${pass.length})</button></div></div>`;
+                }).join('') + `</div></div>`;
+            }
+            m.innerHTML = html + `</div>`;
+        }
+
+        async function fleet_cancelTO(to, status) { if(confirm("Change to LAND or Cancel TO?")) { await supabaseClient.from('travel_orders').update({ transport: 'LAND', status: status==='APPROVED'?'APPROVED':'PENDING_UNIT_HEAD' }).eq('to_no', to); fleet_sync(); } }
+        async function fleet_cancelBooking(ref) { if(confirm("Permanently delete this Booking?")) { await supabaseClient.from('fleet_bookings').delete().eq('ref_no', ref); fleet_sync(); } }
+
+        function fleet_renderSched(m) {
+            const now = new Date(); now.setHours(0,0,0,0);
+            const fItins = fleetData.itins.filter(i => {
+                const d = new Date(i.travel_date); d.setHours(0,0,0,0);
+                if(fleetSchedFilter === 'day') return d.getTime() === now.getTime();
+                if(fleetSchedFilter === 'week') { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); const e = new Date(s); e.setDate(s.getDate()+6); return d>=s && d<=e; }
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+            const validToNos = fItins.map(i => i.to_no);
+            const fBks = fleetData.bookings.filter(b => {
+                const d = new Date(b.travel_date); d.setHours(0,0,0,0);
+                if(fleetSchedFilter === 'day') return d.getTime() === now.getTime();
+                if(fleetSchedFilter === 'week') { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); const e = new Date(s); e.setDate(s.getDate()+6); return d>=s && d<=e; }
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
             });
 
-            if (!eventsFound) {
-                html = `<div class="bg-white p-10 rounded-2xl text-center border border-dashed border-slate-300">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">No activities logged in this range.</p>
-                </div>`;
+            m.innerHTML = `
+            <div class="no-print bg-white p-2 rounded-xl mb-6 flex gap-1 shadow-sm w-full mx-auto items-center sticky top-0 z-20 border">
+                <button onclick="fleet_setFilter('day')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${fleetSchedFilter==='day'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Day</button>
+                <button onclick="fleet_setFilter('week')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${fleetSchedFilter==='week'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Week</button>
+                <button onclick="fleet_setFilter('month')" class="flex-1 py-2.5 text-[10px] font-black rounded-lg ${fleetSchedFilter==='month'?'bg-dar text-white shadow':'text-slate-500 hover:bg-slate-50'} uppercase tracking-widest">Month</button>
+                <button onclick="window.print()" class="bg-slate-100 flex-[0.8] py-2.5 text-[10px] font-bold text-slate-700 shadow-sm transition flex items-center justify-center rounded-lg">Card View</button>
+                <button onclick="fleet_printSummary()" class="btn-gold flex-[1.2] py-2.5 text-[10px] shadow active:scale-95 transition flex items-center justify-center rounded-lg">🖨️ Report</button>
+            </div>
+            <div class="print-area grid grid-cols-1 gap-6">
+                <h1 class="print-header text-dar uppercase font-black col-span-full mb-0 border-b-2 border-dar pb-2 text-lg text-center tracking-tighter">Deployments (${fleetSchedFilter})</h1>
+                ` + FLEET_VEHICLES.map(v => {
+                const vLogs = fleetData.orders.filter(o => o.received === v && validToNos.includes(o.to_no));
+                const uniqueTo = [...new Set(vLogs.map(l => l.to_no))].sort();
+                const vBookings = fBks.filter(b => b.vehicle === v);
+                const uniqueRefs = [...new Set(vBookings.map(b => b.ref_no))].sort();
+
+                let html = `<div class="card-item bg-white p-5 rounded-2xl border shadow-sm relative"><div class="flex justify-between items-center mb-4 border-b pb-2"><h3 class="font-black text-sm text-dar uppercase border-l-4 border-dar-gold pl-2 tracking-widest">${v}</h3><button onclick="fleet_setOffRoad('${v}')" class="no-print bg-red-50 text-red-600 text-[8px] px-2.5 py-1 rounded font-black tracking-widest active:scale-95 border border-red-100">OFF-ROAD</button></div>`;
+                if(!uniqueTo.length && !uniqueRefs.length) html += `<p class="p-6 text-center text-[10px] text-slate-300 font-black uppercase tracking-widest">Available</p>`;
+                else {
+                    html += uniqueTo.map(toNo => {
+                        const h = vLogs.find(l => l.to_no === toNo);
+                        const dates = [...new Set(fleetData.itins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
+                        const allPass = fleetData.orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join('<br> • ');
+                        const isMaint = h.status === 'OFF_ROAD' || h.remarks === 'MAINTENANCE';
+                        const mainItin = fleetData.itins.find(itin => itin.to_no === toNo);
+                        
+                        if(isMaint) return `<div class="bg-red-50 p-4 rounded-xl border border-red-200 mb-3 relative"><p class="text-xs font-black text-red-700 uppercase tracking-widest">🚨 UNAVAILABLE</p><p class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">${dates} | OFF-ROAD</p><p class="text-[9px] text-slate-600 font-bold mt-1 italic border-l-2 border-red-300 pl-2">${mainItin?.purpose || 'Maintenance'}</p><button onclick="fleet_endMaint('${h.to_no}')" class="no-print mt-3 bg-white border border-red-300 text-red-700 px-3 py-2 rounded-lg text-[9px] font-black uppercase w-full active:scale-95 transition shadow-sm">✅ Mark Done</button></div>`;
+                        return `<div class="bg-slate-50 p-4 rounded-xl mb-3 flex justify-between items-center border border-slate-200 shadow-sm"><div class="overflow-hidden leading-tight pr-2"><span class="text-[8px] bg-dar text-white px-1.5 py-0.5 rounded font-bold mb-1 inline-block">TO</span><p class="text-[11px] font-black text-slate-800 uppercase mb-2"> • ${allPass}</p><p class="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-2 pt-1 border-t">${dates} | ${h.remarks || 'WHOLE'}</p></div><button onclick="fleet_smartTransfer('${h.to_no}','${v}')" class="text-xl no-print active:scale-75 transition hover:opacity-70 bg-white rounded-full w-10 h-10 flex items-center justify-center border border-slate-200 shadow-sm shrink-0">🔄</button></div>`;
+                    }).join('');
+                    html += uniqueRefs.map(ref => {
+                        const items = vBookings.filter(b => b.ref_no === ref);
+                        const dates = [...new Set(items.map(i => i.travel_date))].join(', ');
+                        const seenNames = new Set(); const passNames = []; items.forEach(i => { if(!seenNames.has(i.emp_name)){ seenNames.add(i.emp_name); passNames.push(i.emp_name); } });
+                        return `<div class="bg-blue-50 p-4 rounded-xl mb-3 flex justify-between items-center border border-blue-200 shadow-sm"><div class="overflow-hidden leading-tight pr-2"><span class="text-[8px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold mb-1 inline-block">BOOKING</span><p class="text-[11px] font-black text-blue-900 uppercase mb-2"> • ${passNames.join('<br> • ')}</p><p class="text-[9px] text-blue-500 font-bold tracking-widest uppercase mt-2 pt-1 border-t border-blue-200">${dates} | ${items[0].assignment}</p><p class="text-[8px] text-slate-500 italic mt-1">${items[0].destination}</p></div></div>`;
+                    }).join('');
+                }
+                return html + `</div>`;
+            }).join('') + `</div>`;
+        }
+
+        function fleet_setFilter(f) { fleetSchedFilter = f; fleet_updateView(); }
+
+        function fleet_runSearch(inp, resId) {
+            const div = document.getElementById(resId);
+            const val = inp.value.toLowerCase().trim();
+            if (val.length < 2) { div.classList.add('hidden'); return; }
+            const match = fleetData.emps.filter(e => e.full_name.toLowerCase().includes(val)).slice(0, 5);
+            div.innerHTML = match.map(e => `<div onclick="fleet_pickPerson('${safeStr(e.full_name)}','${resId}','${inp.id}','${safeStr(e.emp_id)}')"\n class="p-4 border-b border-slate-100 text-[11px] font-black active:bg-slate-100 cursor-pointer uppercase text-slate-700 hover:bg-slate-50 transition">${e.full_name}</div>`).join('');
+            div.classList.remove('hidden');
+        }
+
+        function fleet_pickPerson(n, rId, iId, eId) {
+            document.getElementById(iId).value = n;
+            document.getElementById(rId).classList.add('hidden');
+            fleetSelectedEmp = { n, id: eId };
+        }
+
+        function fleet_queuePass() {
+            if(!fleetSelectedEmp) return alert("Search and click a name first.");
+            fleetQueue.push(fleetSelectedEmp);
+            document.getElementById('fResPAdd').value = "";
+            fleetSelectedEmp = null;
+            fleet_renderQueue();
+        }
+
+        function fleet_renderQueue() {
+            document.getElementById('fManualPList').innerHTML = fleetQueue.map((p, idx) => `
+                <div class="flex justify-between items-center bg-white p-2.5 rounded-lg text-[10px] font-black uppercase border ${idx===0 ? 'border-dar shadow-sm' : 'border-slate-200'}">
+                    <span>${p.n} ${idx===0 ? '<span class="ml-1 bg-dar text-white text-[8px] px-1.5 py-0.5 rounded">LEAD</span>' : ''}</span>
+                    <button onclick="fleetQueue.splice(${idx},1);fleet_renderQueue();" class="text-red-500 font-bold hover:scale-110 text-xs px-2">✕</button>
+                </div>`).join('');
+        }
+
+        async function fleet_isDoubleBooked(empName, checkDates) {
+            const empTrips = fleetData.orders.filter(o => o.emp_name === empName && o.status !== 'CANCELLED' && o.transport === "GOV'T VEHICLE");
+            for (let trip of empTrips) {
+                const tripDates = fleetData.itins.filter(i => i.to_no === trip.to_no).map(i => i.travel_date);
+                if(tripDates.some(d => checkDates.includes(d))) return true;
+            }
+            const bks = fleetData.bookings.filter(b => b.emp_name === empName && checkDates.includes(b.travel_date));
+            return bks.length > 0;
+        }
+
+        async function fleet_saveManual() {
+            const d1 = document.getElementById('fResD1').value, d2 = document.getElementById('fResD2').value;
+            const assign = document.getElementById('fResS').value, v = document.getElementById('fResV').value, dr = document.getElementById('fResDr').value;
+            const dest = document.getElementById('fResDest').value.trim(), p = document.getElementById('fResP').value.trim();
+            const depT = document.getElementById('fResDepTime').value, arrT = document.getElementById('fResArrTime').value;
+            
+            if(!d1 || !dest || !p) return alert("Missing Dates, Destination, or Purpose.");
+            if(fleetQueue.length === 0) return alert("Queue at least one passenger.");
+
+            let st = new Date(d1), en = new Date(d2 || d1), dates = [];
+            while(st <= en) { dates.push(st.toISOString().split('T')[0]); st.setDate(st.getDate() + 1); }
+
+            for (let pass of fleetQueue) {
+                if (await fleet_isDoubleBooked(pass.n, dates)) return alert(`Blocked: ${pass.n} already assigned a vehicle on these dates!`);
             }
 
-            html += `</div>`;
-            resArea.innerHTML = html;
+            let timeStr = assign;
+            if (depT && arrT) timeStr = `${assign} (${formatTo12Hour(depT)} - ${formatTo12Hour(arrT)})`;
+            else if (depT) timeStr = `${assign} (${formatTo12Hour(depT)} Onward)`;
+
+            const payload = []; const toUpdates = []; const ref = `BK-${Math.floor(Date.now()%100000)}`;
+
+            for (let pass of fleetQueue) {
+                const passTOs = fleetData.orders.filter(o => o.emp_name === pass.n && o.status !== 'CANCELLED' && (o.transport !== "GOV'T VEHICLE" || !o.transport));
+                let matchedTO = null;
+                for (let to of passTOs) {
+                    const toDates = fleetData.itins.filter(i => i.to_no === to.to_no).map(i => i.travel_date);
+                    if (toDates.some(d => dates.includes(d))) { matchedTO = to.to_no; break; }
+                }
+                if (matchedTO) toUpdates.push(matchedTO);
+                else {
+                    for (let date of dates) payload.push({ ref_no: ref, emp_name: pass.n, emp_id: pass.id, travel_date: date, destination: dest, purpose: p, vehicle: v, driver: dr, assignment: timeStr });
+                }
+            }
+
+            if (payload.length > 0) await supabaseClient.from('fleet_bookings').insert(payload);
+            for (let to of [...new Set(toUpdates)]) await supabaseClient.from('travel_orders').update({ transport: "GOV'T VEHICLE", received: v, driver: dr, remarks: timeStr }).eq('to_no', to);
+            
+            fleetQueue = []; document.getElementById('fResDest').value = ""; document.getElementById('fResP').value = "";
+            fleet_renderQueue(); fleet_closeModal('fleetBookModal'); fleet_sync();
         }
+
+        async function fleet_openPeople(ref, isBooking) {
+            fleetActiveRef = ref; fleetIsBooking = isBooking;
+            document.getElementById('fPSub').innerText = isBooking ? `Booking Ref: ${ref}` : `TO: ${ref}`;
+            await fleet_renderPList();
+            fleet_openModal('fleetPeopleModal');
+        }
+
+        async function fleet_renderPList() {
+            const list = document.getElementById('fPList');
+            let data = [];
+            if (fleetIsBooking) {
+                const res = await supabaseClient.from('fleet_bookings').select('*').eq('ref_no', fleetActiveRef);
+                const seen = new Set(); res.data.forEach(d => { if(!seen.has(d.emp_name)) { data.push({id: d.id, name: d.emp_name}); seen.add(d.emp_name); }});
+            } else {
+                const res = await supabaseClient.from('travel_orders').select('*').eq('to_no', fleetActiveRef);
+                data = res.data.map(d => ({id: d.id, name: d.emp_name}));
+            }
+            list.innerHTML = data.map((d, i) => `
+                <div class="bg-white p-4 rounded-xl border flex justify-between items-center shadow-sm">
+                    <span class="text-xs font-black uppercase text-slate-700">${d.name} ${i===0?'<span class="ml-2 bg-dar text-white text-[8px] px-2 py-1 rounded">LEAD</span>':''}</span>
+                    ${i>0 ? `<button onclick="fleet_rmPerson('${d.id}', '${safeStr(d.name)}')" class="text-red-500 font-bold hover:bg-red-50 p-2 rounded-lg text-[10px] uppercase">Remove</button>` : ''}
+                </div>`).join('');
+        }
+
+        async function fleet_addPersonnel() {
+            if(!fleetSelectedEmp) return alert("Search and click a name first.");
+            if (fleetIsBooking) {
+                const { data } = await supabaseClient.from('fleet_bookings').select('*').eq('ref_no', fleetActiveRef);
+                if(!data || !data.length) return;
+                const dates = [...new Set(data.map(d => d.travel_date))];
+                if (await fleet_isDoubleBooked(fleetSelectedEmp.n, dates)) return alert(`${fleetSelectedEmp.n} is already assigned a vehicle on these dates.`);
+                const template = data[0];
+                const payload = dates.map(d => ({ ref_no: fleetActiveRef, emp_name: fleetSelectedEmp.n, emp_id: fleetSelectedEmp.id, travel_date: d, destination: template.destination, purpose: template.purpose, vehicle: template.vehicle, driver: template.driver, assignment: template.assignment }));
+                await supabaseClient.from('fleet_bookings').insert(payload);
+            } else {
+                const head = fleetData.orders.find(o => o.to_no === fleetActiveRef);
+                const toDates = fleetData.itins.filter(i => i.to_no === fleetActiveRef).map(i => i.travel_date);
+                if (await fleet_isDoubleBooked(fleetSelectedEmp.n, toDates)) return alert(`${fleetSelectedEmp.n} is already assigned a vehicle on these dates.`);
+                const row = { ...head, emp_name: fleetSelectedEmp.n, emp_id: fleetSelectedEmp.id }; delete row.id; delete row.created_at;
+                await supabaseClient.from('travel_orders').insert([row]);
+            }
+            document.getElementById('fPAdd').value = ""; fleetSelectedEmp = null; await fleet_renderPList(); fleet_sync();
+        }
+
+        async function fleet_rmPerson(id, name) { 
+            if(fleetIsBooking) await supabaseClient.from('fleet_bookings').delete().eq('ref_no', fleetActiveRef).eq('emp_name', name);
+            else await supabaseClient.from('travel_orders').delete().eq('id', id); 
+            await fleet_renderPList(); fleet_sync(); 
+        }
+
+        function fleet_setOffRoad(veh) { 
+            fleetVehMaint = veh; document.getElementById('fMaintSub').innerText = `Vehicle: ${veh}`; 
+            document.getElementById('fMaintD1').value = ""; document.getElementById('fMaintD2').value = ""; document.getElementById('fMaintReason').value = ""; 
+            fleet_openModal('fleetMaintModal'); 
+        }
+        
+        async function fleet_saveMaint() { 
+            const d1 = document.getElementById('fMaintD1').value, d2 = document.getElementById('fMaintD2').value, reason = document.getElementById('fMaintReason').value || "Routine Maintenance"; 
+            if(!d1) return alert("Select start date."); 
+            const to = `MAINT-${Math.floor(Date.now()%10000)}`; 
+            await supabaseClient.from('travel_orders').insert({ to_no: to, emp_name: '🚨 UNAVAILABLE', received: fleetVehMaint, remarks: 'MAINTENANCE', status: 'OFF_ROAD', transport: "GOV'T VEHICLE" }); 
+            let st = new Date(d1), en = new Date(d2 || d1); 
+            while(st <= en) { await supabaseClient.from('itinerary').insert({ to_no: to, travel_date: st.toISOString().split('T')[0], destination: "Authorized Shop", purpose: reason }); st.setDate(st.getDate() + 1); } 
+            fleet_closeModal('fleetMaintModal'); fleet_sync(); 
+        }
+
+        async function fleet_endMaint(to) { 
+            if(!confirm("Maintenance finished? Clears remaining schedules.")) return; 
+            const now = new Date(); const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0'), d = String(now.getDate()).padStart(2,'0'); 
+            await supabaseClient.from('itinerary').delete().eq('to_no', to).gte('travel_date', `${y}-${m}-${d}`); 
+            const remaining = await supabaseClient.from('itinerary').select('id').eq('to_no', to); 
+            if(!remaining.data || remaining.data.length === 0) await supabaseClient.from('travel_orders').delete().eq('to_no', to); 
+            fleet_sync(); 
+        }
+
+        async function fleet_smartTransfer(toNo, curV) { 
+            fleetActiveRef = toNo; const dates = fleetData.itins.filter(i => i.to_no === toNo).map(i => i.travel_date); 
+            const busy = fleetData.orders.filter(o => o.status !== 'CANCELLED' && o.to_no !== toNo && o.transport === "GOV'T VEHICLE" && fleetData.itins.filter(i => i.to_no === o.to_no).some(d => dates.includes(d.travel_date))).map(o => ({ v: o.received, to: o.to_no, drv: o.driver })); 
+            const opts = FLEET_VEHICLES.filter(v => v !== curV).map(v => { const m = busy.find(b => b.v === v); return `<option value="${v}" data-drv="${m?m.drv:''}">${v} ${m ? `(JOIN #${m.to})` : '(AVAIL)'}</option>`; }).join(''); 
+            document.getElementById('fTSub').innerText = `ID #${toNo}`; document.getElementById('fTSelect').innerHTML = opts; 
+            document.getElementById('fTExec').onclick = async () => { const targetV = document.getElementById('fTSelect').value, targetD = document.getElementById('fTSelect').options[document.getElementById('fTSelect').selectedIndex].dataset.drv; await supabaseClient.from('travel_orders').update({ received: targetV, driver: targetD || fleetData.orders.find(o=>o.to_no===toNo).driver }).eq('to_no', toNo); fleet_closeModal('fleetTransferModal'); fleet_sync(); }; 
+            fleet_openModal('fleetTransferModal'); 
+        }
+
+        function fleet_printSummary() {
+            const printSec = document.getElementById('print-table-section');
+            const now = new Date(); now.setHours(0,0,0,0);
+            const fItins = fleetData.itins.filter(i => {
+                const d = new Date(i.travel_date); d.setHours(0,0,0,0);
+                if(fleetSchedFilter === 'day') return d.getTime() === now.getTime();
+                if(fleetSchedFilter === 'week') { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); const e = new Date(s); e.setDate(s.getDate()+6); return d>=s && d<=e; }
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+            const validTOs = fItins.map(i => i.to_no);
+            const fBks = fleetData.bookings.filter(b => {
+                const d = new Date(b.travel_date); d.setHours(0,0,0,0);
+                if(fleetSchedFilter === 'day') return d.getTime() === now.getTime();
+                if(fleetSchedFilter === 'week') { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); const e = new Date(s); e.setDate(s.getDate()+6); return d>=s && d<=e; }
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            });
+
+            let html = `<div class="mb-6 border-b-2 border-dar pb-4 text-center"><h1 class="text-2xl font-serif font-bold text-dar uppercase">DAR Fleet Manifest Summary</h1><p class="text-sm font-bold text-gray-500 uppercase">Filter: ${fleetSchedFilter} | Printed: ${new Date().toLocaleDateString()}</p></div><table class="w-full text-left border-collapse text-xs"><thead><tr class="bg-dar text-white uppercase tracking-wider text-[10px]"><th class="p-3 border border-slate-300">Vehicle</th><th class="p-3 border border-slate-300">Date</th><th class="p-3 border border-slate-300 w-1/4">Passengers</th><th class="p-3 border border-slate-300">Destination / Purpose</th><th class="p-3 border border-slate-300">Time / Type</th></tr></thead><tbody>`;
+
+            FLEET_VEHICLES.forEach(v => {
+                const vTOs = fleetData.orders.filter(o => o.received === v && validTOs.includes(o.to_no));
+                const uniqueTo = [...new Set(vTOs.map(l => l.to_no))].sort();
+                const vBks = fBks.filter(b => b.vehicle === v);
+                const uniqueRefs = [...new Set(vBks.map(b => b.ref_no))].sort();
+
+                let rowSpan = uniqueTo.length + uniqueRefs.length;
+                if (rowSpan === 0) return; 
+                let isFirst = true;
+
+                uniqueTo.forEach(toNo => {
+                    const h = vTOs.find(l => l.to_no === toNo);
+                    const dates = [...new Set(fItins.filter(itin => itin.to_no === toNo).map(itin => itin.travel_date))].join(', ');
+                    const allPass = fleetData.orders.filter(o => o.to_no === toNo).map(o => o.emp_name).join(', ');
+                    const mainItin = fItins.find(itin => itin.to_no === toNo);
+                    
+                    html += `<tr class="border-b border-slate-200">
+                        ${isFirst ? `<td class="p-3 border-x border-slate-300 font-black text-dar bg-slate-50 uppercase text-center align-middle" rowspan="${rowSpan}">${v}</td>` : ''}
+                        <td class="p-3 border-x border-slate-300 font-bold whitespace-nowrap">${dates}</td>
+                        <td class="p-3 border-x border-slate-300">${h.remarks==='MAINTENANCE'||h.status==='OFF_ROAD' ? '<span class="text-red-600 font-bold">UNAVAILABLE (OFF-ROAD)</span>' : allPass}</td>
+                        <td class="p-3 border-x border-slate-300 italic text-[11px]">${mainItin?.destination || 'Maintenance'} <br><span class="text-slate-500">${mainItin?.purpose || ''}</span></td>
+                        <td class="p-3 border-x border-slate-300 font-bold"><span class="bg-green-100 text-green-800 px-1 py-0.5 rounded text-[8px]">TO</span> <br> ${h.remarks || 'WHOLE'}</td>
+                    </tr>`;
+                    isFirst = false;
+                });
+
+                uniqueRefs.forEach(ref => {
+                    const items = vBks.filter(b => b.ref_no === ref);
+                    const dates = [...new Set(items.map(i => i.travel_date))].join(', ');
+                    const seenNames = new Set(); const passNames = []; items.forEach(i => { if(!seenNames.has(i.emp_name)){ seenNames.add(i.emp_name); passNames.push(i.emp_name); } });
+                    
+                    html += `<tr class="border-b border-slate-200 bg-blue-50/30">
+                        ${isFirst ? `<td class="p-3 border-x border-slate-300 font-black text-dar bg-slate-50 uppercase text-center align-middle" rowspan="${rowSpan}">${v}</td>` : ''}
+                        <td class="p-3 border-x border-slate-300 font-bold whitespace-nowrap">${dates}</td>
+                        <td class="p-3 border-x border-slate-300">${passNames.join(', ')}</td>
+                        <td class="p-3 border-x border-slate-300 italic text-[11px]">${items[0].destination} <br><span class="text-slate-500">${items[0].purpose}</span></td>
+                        <td class="p-3 border-x border-slate-300 font-bold text-blue-700"><span class="bg-blue-100 text-blue-800 px-1 py-0.5 rounded text-[8px]">BOOKING</span> <br> ${items[0].assignment}</td>
+                    </tr>`;
+                    isFirst = false;
+                });
+            });
+
+            html += `</tbody></table>`;
+            if (!html.includes('<tr>')) html += `<div class="p-10 text-center text-gray-400 font-bold uppercase">No records found.</div>`;
+
+            printSec.innerHTML = html;
+            document.body.classList.add('printing-table');
+            setTimeout(() => { window.print(); document.body.classList.remove('printing-table'); }, 300);
+        }
+
+        // ==========================================
+        // SYSTEM 3: EMPLOYEE PORTAL (Itinerary & Apply)
+        // ==========================================
+        let empItinDraft = [], empPassDraft = [], empConflicts = [];
+        const todayStr = new Date().toISOString().split('T')[0]; 
+        let empCalDate = new Date();
+
+        function emp_initPortal() {
+            empPassDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
+            document.getElementById('app').innerHTML = `
+            <header class="flex-none h-16 px-5 border-b-2 border-dar-gold flex items-center justify-between bg-dar text-white shadow-md z-50">
+                <div><div class="font-bold text-sm leading-none">${currentUser.full_name}</div><div class="text-[9px] font-bold text-dar-gold uppercase">${currentUser.division} | ${currentUser.position}</div></div>
+                <div class="flex gap-2">
+                    <button onclick="showGlobalChangePwd()" class="text-[10px] font-bold border border-white px-3 py-1 rounded">Pass</button>
+                    <button onclick="globalLogout()" class="text-[10px] font-bold border border-white px-3 py-1 rounded">Logout</button>
+                </div>
+            </header>
+            <main id="emp-main" class="flex-grow overflow-y-auto p-4 pb-32"></main>
+            <nav class="flex-none h-16 bg-white border-t flex items-center pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-50">
+                <div onclick="emp_switchTab('apply')" id="etab-apply" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">📝 Apply</div>
+                <div onclick="emp_switchTab('status')" id="etab-status" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">📋 Status</div>
+                <div onclick="emp_switchTab('calendar')" id="etab-calendar" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">📅 Schedule</div>
+            </nav>`;
+            emp_switchTab('apply');
+        }
+
+        function emp_switchTab(t) {
+            document.querySelectorAll('nav div').forEach(d => d.classList.remove('text-dar', 'border-t-2', 'border-dar-gold'));
+            document.getElementById(`etab-${t}`).classList.add('text-dar', 'border-t-2', 'border-dar-gold');
+            if(t === 'apply') emp_renderApply();
+            else if(t === 'status') emp_renderStatus();
+            else emp_renderCalendar();
+        }
+
+        function emp_renderApply() {
+            document.getElementById('emp-main').innerHTML = `
+            <div class="space-y-4">
+                <div class="emp-card text-center">
+                    <button class="w-full btn-gold py-2 text-xs" onclick="emp_showQR()">Generate My QR Code</button>
+                    <div id="emp-qr-container" class="hidden mt-4">
+                        <img id="emp-qr-img" src="" class="w-[150px] h-[150px] mx-auto rounded-lg border-2 border-dar p-1 cursor-pointer transition-all" onclick="this.classList.toggle('qr-maximized')">
+                        <p class="text-xs font-bold text-dar mt-2" id="emp-qr-text"></p>
+                    </div>
+                </div>
+
+                <div class="emp-card">
+                    <h4 class="text-[11px] font-black uppercase text-dar border-b pb-1 mb-3">1. Personnel (Max 5)</h4>
+                    <div class="flex gap-2 mb-3 relative">
+                        <input type="text" id="empPAdd" oninput="emp_runSearch(this)" placeholder="Search Name..." class="flex-1 p-3 border rounded-xl text-sm outline-none">
+                        <div id="empPResults" class="search-results-box hidden"></div>
+                    </div>
+                    <div id="empPList" class="space-y-2 mt-2"></div>
+                </div>
+
+                <div class="emp-card">
+                    <h4 class="text-[11px] font-black uppercase text-dar border-b pb-1 mb-3">2. Logistics</h4>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Means of Transportation</label>
+                    <select id="emp-transport" class="w-full p-3 border rounded-xl text-sm font-bold text-dar outline-none bg-white">
+                        <option value="LAND">Public Utility (LAND)</option>
+                        <option value="GOV'T VEHICLE">Gov't Vehicle</option>
+                        <option value="AIR">Air Travel</option>
+                        <option value="OTHERS">Others</option>
+                    </select>
+                </div>
+
+                <div class="emp-card">
+                    <h4 class="text-[11px] font-black uppercase text-dar border-b pb-1 mb-3">3. Itinerary Builder</h4>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Date Range (Max 5 days)</label>
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <input id="empD1" type="date" min="${todayStr}" class="p-3 border rounded-xl text-sm bg-slate-50 outline-none" onchange="document.getElementById('empD2').value=this.value; emp_generateItin()">
+                        <input id="empD2" type="date" min="${todayStr}" class="p-3 border rounded-xl text-sm bg-slate-50 outline-none" onchange="emp_generateItin()">
+                    </div>
+                    <div id="empItinFields" class="space-y-3"></div>
+                </div>
+                <button onclick="emp_submitTO(this)" class="w-full btn-primary py-4 text-xs tracking-widest shadow-xl">🚀 SUBMIT OFFICIAL REQUEST</button>
+            </div>`;
+            emp_renderPList();
+        }
+
+        function emp_showQR() {
+            const c = document.getElementById('emp-qr-container'), img = document.getElementById('emp-qr-img'), txt = document.getElementById('emp-qr-text');
+            if (c.classList.contains('hidden')) {
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${currentUser.emp_id}`;
+                txt.innerText = `EMP ID: ${currentUser.emp_id}`;
+                c.classList.remove('hidden');
+            } else c.classList.add('hidden');
+        }
+
+        async function emp_runSearch(inp) {
+            const div = document.getElementById('empPResults');
+            const val = inp.value.trim().toLowerCase();
+            if (val.length < 2) { div.classList.add('hidden'); return; }
+            const { data } = await supabaseClient.from('employees').select('emp_id, full_name, unit').or(`full_name.ilike.%${val}%,emp_id.eq.${val}`).limit(5);
+            div.innerHTML = data.map(e => `<div onclick="emp_addPass('${safeStr(e.full_name)}', '${e.emp_id}', '${e.unit}')" class="p-3 border-b text-xs cursor-pointer hover:bg-slate-50 uppercase font-bold">${e.full_name}</div>`).join('');
+            div.classList.remove('hidden');
+        }
+
+        function emp_addPass(name, id, unit) {
+            if (empPassDraft.length >= 5) return alert("Max 5 Personnel.");
+            if (empPassDraft.some(p => p.emp_id === id)) return;
+            empPassDraft.push({ emp_id: id, name, unit });
+            document.getElementById('empPAdd').value = ""; document.getElementById('empPResults').classList.add('hidden');
+            emp_renderPList();
+        }
+
+        function emp_renderPList() {
+            document.getElementById('empPList').innerHTML = empPassDraft.map((p, i) => `
+                <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border text-xs font-bold uppercase">
+                    <span>👤 ${p.name}</span>
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="text-red-500 px-2" onclick="emp_rmPass(${i})">✕</button>` : ''}
+                </div>`).join('');
+        }
+        function emp_rmPass(i) { empPassDraft.splice(i,1); emp_renderPList(); }
+
+        async function emp_generateItin() {
+            const d1 = document.getElementById('empD1').value, d2 = document.getElementById('empD2').value;
+            const container = document.getElementById('empItinFields');
+            container.innerHTML = ''; empItinDraft = []; empConflicts = []; 
+            if(!d1 || !d2) return;
+            if(d1 < todayStr) return alert("No backdating allowed.");
+            if(d2 < d1) return alert("End date cannot be before Start.");
+            let start = new Date(d1), end = new Date(d2), diff = Math.ceil(Math.abs(end-start)/(1000*60*60*24))+1;
+            if(diff > 5) return alert("Maximum 5 days allowed.");
+
+            const { data: psos } = await supabaseClient.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: actTOs } = await supabaseClient.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+
+            let cur = new Date(start);
+            for(let i=0; i<diff; i++) {
+                const dateStr = cur.toISOString().split('T')[0];
+                let hasPSO = false;
+
+                if (psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
+                    if(!confirm(`Conflict: Existing PSO on ${dateStr}. Continue?`)) return; hasPSO = true;
+                }
+
+                for (let to of actTOs || []) {
+                    const { data: itins } = await supabaseClient.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
+                    if (itins && itins.length > 0) {
+                        if (to.status.includes('DISAPPROVED')) { alert(`DISAPPROVED TO on ${dateStr}. Select another date.`); return; }
+                        if (confirm(`Conflict: ${to.status} TO ${to.to_no} exists on ${dateStr}. Overwrite? (Splits multi-day TOs)`)) {
+                            empConflicts.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
+                        } else return;
+                    }
+                }
+
+                container.innerHTML += `
+                    <div class="emp-card border-l-4 border-dar" id="ecard-${i}" style="margin-bottom:10px; padding:10px;">
+                        <div class="flex justify-between items-center mb-2">
+                            <h5 class="text-dar font-black text-xs uppercase">📅 ${dateStr} ${hasPSO?'<span class="text-red-500 ml-1">(PSO)</span>':''}</h5>
+                            <button onclick="document.getElementById('ecard-${i}').remove(); empItinDraft=empItinDraft.filter(x=>x.id!=='ecard-${i}');" class="text-[10px] font-bold text-red-500">DELETE</button>
+                        </div>
+                        <input type="text" id="edest-${i}" placeholder="Destination" class="w-full p-2 border rounded-lg text-xs mb-2 bg-white">
+                        ${i > 0 ? `<label class="text-[10px] text-slate-500 flex items-center gap-1 mb-2 cursor-pointer"><input type="checkbox" onchange="if(this.checked) document.getElementById('epurp-${i}').value = document.getElementById('epurp-${i-1}').value; else document.getElementById('epurp-${i}').value='';"> Copy previous purpose</label>` : ''}
+                        <textarea id="epurp-${i}" rows="2" placeholder="Purpose" class="w-full p-2 border rounded-lg text-xs mb-2 bg-white"></textarea>
+                        <input type="text" id="erep-${i}" placeholder="Report To" class="w-full p-2 border rounded-lg text-xs bg-white">
+                    </div>`;
+                empItinDraft.push({ date: dateStr, destId: `edest-${i}`, purpId: `epurp-${i}`, repId: `erep-${i}`, id: `ecard-${i}`, hasPSO });
+                cur.setDate(cur.getDate()+1);
+            }
+        }
+
+        async function emp_submitTO(btn) {
+            if(empItinDraft.length === 0) return alert("Itinerary empty.");
+            const batchI = []; const reps = new Set();
+            for (let it of empItinDraft) {
+                const dst = document.getElementById(it.destId).value.trim(), prp = document.getElementById(it.purpId).value.trim(), rpt = document.getElementById(it.repId).value.trim();
+                if(!dst || !prp || !rpt) return alert(`Fill all fields for ${it.date}.`);
+                batchI.push({ travel_date: it.date, destination: dst, purpose: prp }); reps.add(rpt);
+            }
+
+            btn.disabled = true; btn.innerText = "PROCESSING...";
+
+            try {
+                for (let c of empConflicts) {
+                    if (c.status.includes("PENDING")) {
+                        await supabaseClient.from('itinerary').delete().eq('to_no', c.to_no);
+                        await supabaseClient.from('travel_orders').delete().eq('to_no', c.to_no);
+                    } else if (c.status === "APPROVED") {
+                        const { data: oItin } = await supabaseClient.from('itinerary').select('*').eq('to_no', c.to_no);
+                        const remains = oItin.filter(d => d.travel_date !== c.affected_date);
+                        await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', c.to_no);
+                        if (remains.length > 0) {
+                            const newTo = await emp_getSeq();
+                            const { data: orig } = await supabaseClient.from('travel_orders').select('*').eq('to_no', c.to_no);
+                            await supabaseClient.from('travel_orders').insert(orig.map(p => ({...p, id:undefined, to_no: newTo, status:'APPROVED'})));
+                            await supabaseClient.from('itinerary').insert(remains.map(i => ({...i, id:undefined, to_no: newTo})));
+                        }
+                    }
+                }
+
+                const toNo = await emp_getSeq();
+                const trans = document.getElementById('emp-transport').value;
+                const isMarpo = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
+                let rStatus = "PENDING_CHIEF";
+                if(trans === "GOV'T VEHICLE") rStatus = "PENDING_VEHICLE_APPROVER";
+                else if(currentUser.unit === "PARPO") rStatus = "PENDING_PARPO";
+                else if(isMarpo) rStatus = "PENDING_CHIEF";
+                else if(currentUser.unit) rStatus = "PENDING_UNIT_HEAD";
+
+                const bPass = empPassDraft.map(p => ({
+                    to_no: toNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: currentUser.division,
+                    status: rStatus, transport: trans, report_to: Array.from(reps).join(", "),
+                    remarks: empItinDraft.some(x => x.hasPSO) ? "EXISTING PSO" : ""
+                }));
+                batchI.forEach(i => i.to_no = toNo);
+
+                await supabaseClient.from('travel_orders').insert(bPass);
+                await supabaseClient.from('itinerary').insert(batchI);
+
+                alert("Submitted: " + toNo);
+                emp_switchTab('status');
+            } catch(e) { alert("Error: " + e.message); }
+            finally { btn.disabled = false; btn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
+        }
+
+        async function emp_getSeq() {
+            const yr = new Date().getFullYear(), div = (currentUser.division || "GEN").trim().substring(0,5).toUpperCase();
+            const { data } = await supabaseClient.from('travel_orders').select('to_no').like('to_no', `${yr}-${div}-%`).order('to_no', {ascending:false}).limit(1);
+            let seq = 1;
+            if(data && data.length && data[0].to_no) {
+                const p = data[0].to_no.split('-'); if(p.length>=3 && !isNaN(parseInt(p[2]))) seq = parseInt(p[2])+1;
+            }
+            return `${yr}-${div}-${String(seq).padStart(5,'0')}`;
+        }
+
+        async function emp_renderStatus() {
+            const m = document.getElementById('emp-main'); m.innerHTML = `<p class="text-center p-10 font-bold text-slate-400">Loading Applications...</p>`;
+            const {data} = await supabaseClient.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending:false}).limit(20);
+            if(!data || !data.length) return m.innerHTML = `<p class="text-center p-10 text-slate-400 font-bold uppercase">No Applications</p>`;
+            
+            let h = `<h3 class="font-black text-dar mb-4 uppercase tracking-widest text-sm border-b pb-2">Applications Status</h3><div class="space-y-4">`;
+            for(let t of data) {
+                const {data: itin} = await supabaseClient.from('itinerary').select('*').eq('to_no', t.to_no).order('travel_date');
+                const isApp = t.status === 'APPROVED', isPen = t.status.includes('PENDING');
+                const bCol = isApp ? 'border-green-500' : (t.status.includes('CANCEL') ? 'border-red-500' : 'border-dar-gold');
+                
+                h += `
+                <div class="bg-white p-4 rounded-xl border-l-4 ${bCol} shadow-sm">
+                    <div class="flex justify-between items-start mb-2 border-b border-slate-100 pb-2">
+                        <span class="text-[10px] font-black text-slate-500 uppercase">${t.to_no}</span>
+                        <span class="text-[9px] font-black uppercase bg-slate-100 px-2 py-1 rounded">${t.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded-lg mb-3">
+                        ${itin?.map(i=>`<p class="text-[10px] font-bold leading-tight mb-1">📅 ${i.travel_date}: <span class="font-normal italic">${i.destination}</span></p>`).join('')}
+                    </div>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-[9px] font-black uppercase text-dar">🚙 ${t.transport}</span>
+                        <span class="text-[9px] font-black uppercase text-slate-400">👤 ${t.received || 'N/A'}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        ${isPen ? `<button onclick="emp_modifyTO('${t.to_no}')" class="btn-primary text-[9px] flex-1 py-2">Modify</button><button onclick="emp_delTO('${t.to_no}')" class="border border-red-500 text-red-600 rounded-lg text-[9px] font-black uppercase flex-1 py-2">Delete</button>` : ''}
+                        ${isApp ? `<button onclick="emp_printPDF('${t.to_no}')" class="bg-green-600 text-white rounded-lg font-black uppercase text-[9px] flex-[2] py-2 shadow">Print PDF</button><button onclick="emp_cancelApp('${t.to_no}')" class="border border-red-500 text-red-600 rounded-lg text-[9px] font-black uppercase flex-1 py-2">Cancel</button>` : ''}
+                    </div>
+                </div>`;
+            }
+            m.innerHTML = h + `</div>`;
+        }
+
+        async function emp_delTO(to) { if(confirm("Delete pending TO?")) { await supabaseClient.from('itinerary').delete().eq('to_no', to); await supabaseClient.from('travel_orders').delete().eq('to_no', to); emp_renderStatus(); } }
+        async function emp_cancelApp(to) { if(confirm("Cancel approved TO?")) { await supabaseClient.from('travel_orders').update({status:'CANCELLED'}).eq('to_no', to); emp_renderStatus(); } }
+        async function emp_modifyTO(toNo) {
+            if(!confirm("Load TO to draft? Old record deleted.")) return;
+            const { data: to } = await supabaseClient.from('travel_orders').select('*').eq('to_no', toNo).single();
+            const { data: itin } = await supabaseClient.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            
+            emp_switchTab('apply');
+            document.getElementById('emp-transport').value = to.transport;
+            if(itin.length) { document.getElementById('empD1').value = itin[0].travel_date; document.getElementById('empD2').value = itin[itin.length-1].travel_date; }
+            
+            const c = document.getElementById('empItinFields'); c.innerHTML=''; empItinDraft=[];
+            itin.forEach((i, idx) => {
+                c.innerHTML += `
+                    <div class="emp-card border-l-4 border-dar" id="ecard-${idx}" style="margin-bottom:10px; padding:10px;">
+                        <div class="flex justify-between items-center mb-2">
+                            <h5 class="text-dar font-black text-xs uppercase">📅 ${i.travel_date}</h5>
+                            <button onclick="document.getElementById('ecard-${idx}').remove(); empItinDraft=empItinDraft.filter(x=>x.id!=='ecard-${idx}');" class="text-[10px] font-bold text-red-500">DELETE</button>
+                        </div>
+                        <input type="text" id="edest-${idx}" value="${i.destination}" class="w-full p-2 border rounded-lg text-xs mb-2 bg-white">
+                        <textarea id="epurp-${idx}" rows="2" class="w-full p-2 border rounded-lg text-xs mb-2 bg-white">${i.purpose}</textarea>
+                        <input type="text" id="erep-${idx}" value="${to.report_to}" class="w-full p-2 border rounded-lg text-xs bg-white">
+                    </div>`;
+                empItinDraft.push({ date: i.travel_date, destId: `edest-${idx}`, purpId: `epurp-${idx}`, repId: `erep-${idx}`, id: `ecard-${idx}`, hasPSO:false });
+            });
+            await supabaseClient.from('itinerary').delete().eq('to_no', toNo); await supabaseClient.from('travel_orders').delete().eq('to_no', toNo);
+        }
+
+        async function emp_renderCalendar() {
+            document.getElementById('emp-main').innerHTML = `
+                <div class="bg-white p-4 rounded-xl border">
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded-t-xl mb-2">
+                        <button onclick="empCalDate.setMonth(empCalDate.getMonth()-1); emp_renderCalendar();" class="text-dar font-black px-3 py-1 bg-white rounded border shadow-sm">&lt;</button>
+                        <div class="font-black text-dar uppercase tracking-widest text-xs">${empCalDate.toLocaleString('default',{month:'long',year:'numeric'})}</div>
+                        <button onclick="empCalDate.setMonth(empCalDate.getMonth()+1); emp_renderCalendar();" class="text-dar font-black px-3 py-1 bg-white rounded border shadow-sm">&gt;</button>
+                    </div>
+                    <table class="cal-table"><tbody id="ecaltbody"><tr><td class="text-center p-10 font-bold text-gray-400">Loading...</td></tr></tbody></table>
+                </div>`;
+            const y = empCalDate.getFullYear(), m = empCalDate.getMonth();
+            const [tos, psos, hols] = await Promise.all([
+                supabaseClient.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status','APPROVED'),
+                supabaseClient.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                supabaseClient.from('holidays').select('*')
+            ]);
+            const {data: itins} = await supabaseClient.from('itinerary').select('*').in('to_no', tos.data.map(t=>t.to_no));
+            
+            let h = ''; const days = new Date(y, m+1, 0).getDate();
+            for(let d=1; d<=days; d++) {
+                const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dw = new Date(y, m, d).getDay(); const isW = dw===0||dw===6;
+                const dI = itins.filter(i=>i.travel_date===ds), dP = psos.data.filter(p=>ds>=p.start_date && ds<=p.end_date), dH = hols.data.find(x=>x.date===ds);
+                let acts = "";
+                if(dH) acts += `<div class="bg-red-500 text-white text-[9px] font-bold p-1 rounded mb-1">HOL: ${dH.name}</div>`;
+                if(dP.length) dP.forEach(p=>acts+=`<div class="bg-dar-gold text-dar text-[9px] font-bold p-1 rounded mb-1">PSO: ${p.pso_no}</div>`);
+                if(dI.length) dI.forEach(i=>acts+=`<div class="bg-dar text-white text-[9px] font-bold p-1 rounded mb-1">TO: ${i.destination}</div>`);
+                
+                const bg = ds===todayStr ? 'bg-yellow-50 border-l-4 border-dar-gold' : (isW ? 'bg-slate-50' : '');
+                h += `<tr class="${bg} border-b border-slate-100"><td class="p-2 w-12 text-center border-r border-slate-100"><span class="text-dar font-black text-lg leading-none">${d}</span><br><span class="text-[9px] text-slate-400 font-bold uppercase">${new Date(y,m,d).toLocaleDateString('en-US',{weekday:'short'})}</span></td><td class="p-2 align-top">${acts||'<span class="text-slate-300">-</span>'}</td></tr>`;
+            }
+            document.getElementById('ecaltbody').innerHTML = h;
+        }
+
+        // --- jsPDF Logic ---
+        const urlToBase64 = async (url) => {
+            try { const r = await fetch(url); if(!r.ok) return null; const b = await r.blob(); return new Promise((res) => { const reader = new FileReader(); reader.onloadend = () => res(reader.result); reader.readAsDataURL(b); }); } catch(e) { return null; }
+        };
+        async function emp_printPDF(toNo) {
+            const { jsPDF } = window.jspdf; const doc = new jsPDF('p', 'mm', 'a4'); 
+            try {
+                const { data: gO } = await supabaseClient.from('travel_orders').select('*').eq('to_no', toNo);
+                const { data: iL } = await supabaseClient.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+                const { data: eD } = await supabaseClient.from('employees').select('emp_id, full_name, position, station');
+                
+                const od = gO[0]; const names = gO.map(m => m.emp_name.toUpperCase()).join(", ");
+                const positions = [...new Set(gO.map(m => eD.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
+                const stations = [...new Set(gO.map(m => eD.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
+                const isM = currentUser.position?.toUpperCase().includes("MARPO"); const bD = currentUser.division?.split(',')[0].trim() || "";
+
+                let uh_d = null, dc_d = null;
+                if (!isM && currentUser.unit && currentUser.unit !== "PARPO") { const r = await supabaseClient.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle(); uh_d = r.data; }
+                if (currentUser.unit !== "PARPO" && bD) { const r = await supabaseClient.from('users').select('full_name, username').eq('division', bD).eq('role', 'CHIEF').maybeSingle(); dc_d = r.data; }
+
+                const getAst = (f) => `${SB_URL}/storage/v1/object/public/e-sign/${f}`;
+                const [iBg, iQr, iP2, iUh, iDc] = await Promise.all([urlToBase64(getAst("bg_form.jpg")), urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`), urlToBase64(getAst("P2.png")), uh_d ? urlToBase64(getAst(`${uh_d.username}.png`)) : null, dc_d ? urlToBase64(getAst(`${dc_data.username}.png`)) : null]);
+
+                for (let i = 0; i < 3; i++) {
+                    if (i > 0) doc.addPage();
+                    if (iBg) try { doc.addImage(iBg, 'JPEG', 0, 0, 210, 297); } catch(e){} 
+                    if (iQr) doc.addImage(iQr, 'PNG', 180, 10, 20, 20); 
+                    if (od.transport === "GOV'T VEHICLE") { doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' }); }
+                    if (od.remarks && od.remarks.includes("EXISTING PSO")) { doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' }); }
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+                    const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
+
+                    doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); doc.text(names, 40, 48); doc.line(40, 49, 160, 49);
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 54); doc.setFont("helvetica", "normal"); doc.text(positions, 40, 54); doc.line(40, 55, 85, 55);
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 54); doc.setFont("helvetica", "normal"); doc.text(stations, 110, 54); doc.line(110, 55, 160, 55);
+
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 61); doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    const drawCheck = (label, x, y, isChecked) => { doc.rect(x, y - 3, 3, 3); if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); } doc.text(label, x + 5, y); };
+                    drawCheck("AIR", 20, 66, od.transport === "AIR"); drawCheck("GOV'T VEHICLE", 70, 66, od.transport === "GOV'T VEHICLE"); drawCheck("LAND", 20, 71, od.transport === "LAND"); drawCheck("OTHERS, PLEASE SPECIFY", 70, 71, od.transport === "OTHERS");
+
+                    doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text("DESTINATION:", 20, 78);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9); let destY = 78;
+                    iL.forEach(it => { doc.text(`${new Date(it.travel_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} - ${it.destination}`, 50, destY); destY += 4.5; });
+                    let curY = Math.max(destY, 83);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("DEPARTURE DATE:", 20, curY); doc.setFont("helvetica", "normal"); doc.text(iL[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
+                    doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY); doc.setFont("helvetica", "normal"); doc.text(iL[iL.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+
+                    curY += 6; doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY); doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
+                    curY += 6; doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY); curY += 4;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9); const pL = doc.splitTextToSize(iL[0]?.purpose || "", 140); doc.text(pL, 20, curY); doc.line(20, curY+1, 160, curY+1); curY += Math.max(5, pL.length * 4);
+
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY); drawCheck("LIVE IN", 110, curY, false); drawCheck("LIVE OUT", 135, curY, false);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("Recommended by:", 20, 156);
+                    if (i > 0) {
+                        if(uh_d && !isM) { if(iUh) doc.addImage(iUh, 'PNG', 34, 153, 35, 15); doc.text(uh_d.full_name.toUpperCase(), 34, 166); }
+                        if(dc_d) { if(iDc) doc.addImage(iDc, 'PNG', 104, 153, 35, 15); doc.text(dc_d.full_name.toUpperCase(), 104, 166); }
+                    } else {
+                        if(uh_d && !isM) doc.text(uh_d.full_name.toUpperCase(), 34, 166);
+                        if(dc_d) doc.text(dc_d.full_name.toUpperCase(), 104, 166);
+                    }
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isM ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+
+                    if(i > 0 && iP2) doc.addImage(iP2, 'PNG', 122, 187, 20, 20); 
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("RICARDO C. GARCIA", 114, 202);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text("PARPO II", 128, 206);
+                }
+                doc.save(`TO_${toNo}.pdf`);
+            } catch(e) { alert("PDF Error: "+e.message); }
+        }
+
+
+        // ==========================================
+        // SYSTEM 4: ADMIN CONSOLE (Approvals & Analytics)
+        // ==========================================
+        let adminTab = 'pending', adminRepFilter = 'month', adminRepData = [];
+
+        function admin_initConsole() {
+            document.getElementById('app').innerHTML = `
+            <header class="flex-none h-16 px-5 border-b shadow-sm flex items-center justify-between bg-white text-dar">
+                <div><h1 class="font-black text-sm uppercase tracking-widest">${currentUser.role} CONSOLE</h1><p class="text-[10px] text-slate-500 font-bold">${currentUser.full_name}</p></div>
+                <div class="flex gap-2">
+                    <button onclick="showGlobalChangePwd()" class="text-[10px] font-bold border border-slate-200 px-3 py-1 rounded-lg">Pass</button>
+                    <button onclick="globalLogout()" class="text-[10px] font-bold border border-slate-200 px-3 py-1 rounded-lg bg-slate-50 hover:bg-red-50 hover:text-red-500 transition">Logout</button>
+                </div>
+            </header>
+            <main id="admin-main" class="flex-grow overflow-y-auto p-4 pb-32 bg-slate-50"></main>
+            <nav class="flex-none h-16 bg-white border-t flex items-center pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-50">
+                <div onclick="admin_switchTab('pending')" id="atab-pending" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">📥 Action</div>
+                <div onclick="admin_switchTab('approved')" id="atab-approved" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">✅ Approved</div>
+                <div onclick="admin_switchTab('reports')" id="atab-reports" class="flex-1 flex flex-col items-center justify-center text-[10px] font-bold text-gray-400 uppercase cursor-pointer">📊 Analytics</div>
+            </nav>`;
+            admin_switchTab('pending');
+        }
+
+        function admin_switchTab(t) {
+            adminTab = t;
+            document.querySelectorAll('nav div').forEach(d => d.classList.remove('text-dar', 'border-t-2', 'border-dar-gold'));
+            document.getElementById(`atab-${t}`).classList.add('text-dar', 'border-t-2', 'border-dar-gold');
+            
+            const m = document.getElementById('admin-main');
+            if(t === 'pending') admin_loadPending(m);
+            else if(t === 'approved') admin_loadApproved(m);
+            else admin_loadReports(m);
+        }
+
+        const admin_checkScope = (div, unit) => {
+            if (userRole === "PARPO") return true;
+            const dM = div && currentUser.divisions.includes(div.toUpperCase());
+            if (userRole === "CHIEF") return dM;
+            return dM && (unit && unit.toUpperCase() === currentUser.unit);
+        };
+
+        async function admin_loadPending(m) {
+            m.innerHTML = `<p class="text-center p-10 font-bold text-slate-400 animate-pulse text-xs uppercase tracking-widest">Scanning Inbox...</p>`;
+            const [o, i] = await Promise.all([supabaseClient.from('travel_orders').select('*'), supabaseClient.from('itinerary').select('*')]);
+            let g = {}; (o.data||[]).forEach(x=>{if(!g[x.to_no])g[x.to_no]=[];g[x.to_no].push(x);});
+            
+            let arr = [];
+            for (const [to, list] of Object.entries(g)) {
+                const s = (list[0].status || "").toUpperCase(); let show = false;
+                if (userRole === "PARPO" && s === "PENDING_PARPO") show = true;
+                else if (userRole === "CHIEF" && s === "PENDING_CHIEF" && currentUser.divisions.includes(list[0].division?.toUpperCase())) show = true;
+                else if (userRole === "UNIT_HEAD" && s === "PENDING_UNIT_HEAD" && currentUser.divisions.includes(list[0].division?.toUpperCase()) && currentUser.unit === list[0].unit?.toUpperCase()) show = true;
+                
+                if (show) {
+                    const ds = i.data.filter(x=>x.to_no===to);
+                    arr.push({ to, names: list.map(l=>l.emp_name), dest: ds.map(d=>d.destination).join(', ') });
+                }
+            }
+
+            if(!arr.length) return m.innerHTML = `<p class="text-center p-10 font-bold text-slate-300 uppercase">Inbox Clear</p>`;
+            
+            m.innerHTML = `<div class="space-y-4">` + arr.map(a => `
+                <div class="bg-white p-5 rounded-2xl border shadow-sm">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">${a.to}</span>
+                    <h3 class="font-black text-dar uppercase text-xs">${a.names.join(', ')}</h3>
+                    <p class="text-[10px] text-slate-500 mt-2 italic truncate">📍 ${a.dest}</p>
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="admin_act('${a.to}', 'DISAPPROVED')" class="flex-1 bg-red-50 text-red-600 border border-red-200 rounded-xl font-bold py-3 text-[10px] uppercase tracking-widest active:scale-95">Deny</button>
+                        <button onclick="admin_act('${a.to}', 'APPROVE')" class="flex-[2] btn-primary rounded-xl py-3 text-[10px] shadow">Approve</button>
+                    </div>
+                </div>`).join('') + `</div>`;
+        }
+
+        async function admin_act(to, act) {
+            let nxt = 'APPROVED', payload = {};
+            if(act === 'DISAPPROVED') {
+                const rs = prompt("Reason for denial:"); if(!rs) return;
+                nxt = 'DISAPPROVED'; payload.received = rs;
+            } else {
+                if(userRole === 'UNIT_HEAD') { nxt = 'PENDING_CHIEF'; payload.unithead_signed = currentUser.full_name; }
+                else if(userRole === 'CHIEF') { nxt = 'PENDING_PARPO'; payload.dc_signed = currentUser.full_name; }
+                else payload.parpo_signed = "RICARDO C. GARCIA";
+            }
+            payload.status = nxt;
+            await supabaseClient.from('travel_orders').update(payload).eq('to_no', to);
+            admin_loadPending(document.getElementById('admin-main'));
+        }
+
+        async function admin_loadApproved(m) {
+            m.innerHTML = `<p class="text-center p-10 font-bold text-slate-400 animate-pulse text-xs uppercase tracking-widest">Loading...</p>`;
+            const [o, i] = await Promise.all([supabaseClient.from('travel_orders').select('*').eq('status','APPROVED'), supabaseClient.from('itinerary').select('*')]);
+            let h = `<div class="space-y-3">`;
+            (o.data||[]).forEach(x => {
+                if(admin_checkScope(x.division, x.unit)) {
+                    const ds = i.data.filter(d=>d.to_no===x.to_no).map(d=>d.destination).join(', ');
+                    h += `<div class="bg-white p-4 rounded-xl border-l-4 border-green-500 shadow-sm"><span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">${x.to_no}</span><p class="font-black text-dar text-xs uppercase mt-1">${x.emp_name}</p><p class="text-[10px] text-slate-500 mt-1 truncate">📍 ${ds}</p></div>`;
+                }
+            });
+            m.innerHTML = h + `</div>`;
+        }
+
+        async function admin_loadReports(m) {
+            m.innerHTML = `<p class="text-center p-10 font-bold text-slate-400 animate-pulse text-xs uppercase tracking-widest">Building Dashboard...</p>`;
+            try {
+                const [to, it, ps, ho] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('*').eq('status', 'APPROVED'),
+                    supabaseClient.from('itinerary').select('*'),
+                    supabaseClient.from('pso_records').select('*'),
+                    supabaseClient.from('holidays').select('*')
+                ]);
+                adminRepData = []; let seen = new Set();
+                (it.data||[]).forEach(i => {
+                    const p = (to.data||[]).find(x => x.to_no === i.to_no);
+                    if(p && i.travel_date && admin_checkScope(p.division, p.unit)) {
+                        const k = `${p.emp_name}-${i.travel_date}`;
+                        if(!seen.has(k)) { adminRepData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, sub: i.destination, c: 'text-dar bg-green-50 border-green-200' }); seen.add(k); }
+                    }
+                });
+                (ps.data||[]).forEach(p => { if(p.date && admin_checkScope(p.division, p.unit)) adminRepData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name||'Personnel', sub: p.destination||'Field Work', c: 'text-blue-700 bg-blue-50 border-blue-200' }); });
+                (ho.data||[]).forEach(h => { if(h.date) adminRepData.push({ type: 'HOLIDAY', date: new Date(h.date), title: h.name||'Holiday', sub: 'National/Local', c: 'text-red-700 bg-red-50 border-red-200' }); });
+                
+                m.innerHTML = `
+                <div class="flex bg-slate-200 rounded-xl p-1 mb-4">
+                    <button onclick="admin_setRepFilter('day')" class="w-1/3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition ${adminRepFilter==='day'?'bg-white shadow text-dar':'text-slate-500 hover:bg-slate-100'}">Day</button>
+                    <button onclick="admin_setRepFilter('week')" class="w-1/3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition ${adminRepFilter==='week'?'bg-white shadow text-dar':'text-slate-500 hover:bg-slate-100'}">Week</button>
+                    <button onclick="admin_setRepFilter('month')" class="w-1/3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition ${adminRepFilter==='month'?'bg-white shadow text-dar':'text-slate-500 hover:bg-slate-100'}">Month</button>
+                </div>
+                <div id="admin-rep-list" class="space-y-3"></div>`;
+                admin_updateRepList();
+            } catch(e) { m.innerHTML = `<p class="p-10 text-red-500 text-xs font-bold text-center border bg-red-50 rounded-xl">Error loading analytics.</p>`; }
+        }
+
+        function admin_setRepFilter(v) { adminRepFilter = v; admin_updateRepList(); }
+        
+        function admin_updateRepList() {
+            const list = document.getElementById('admin-rep-list');
+            document.querySelectorAll('#admin-main button').forEach(b=> { if(b.innerText.toLowerCase()===adminRepFilter) { b.classList.add('bg-white','shadow','text-dar'); b.classList.remove('text-slate-500','hover:bg-slate-100'); } else { b.classList.remove('bg-white','shadow','text-dar'); b.classList.add('text-slate-500','hover:bg-slate-100'); } });
+            
+            const n = new Date(); n.setHours(0,0,0,0);
+            let f = adminRepData.filter(r => {
+                const d = new Date(r.date); d.setHours(0,0,0,0);
+                if(adminRepFilter==='day') return d.getTime()===n.getTime();
+                if(adminRepFilter==='week') { const s = new Date(n); s.setDate(n.getDate()-n.getDay()); const e = new Date(s); e.setDate(s.getDate()+6); return d>=s && d<=e; }
+                return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear();
+            });
+            f.sort((a,b) => b.date - a.date);
+
+            if(!f.length) { list.innerHTML = `<p class="text-center py-10 text-slate-400 font-bold text-[10px] tracking-widest uppercase">No Records</p>`; return; }
+            
+            let h = '', last = '';
+            f.forEach(r => {
+                const cur = r.date.toDateString();
+                if(cur !== last) {
+                    h += `<h3 class="text-[9px] font-black text-slate-400 mt-4 mb-2 tracking-widest uppercase border-b pb-1">${r.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</h3>`;
+                    last = cur;
+                }
+                h += `<div class="bg-white p-4 rounded-xl border shadow-sm flex items-center justify-between ${r.c} border-l-4"><div class="overflow-hidden pr-2"><p class="font-black text-xs uppercase truncate">${r.title}</p><p class="text-[9px] italic mt-1 truncate">📍 ${r.sub}</p></div><div class="shrink-0"><span class="text-[8px] font-black px-2 py-1 rounded bg-white/50 uppercase shadow-sm">${r.type}</span></div></div>`;
+            });
+            list.innerHTML = h;
+        }
+
     </script>
 </body>
 </html>
