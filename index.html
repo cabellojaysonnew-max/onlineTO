@@ -460,17 +460,24 @@
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                // Personal Context: Signatory Rule Execution based on current user
-                let uh_data = null;
-                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
-                    const res = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).eq('role', 'Unit Head').maybeSingle();
-                    uh_data = res.data;
-                }
+                // Extract base division (e.g., turns "LTSP, DARMO" into "LTSP") to correctly query the users table
+                const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
 
+                // Personal Context: Signatory Rule Execution strictly based on current user
+                let uh_data = null;
                 let dc_data = null;
-                if (currentUser.unit !== "PARPO" && currentUser.division) {
-                    const res = await supabase.from('users').select('full_name, username').eq('division', currentUser.division).eq('role', 'Division Chief').maybeSingle();
-                    dc_data = res.data;
+                
+                if (currentUser.unit !== "PARPO") {
+                    if (!isMARPO && currentUser.unit && currentUser.unit.trim() !== "") {
+                        // Adjusted to ilike '%HEAD%' to prevent strict-casing query failures
+                        const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).ilike('role', '%HEAD%').maybeSingle();
+                        uh_data = resUH.data;
+                    }
+                    if (baseDiv) {
+                        // Adjusted query from 'Division Chief' to 'CHIEF' as per the actual database table values
+                        const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                        dc_data = resDC.data;
+                    }
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
@@ -503,16 +510,17 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
+                    // MAXIMIZED ROW SPACE IMPLEMENTATION
                     doc.setFontSize(10); 
-                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 55); 
-                    doc.text(names, 40, 55); doc.line(40, 56, 160, 56);
+                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
+                    doc.text(names, 40, 48); doc.line(40, 49, 160, 49);
 
-                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 62);
-                    doc.setFont("helvetica", "normal"); doc.text(positions, 40, 62); doc.line(40, 63, 85, 63);
-                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 62);
-                    doc.setFont("helvetica", "normal"); doc.text(stations, 110, 62); doc.line(110, 63, 160, 63);
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 54);
+                    doc.setFont("helvetica", "normal"); doc.text(positions, 40, 54); doc.line(40, 55, 85, 55);
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 54);
+                    doc.setFont("helvetica", "normal"); doc.text(stations, 110, 54); doc.line(110, 55, 160, 55);
 
-                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 72);
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 61);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     
                     const drawCheck = (label, x, y, isChecked) => {
@@ -521,19 +529,21 @@
                         doc.text(label, x + 5, y);
                     };
 
-                    drawCheck("AIR", 20, 78, od.transport === "AIR");
-                    drawCheck("GOV'T VEHICLE", 70, 78, od.transport === "GOV'T VEHICLE");
-                    drawCheck("LAND", 20, 84, od.transport === "LAND");
-                    drawCheck("OTHERS, PLEASE SPECIFY", 70, 84, od.transport === "OTHERS");
+                    drawCheck("AIR", 20, 66, od.transport === "AIR");
+                    drawCheck("GOV'T VEHICLE", 70, 66, od.transport === "GOV'T VEHICLE");
+                    drawCheck("LAND", 20, 71, od.transport === "LAND");
+                    drawCheck("OTHERS, PLEASE SPECIFY", 70, 71, od.transport === "OTHERS");
 
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                    doc.text("DESTINATION:", 20, 94);
+                    doc.text("DESTINATION:", 20, 78);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     const dests = itin_list.map(it => `${it.destination} - ${formatDestDate(it.travel_date)}`).join(", ");
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const destLines = doc.splitTextToSize(dests, 110);
-                    doc.text(destLines, 50, 94);
-                    let curY = 94 + Math.max(6, destLines.length * 4);
+                    doc.text(destLines, 50, 78);
+                    
+                    // Dynamic shifting based on text lines
+                    let curY = 78 + Math.max(5, destLines.length * 4);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
@@ -541,41 +551,45 @@
                     doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
 
-                    curY += 8;
+                    curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
-                    curY += 8;
+                    curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
-                    curY += 5;
+                    curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
                     doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
-                    curY += Math.max(6, purpLines.length * 4);
+                    curY += Math.max(5, purpLines.length * 4);
 
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
+                    // SIGNATORIES BLOCK COMPRESSION
+                    let recY = curY + 12;
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("Recommended by:", 20, 157);
+                    doc.text("Recommended by:", 20, recY);
                     
+                    let nameY = recY + 8;
                     if (i > 0) {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, recY-4, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 52, nameY, {align: 'center'}); }
+                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, recY-4, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 127, nameY, {align: 'center'}); }
                     } else {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 165); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 113, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 113, 165); }
+                        if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 52, nameY, {align: 'center'}); }
+                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 127, nameY, {align: 'center'}); }
                     }
 
-                    doc.line(25, 167, 80, 167); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 171, {align: 'center'});
-                    doc.line(100, 167, 155, 167); doc.text("DIVISION CHIEF", 127, 171, {align: 'center'});
+                    doc.line(25, nameY+2, 80, nameY+2); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, nameY+6, {align: 'center'});
+                    doc.line(100, nameY+2, 155, nameY+2); doc.text("DIVISION CHIEF", 127, nameY+6, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, 189, 20, 20); 
+                    let parpoY = nameY + 20;
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, parpoY-15, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 121, 204);
+                    doc.text("RICARDO C. GARCIA", 121, parpoY);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 135, 209);
+                    doc.text("PARPO II", 135, parpoY+4);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
