@@ -460,10 +460,9 @@
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
-                // Extract base division (e.g., turns "LTSP, DARMO" into "LTSP") to correctly query the users table
+                // Extract base division
                 const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
 
-                // Personal Context: Signatory Rule Execution based on current user
                 let uh_data = null;
                 if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
                     const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle();
@@ -489,7 +488,6 @@
                     if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){}
                     if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
 
-                    // Personal Context: Logistics Warnings
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
                         doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' });
@@ -506,7 +504,6 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
-                    // MAXIMIZED ROW SPACE IMPLEMENTATION
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
                     doc.text(names, 40, 48); doc.line(40, 49, 160, 49);
@@ -538,7 +535,6 @@
                     const destLines = doc.splitTextToSize(dests, 110);
                     doc.text(destLines, 50, 78);
                     
-                    // Dynamic shifting based on text lines
                     let curY = 78 + Math.max(5, destLines.length * 4);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
@@ -578,11 +574,11 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 130, 190, 20, 20); 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
+                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 114, 188, 25, 18);
                 }
                 doc.save(`TO_${toNo}.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
