@@ -104,7 +104,7 @@
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SB_KEY = "sb_secret_YNX-IJjveulE3N3gT_yBdA_6PzxoKdB"; 
         
-        // FIXED: Browser-compatible Supabase initialization
+        // Browser-compatible Supabase initialization
         const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 
         let currentUser = null;
@@ -131,9 +131,9 @@
             errEl.classList.add('hidden');
 
             try {
-                // Query the exact 'users' table structure
+                // FIXED: Changed .table() to .from() for JavaScript SDK
                 const { data, error } = await supabaseClient
-                    .table('users')
+                    .from('users')
                     .select('id, username, password, role, division, full_name, unit')
                     .eq('username', u)
                     .eq('password', p)
@@ -166,9 +166,10 @@
 
         // --- DATA SYNC ---
         async function syncData() {
-            const ordReq = supabaseClient.table('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
-            const itinReq = supabaseClient.table('itinerary').select('*');
-            const empReq = supabaseClient.table('employees').select('*');
+            // FIXED: Changed .table() to .from()
+            const ordReq = supabaseClient.from('travel_orders').select('*').eq('transport', "GOV'T VEHICLE");
+            const itinReq = supabaseClient.from('itinerary').select('*');
+            const empReq = supabaseClient.from('employees').select('*');
 
             const [ordRes, itinRes, empRes] = await Promise.all([ordReq, itinReq, empReq]);
             orders = ordRes.data || [];
@@ -229,7 +230,8 @@
             if (unit === "PARPO") nextStatus = "PENDING_PARPO";
             else if (!unit || unit === "NULL") nextStatus = "PENDING_CHIEF";
 
-            const { error } = await supabaseClient.table('travel_orders').update({
+            // FIXED: Changed .table() to .from()
+            const { error } = await supabaseClient.from('travel_orders').update({
                 received: veh,
                 driver: drv,
                 status: nextStatus
