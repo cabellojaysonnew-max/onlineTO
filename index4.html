@@ -302,7 +302,6 @@
         const calcUndertime = (timeLogs, schedule) => {
             if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
             
-            // Assuming schedule format is "HH:MM:SS"
             const schedStartParts = schedule.start_time.split(':');
             const schedEndParts = schedule.end_time.split(':');
             
@@ -369,7 +368,6 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
-                    // Initialize DTR Dropdowns safely after login
                     const dtrMonth = document.getElementById('dtr-month');
                     const dtrYear = document.getElementById('dtr-year');
                     if (dtrMonth && dtrMonth.options.length === 0) {
@@ -558,7 +556,6 @@
                             const remainderToNo = await window.generateToNo();
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
                             
-                            // EXPLICIT DESTRUCTURING TO REMOVE 'id'
                             const batchRemainder = origTO.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo, status: 'APPROVED' }));
                             const batchRemainderItin = remainingDays.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo }));
                             
@@ -829,11 +826,19 @@
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
             
             if(filter === "TO") {
-                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(30);
+                // Ensure cancelled and disapproved are not loaded in the applications view
+                const { data: tos } = await supabase.from('travel_orders')
+                    .select('*')
+                    .eq('emp_id', currentUser.emp_id)
+                    .not('status', 'ilike', '%CANCELLED%')
+                    .not('status', 'ilike', '%DISAPPROVED%')
+                    .order('created_at', {ascending: false})
+                    .limit(30);
+                
                 let html = '';
                 for(let to of tos || []) {
                     const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
-                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : 'bg-pending';
                     const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
@@ -852,7 +857,13 @@
                 }
                 list.innerHTML = html || "No Travel Orders found.";
             } else {
-                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED']).order('created_at', {ascending: false});
+                // Ensure cancelled and disapproved are not loaded in the applications view
+                const { data: leaves } = await supabase.from('leave_ledger')
+                    .select('*')
+                    .eq('emp_id', currentUser.emp_id)
+                    .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                    .order('created_at', {ascending: false});
+                
                 let html = '';
                 for(let app of leaves || []) {
                     const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : 'bg-pending';
@@ -1238,7 +1249,7 @@
         
         window.renderCalendar = async function() {
             try {
-                // Removed the line causing "Cannot set properties of null (setting 'innerText')" error
+                document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
@@ -1251,10 +1262,11 @@
                 const endDt = new Date(year, month + 1, 0);
                 const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const dateObj = new Date(l.log_time);
+                    const cleanTime = l.log_time.split('+')[0].replace('Z', '');
+                    const dateObj = new Date(cleanTime);
                     const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
@@ -1282,18 +1294,15 @@
                     const dateObj = new Date(year, month, d);
                     const dayOfWeek = dateObj.getDay();
                     
-                    // Default Weekend Rule
                     let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-                    // CHECK FOR SCHEDULE OVERRIDES (INCLUDING FRIDAY NON-WORKING)
                     let activeOverride = null;
                     if (schedOverrides) {
                         activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
                     }
                     
-                    // Apply override Friday rule if "Fixed" and specific times match your instructions
                     if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                         if (dayOfWeek === 5) { // Friday
+                         if (dayOfWeek === 5) {
                              isWeekend = true; 
                          }
                     }
@@ -1357,10 +1366,11 @@
 
                 alert("Generating Civil Service Form 48...");
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const dateObj = new Date(l.log_time);
+                    const cleanTime = l.log_time.split('+')[0].replace('Z', '');
+                    const dateObj = new Date(cleanTime);
                     const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
@@ -1385,7 +1395,6 @@
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const mName = monthNames[month];
 
-                // GENERATE DTR RECORD TRACKING WITHOUT QR
                 const { data: existingDtr } = await supabase.from('dtr_generations').select('id').eq('emp_id', currentUser.emp_id).eq('month', mName).eq('year', year).maybeSingle();
                 let validationId = crypto.randomUUID();
                 
@@ -1396,7 +1405,9 @@
                     await supabase.from('dtr_generations').insert({ id: validationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
                 }
 
-                // DYNAMIC SIGNATORY LOGIC
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${validationId}`;
+                const dtr_qr = await urlToBase64(qrUrl);
+
                 let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
@@ -1420,6 +1431,8 @@
                 let grandUndertimeM = 0;
 
                 const drawForm = (startX, startY) => {
+                    if (dtr_qr) { try { doc.addImage(dtr_qr, 'PNG', startX + 73, startY, 12, 12); } catch(e){} }
+                    
                     doc.setFont("helvetica", "italic"); doc.setFontSize(6);
                     doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
                     doc.setFont("helvetica", "bold"); doc.setFontSize(9);
@@ -1468,10 +1481,8 @@
                             const dateObj = new Date(year, month, d);
                             const dayOfWeek = dateObj.getDay();
                             
-                            // DEFAULT WEEKEND RULE
                             let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-                            // DETERMINE ACTIVE SCHEDULE (OVERRIDE OR FLEXI)
                             let activeSchedule = null;
                             
                             if (schedOverrides) {
@@ -1481,7 +1492,6 @@
                                         start_time: override.start_time,
                                         end_time: override.end_time
                                     };
-                                    // Overriding Friday Rule Check
                                     if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
                                         isWeekend = true;
                                     }
@@ -1490,7 +1500,7 @@
 
                             if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
                                 activeSchedule = {
-                                    start_time: currentUser.flexi_range_start + ":00", // pad seconds for logic parity
+                                    start_time: currentUser.flexi_range_start + ":00", 
                                     end_time: currentUser.flexi_range_end + ":00"
                                 };
                             }
@@ -1523,7 +1533,6 @@
                                 else pmOut = fmt;
                             });
 
-                            // CALCULATE UNDERTIME IF NO SPECIAL CONDITION PREVENTS WORK
                             let udH = "", udM = "";
                             if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
                                 const ud = calcUndertime(dayLogs, activeSchedule);
