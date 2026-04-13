@@ -1018,11 +1018,11 @@
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
-            // PUSHED APPLICATION HEADER DOWN BY 10mm
-            doc.text("APPLICATION FOR LEAVE", 105, 40, { align: 'center' });
+            // PUSHED APPLICATION HEADER DOWN BY ADDITIONAL 2 LINES
+            doc.text("APPLICATION FOR LEAVE", 105, 50, { align: 'center' });
 
-            // PUSHED ENTIRE FORM Y-AXIS DOWN BY 10mm (ty = 45 instead of 35)
-            let ty = 45;
+            // PUSHED ENTIRE FORM Y-AXIS DOWN
+            let ty = 55;
             doc.setFontSize(7); doc.setFont("helvetica", "normal");
             doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
             doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
@@ -1224,9 +1224,11 @@
                     itins = data || [];
                 }
 
-                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-                const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
-                const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
+                const [{ data: psos }, { data: holidays }, { data: leaves }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED'])
+                ]);
 
                 tbody.innerHTML = "";
                 for(let d=1; d<=endDt.getDate(); d++) {
@@ -1327,20 +1329,24 @@
                     await supabase.from('dtr_generations').insert({ id: validationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
                 }
 
-                // DYNAMIC SIGNATORY LOGIC (DIVISION CHIEF)
+                // DYNAMIC SIGNATORY LOGIC
                 let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
-                const isParpo = currentUser.division?.toUpperCase() === "PARPO" || currentUser.unit?.toUpperCase() === "PARPO";
+                const empDiv = (currentUser.division || "").toUpperCase().trim();
+                const empUnit = (currentUser.unit || "").toUpperCase().trim();
                 
-                if (isParpo) {
+                if (empDiv === "PARPO") {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
+                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                    const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
+                    if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                    chiefPos = "MARPO";
                 } else {
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users').select('full_name, role').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    if (chiefData) {
-                        chiefName = chiefData.full_name.toUpperCase();
-                    }
+                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                    chiefPos = "DIVISION CHIEF";
                 }
 
                 const drawForm = (startX, startY) => {
