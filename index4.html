@@ -297,6 +297,51 @@
             if(!dateObj) return "";
             return dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         };
+        
+        // UNDERTIME CALCULATION HELPER
+        const calcUndertime = (timeLogs, schedule) => {
+            if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
+            
+            // Assuming schedule format is "HH:MM:SS"
+            const schedStartParts = schedule.start_time.split(':');
+            const schedEndParts = schedule.end_time.split(':');
+            
+            const startHour = parseInt(schedStartParts[0]);
+            const startMin = parseInt(schedStartParts[1]);
+            const endHour = parseInt(schedEndParts[0]);
+            const endMin = parseInt(schedEndParts[1]);
+
+            let amIn = null, pmOut = null;
+            
+            timeLogs.forEach(time => {
+                const hr = time.getHours();
+                if(hr < 12 && !amIn) amIn = time;
+                else pmOut = time;
+            });
+            
+            let totalUndertimeMinutes = 0;
+
+            if (amIn) {
+                const inHour = amIn.getHours();
+                const inMin = amIn.getMinutes();
+                if (inHour > startHour || (inHour === startHour && inMin > startMin)) {
+                    totalUndertimeMinutes += ((inHour - startHour) * 60) + (inMin - startMin);
+                }
+            }
+
+            if (pmOut) {
+                const outHour = pmOut.getHours();
+                const outMin = pmOut.getMinutes();
+                if (outHour < endHour || (outHour === endHour && outMin < endMin)) {
+                    totalUndertimeMinutes += ((endHour - outHour) * 60) + (endMin - outMin);
+                }
+            }
+
+            return {
+                h: Math.floor(totalUndertimeMinutes / 60),
+                m: totalUndertimeMinutes % 60
+            };
+        };
 
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
@@ -1215,8 +1260,7 @@
                     logsByDate[isoStr].push(dateObj);
                 });
 
-                // Changed to .ilike('%APPROVED%') to catch any variations of approved status
-                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).ilike('status', '%APPROVED%');
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
                 const validTos = tos?.map(t => t.to_no) || [];
                 
                 let itins = [];
@@ -1225,16 +1269,34 @@
                     itins = data || [];
                 }
 
-                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-                const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
-                const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
+                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
+                    supabase.from('fleet_bookings').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                ]);
 
                 tbody.innerHTML = "";
                 for(let d=1; d<=endDt.getDate(); d++) {
                     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                     const dateObj = new Date(year, month, d);
                     const dayOfWeek = dateObj.getDay();
-                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    
+                    // Default Weekend Rule
+                    let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                    // CHECK FOR SCHEDULE OVERRIDES (INCLUDING FRIDAY NON-WORKING)
+                    let activeOverride = null;
+                    if (schedOverrides) {
+                        activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                    }
+                    
+                    // Apply override Friday rule if "Fixed" and specific times match your instructions
+                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                         if (dayOfWeek === 5) { // Friday
+                             isWeekend = true; 
+                         }
+                    }
                     
                     const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
                     const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
@@ -1259,7 +1321,8 @@
                     });
 
                     if(isWeekend && !activityHtml && !amIn && !pmIn) {
-                        const dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        let dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        if (dayOfWeek === 5) dayName = "NO FRIDAY WORK";
                         activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">${dayName}</div>`;
                     }
 
@@ -1303,8 +1366,7 @@
                     logsByDate[isoStr].push(dateObj);
                 });
 
-                // Changed to .ilike('%APPROVED%') to catch any variations of approved status
-                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).ilike('status', '%APPROVED%');
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
                 const validTos = tos?.map(t => t.to_no) || [];
                 
                 let itins = [];
@@ -1313,10 +1375,11 @@
                     itins = data || [];
                 }
 
-                const [{ data: psos }, { data: holidays }, { data: leaves }] = await Promise.all([
+                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
                     supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
                     supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
-                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED'])
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
+                    supabase.from('fleet_bookings').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
                 ]);
 
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -1352,6 +1415,9 @@
                     if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
+
+                let grandUndertimeH = 0;
+                let grandUndertimeM = 0;
 
                 const drawForm = (startX, startY) => {
                     doc.setFont("helvetica", "italic"); doc.setFontSize(6);
@@ -1389,6 +1455,7 @@
 
                     ty += 4;
                     let row_h = 4.2;
+                    let totalUndertimeMins = 0;
 
                     for (let d = 1; d <= 31; d++) {
                         doc.rect(startX, ty, cw_day, row_h);
@@ -1398,6 +1465,36 @@
                             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                             const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                             
+                            const dateObj = new Date(year, month, d);
+                            const dayOfWeek = dateObj.getDay();
+                            
+                            // DEFAULT WEEKEND RULE
+                            let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                            // DETERMINE ACTIVE SCHEDULE (OVERRIDE OR FLEXI)
+                            let activeSchedule = null;
+                            
+                            if (schedOverrides) {
+                                const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                                if (override) {
+                                    activeSchedule = {
+                                        start_time: override.start_time,
+                                        end_time: override.end_time
+                                    };
+                                    // Overriding Friday Rule Check
+                                    if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
+                                        isWeekend = true;
+                                    }
+                                }
+                            }
+
+                            if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
+                                activeSchedule = {
+                                    start_time: currentUser.flexi_range_start + ":00", // pad seconds for logic parity
+                                    end_time: currentUser.flexi_range_end + ":00"
+                                };
+                            }
+
                             let special = "";
                             const hol = (holidays || []).find(h => h.date === dateStr);
                             if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
@@ -1411,10 +1508,9 @@
                             const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
                             if(leave) special = String(leave.type).toUpperCase();
 
-                            const dayOfWeek = new Date(year, month, d).getDay();
-                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                             if (isWeekend && !special) {
                                 special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                                if (dayOfWeek === 5) special = "NO FRIDAY WORK";
                             }
                             
                             let amIn="", amOut="", pmIn="", pmOut="";
@@ -1427,7 +1523,18 @@
                                 else pmOut = fmt;
                             });
 
-                            if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special.includes("HOLIDAY"))) {
+                            // CALCULATE UNDERTIME IF NO SPECIAL CONDITION PREVENTS WORK
+                            let udH = "", udM = "";
+                            if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
+                                const ud = calcUndertime(dayLogs, activeSchedule);
+                                if (ud.h > 0 || ud.m > 0) {
+                                    totalUndertimeMins += (ud.h * 60) + ud.m;
+                                    if(ud.h > 0) udH = String(ud.h);
+                                    if(ud.m > 0) udM = String(ud.m);
+                                }
+                            }
+
+                            if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special === "NO FRIDAY WORK" || special.includes("HOLIDAY"))) {
                                 special = ""; 
                             }
 
@@ -1442,20 +1549,29 @@
                                 doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
                                 doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
                             }
+                            
+                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h); doc.text(udH, startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
+                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h); doc.text(udM, startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
+
                         } else {
                             doc.rect(startX + cw_day, ty, cw_time, row_h);
                             doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
                             doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
                             doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
                         }
-                        doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
-                        doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
                         ty += row_h;
+                    }
+                    
+                    if (startX === 10) {
+                        grandUndertimeH = Math.floor(totalUndertimeMins / 60);
+                        grandUndertimeM = totalUndertimeMins % 60;
                     }
 
                     doc.text("Total", startX + cw_day + (cw_time * 4) - 2, ty + 3, { align: "right" });
-                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 5);
-                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5);
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 5); doc.text(grandUndertimeH > 0 ? String(grandUndertimeH) : "", startX + cw_day + (cw_time * 4) + 5.5, ty + 3.5, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5); doc.text(grandUndertimeM > 0 ? String(grandUndertimeM) : "", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3.5, { align: "center" });
 
                     ty += 8;
                     doc.setFont("helvetica", "italic");
