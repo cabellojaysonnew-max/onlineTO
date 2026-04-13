@@ -663,14 +663,14 @@
                     doc.text("Recommended by:", 20, 156);
                     
                     if (i > 0) {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 35, 15); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 35, 15); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
+                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
+                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
                     } else {
                         if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
                         if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
                     }
 
-                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
                     if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); 
