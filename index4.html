@@ -1193,7 +1193,7 @@
         
         window.renderCalendar = async function() {
             try {
-                document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
+                // Removed the line causing "Cannot set properties of null (setting 'innerText')" error
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
@@ -1215,7 +1215,8 @@
                     logsByDate[isoStr].push(dateObj);
                 });
 
-                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                // Changed to .ilike('%APPROVED%') to catch any variations of approved status
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).ilike('status', '%APPROVED%');
                 const validTos = tos?.map(t => t.to_no) || [];
                 
                 let itins = [];
@@ -1224,17 +1225,16 @@
                     itins = data || [];
                 }
 
-                const [{ data: psos }, { data: holidays }, { data: leaves }] = await Promise.all([
-                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
-                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
-                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED'])
-                ]);
+                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+                const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
+                const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
 
                 tbody.innerHTML = "";
                 for(let d=1; d<=endDt.getDate(); d++) {
                     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                     const dateObj = new Date(year, month, d);
-                    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                    const dayOfWeek = dateObj.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                     
                     const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
                     const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
@@ -1258,7 +1258,10 @@
                         else pmOut = fmt;
                     });
 
-                    if(isWeekend && !activityHtml && !amIn && !pmIn) activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">WEEKEND</div>`;
+                    if(isWeekend && !activityHtml && !amIn && !pmIn) {
+                        const dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">${dayName}</div>`;
+                    }
 
                     let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
                     
@@ -1300,7 +1303,8 @@
                     logsByDate[isoStr].push(dateObj);
                 });
 
-                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                // Changed to .ilike('%APPROVED%') to catch any variations of approved status
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).ilike('status', '%APPROVED%');
                 const validTos = tos?.map(t => t.to_no) || [];
                 
                 let itins = [];
@@ -1407,8 +1411,11 @@
                             const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
                             if(leave) special = String(leave.type).toUpperCase();
 
-                            const isWeekend = new Date(year, month, d).getDay() === 0 || new Date(year, month, d).getDay() === 6;
-                            if(isWeekend && !special) special = "SATURDAY/SUNDAY";
+                            const dayOfWeek = new Date(year, month, d).getDay();
+                            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                            if (isWeekend && !special) {
+                                special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                            }
                             
                             let amIn="", amOut="", pmIn="", pmOut="";
                             dayLogs.forEach(time => {
@@ -1420,7 +1427,7 @@
                                 else pmOut = fmt;
                             });
 
-                            if(dayLogs.length > 0 && (special === "SATURDAY/SUNDAY" || special.includes("HOLIDAY"))) {
+                            if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special.includes("HOLIDAY"))) {
                                 special = ""; 
                             }
 
