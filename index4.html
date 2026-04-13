@@ -281,22 +281,34 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
-            const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
-            if (data && data.pass === pass) {
-                currentUser = data;
-                document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                document.getElementById('login-screen').classList.remove('active');
-                document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-from').min = todayStr;
-                document.getElementById('itin-to').min = todayStr;
-                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                renderPersonnel();
+            try {
+                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
+                
+                if (error) {
+                    alert("Database connection issue: " + error.message);
+                    return;
+                }
+                
+                if (data && data.pass === pass) {
+                    currentUser = data;
+                    document.getElementById('user-name').innerText = data.full_name;
+                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('app-screen').classList.add('active');
+                    document.getElementById('itin-from').min = todayStr;
+                    document.getElementById('itin-to').min = todayStr;
+                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                    renderPersonnel();
 
-                const { data: hols } = await supabase.from('holidays').select('date');
-                cachedHolidays = hols ? hols.map(h => h.date) : [];
-                updateLeaveInputs();
-            } else { alert("Invalid Credentials"); }
+                    const { data: hols } = await supabase.from('holidays').select('date');
+                    cachedHolidays = hols ? hols.map(h => h.date) : [];
+                    updateLeaveInputs();
+                } else { 
+                    alert("Invalid Credentials"); 
+                }
+            } catch (err) {
+                alert("Network Error");
+            }
         };
 
         window.switchTab = function(id, el) {
@@ -617,13 +629,13 @@
                 let uh_data = null;
                 if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
                     const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle();
-                    uh_data = resUH.data;
+                    uh_data = resUH?.data;
                 }
 
                 let dc_data = null;
                 if (currentUser.unit !== "PARPO" && baseDiv) {
                     const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    dc_data = resDC.data;
+                    dc_data = resDC?.data;
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
@@ -636,8 +648,8 @@
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} 
-                    if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                    if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                    if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); } catch(e){} }
 
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
@@ -714,8 +726,8 @@
                     doc.text("Recommended by:", 20, 156);
                     
                     if (i > 0) {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
+                        if(uh_data && !isMARPO && img_uh) { try { doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); doc.text(uh_data.full_name.toUpperCase(), 34, 166); } catch(e){} }
+                        if(dc_data && img_dc) { try { doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); doc.text(dc_data.full_name.toUpperCase(), 104, 166); } catch(e){} }
                     } else {
                         if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
                         if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
@@ -724,7 +736,7 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); 
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -747,7 +759,6 @@
                     const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
                     const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                    // STRICT ORIGINAL TO LAYOUT PRESERVED EXACTLY
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
@@ -783,7 +794,6 @@
             }
         };
 
-        // --- LEAVE APPLICATION LOGIC ---
         window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
@@ -856,7 +866,6 @@
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             const fullRemarks = `${detailStr} | Commutation: ${comm}`;
 
-            // Check TO conflicts before submitting
             const dates_to_check = [];
             let curr = new Date(start);
             const eDate = new Date(end);
@@ -899,8 +908,30 @@
             }
         };
 
-        // --- CALENDAR & DTR LOGIC ---
-        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
+        window.printLeaveForm6 = async function(leaveId) {
+            alert("Generating Form 6 PDF...");
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).maybeSingle();
+            
+            if (error || !app) return alert("Application not found");
+
+            doc.setFontSize(14); doc.setFont("helvetica", "bold");
+            doc.text("APPLICATION FOR LEAVE", 105, 30, { align: 'center' });
+            
+            doc.setFontSize(9); doc.setFont("helvetica", "normal");
+            doc.text(`Name: ${currentUser.full_name}`, 20, 50);
+            doc.text(`Position: ${currentUser.position}`, 120, 50);
+            doc.text(`Type of Leave: ${app.type}`, 20, 70);
+            doc.text(`Days Applied: ${app.debit}`, 120, 70);
+            doc.text(`Inclusive Dates: ${app.start_date} to ${app.end_date}`, 20, 80);
+            doc.text(`Details: ${app.remarks}`, 20, 90);
+            
+            doc.save(`Form6_${app.id}.pdf`);
+        };
+
+        window.changeCalMonth = function(d) { calDate.setMonth(calDate.getMonth()+d); renderCalendar(); };
+        
         window.renderCalendar = async function() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
             const month = calDate.getMonth(), year = calDate.getFullYear();
@@ -950,7 +981,6 @@
 
             alert("Generating Civil Service Form 48...");
 
-            // Fetch Logs & Plotting Variables
             const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
             
             const logsByDate = {};
@@ -961,30 +991,28 @@
                 logsByDate[dKey].push(dateObj);
             });
 
-            // Form Rendering Logic mapped from Python coordinates
             const drawForm = (startX, startY) => {
-                doc.setFont("Arial", "italic"); doc.setFontSize(6);
+                doc.setFont("helvetica", "italic"); doc.setFontSize(6);
                 doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
-                doc.setFont("Arial", "bold"); doc.setFontSize(9);
+                doc.setFont("helvetica", "bold"); doc.setFontSize(9);
                 doc.text("DAILY TIME RECORD", startX + 42.5, startY + 7, { align: "center" });
 
                 doc.setFontSize(8);
                 doc.text(currentUser.full_name, startX + 42.5, startY + 15, { align: "center" });
                 doc.line(startX, startY + 16, startX + 85, startY + 16);
-                doc.setFont("Arial", "normal"); doc.setFontSize(7);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
                 doc.text("Name", startX + 42.5, startY + 19, { align: "center" });
 
                 doc.text("For the month of", startX, startY + 23);
-                doc.setFont("Arial", "bold"); doc.setFontSize(8);
+                doc.setFont("helvetica", "bold"); doc.setFontSize(8);
                 const mName = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
                 doc.text(mName, startX + 25, startY + 23);
                 doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
 
                 let ty = startY + 30;
                 let cw_day = 8, cw_time = 14, cw_u = 11;
-                doc.setFont("Arial", "normal"); doc.setFontSize(7);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
 
-                // Headers
                 doc.rect(startX, ty, cw_day, 8); doc.text("Days", startX + 4, ty + 5, { align: "center" });
                 doc.rect(startX + cw_day, ty, cw_time * 2, 4); doc.text("A.M.", startX + cw_day + cw_time, ty + 3, { align: "center" });
                 doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time * 2, 4); doc.text("P.M.", startX + cw_day + (cw_time * 3), ty + 3, { align: "center" });
@@ -1039,30 +1067,31 @@
                 doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5);
 
                 ty += 8;
-                doc.setFont("Arial", "italic");
+                doc.setFont("helvetica", "italic");
                 const cert = "I certify on my honor that the above is true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.";
                 doc.text(cert, startX, ty, { maxWidth: 85, align: "justify" });
 
                 ty += 12;
                 doc.line(startX + 10, ty, startX + 75, ty);
-                doc.setFont("Arial", "normal");
+                doc.setFont("helvetica", "normal");
                 doc.text("(Employee's Signature)", startX + 42.5, ty + 3, { align: "center" });
 
                 ty += 8;
                 doc.text("Verified as to prescribed office hours:", startX, ty);
                 
                 ty += 8;
-                doc.setFont("Arial", "bold");
+                doc.setFont("helvetica", "bold");
                 doc.text("DIVISION CHIEF / MARPO", startX + 42.5, ty, { align: "center" });
                 doc.line(startX + 10, ty + 1, startX + 75, ty + 1);
-                doc.setFont("Arial", "normal");
+                doc.setFont("helvetica", "normal");
                 doc.text("Authorized Officer", startX + 42.5, ty + 4, { align: "center" });
             };
 
             drawForm(10, 10);
             drawForm(110, 10);
             
-            doc.save(`Form48_${months[month]}_${year}.pdf`);
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            doc.save(`Form48_${monthNames[month]}_${year}.pdf`);
         };
 
         window.changePassword = async function() {
