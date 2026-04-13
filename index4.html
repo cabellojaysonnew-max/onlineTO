@@ -85,8 +85,8 @@
             border: 4px solid var(--dar-gold) !important;
             cursor: pointer;
         }
-        
-        .radio-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+
+        .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .radio-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
         .radio-item input { width: auto; margin: 0; }
     </style>
@@ -100,7 +100,7 @@
                 <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
-                <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
+                <button class="btn btn-primary" onclick="window.handleLogin()">SECURE LOGIN</button>
             </div>
         </div>
     </div>
@@ -1177,38 +1177,67 @@
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
             const month = calDate.getMonth(), year = calDate.getFullYear();
             const tbody = document.getElementById('cal-table-body');
-            tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Loading...</td></tr>";
 
             const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
             const endDt = new Date(year, month + 1, 0);
             const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-            const [{data: tos}, {data: itins}, {data: psos}, {data: holidays}] = await Promise.all([
-                supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED'),
-                supabase.from('itinerary').select('to_no, travel_date, destination, purpose').gte('travel_date', startDtStr).lte('travel_date', endDtStr),
-                supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
-                supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr)
-            ]);
+            const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+            const logsByDate = {};
+            (logs || []).forEach(l => {
+                const dateObj = new Date(l.log_time);
+                const dKey = dateObj.toISOString().split('T')[0];
+                if(!logsByDate[dKey]) logsByDate[dKey] = [];
+                logsByDate[dKey].push(dateObj);
+            });
 
-            const validTos = tos?.map(t => t.to_no) || [];
-            const validItins = itins?.filter(i => validTos.includes(i.to_no));
+            // SEQUENTIAL FETCHING TO FIX MAPPING BUG
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+            const { data: itins } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', tos?.map(t => t.to_no) || []);
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*');
+            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
 
             tbody.innerHTML = "";
             for(let d=1; d<=endDt.getDate(); d++) {
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d), isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                const dateObj = new Date(year, month, d);
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
                 
-                const dayItins = validItins?.filter(i => i.travel_date === dateStr);
+                const dayItins = itins?.filter(i => i.travel_date === dateStr);
                 const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
                 const holiday = holidays?.find(h => h.date === dateStr);
+                const leave = leaves?.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
                 let activityHtml = "";
                 if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
                 if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.to_no} - ${i.destination}</div>`);
+                if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+
+                let amIn="", amOut="", pmIn="", pmOut="";
+                const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                dayLogs.forEach(time => {
+                    const hr = time.getHours();
+                    const fmt = formatTime12(time);
+                    if(hr < 12 && !amIn) amIn = fmt;
+                    else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
+                    else if(hr <= 14 && !pmIn) pmIn = fmt;
+                    else pmOut = fmt;
+                });
 
                 let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
-                tbody.innerHTML += `<tr style="${rowStyle}"><td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td><td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td></tr>`;
+                if(isWeekend && !activityHtml && !amIn && !pmIn) activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">WEEKEND</div>`;
+
+                tbody.innerHTML += `<tr style="${rowStyle}">
+                    <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
+                    <td style="color:#003811;">${amIn || '--'}</td>
+                    <td style="color:#003811;">${amOut || '--'}</td>
+                    <td style="color:#003811;">${pmIn || '--'}</td>
+                    <td style="color:#003811;">${pmOut || '--'}</td>
+                    <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                </tr>`;
             }
         };
 
@@ -1223,7 +1252,6 @@
             alert("Generating Civil Service Form 48...");
 
             const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
-            
             const logsByDate = {};
             (logs || []).forEach(l => {
                 const dateObj = new Date(l.log_time);
@@ -1231,6 +1259,12 @@
                 if(!logsByDate[dKey]) logsByDate[dKey] = [];
                 logsByDate[dKey].push(dateObj);
             });
+
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+            const { data: itins } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', tos?.map(t => t.to_no) || []);
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*');
+            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
 
             const drawForm = (startX, startY) => {
                 doc.setFont("helvetica", "italic"); doc.setFontSize(6);
@@ -1278,6 +1312,22 @@
                         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                         const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                         
+                        let special = "";
+                        const hol = holidays?.find(h => h.date === dateStr);
+                        if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+                        
+                        const pso = psos?.find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                        if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                        
+                        const to = itins?.find(i => i.travel_date === dateStr);
+                        if(to) special = `TO: ${to.destination}`.toUpperCase();
+                        
+                        const leave = leaves?.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                        if(leave) special = String(leave.type).toUpperCase();
+
+                        const isWeekend = new Date(year, month, d).getDay() === 0 || new Date(year, month, d).getDay() === 6;
+                        if(isWeekend && !special) special = "SATURDAY/SUNDAY";
+                        
                         let amIn="", amOut="", pmIn="", pmOut="";
                         dayLogs.forEach(time => {
                             const hr = time.getHours();
@@ -1288,10 +1338,21 @@
                             else pmOut = fmt;
                         });
 
-                        doc.rect(startX + cw_day, ty, cw_time, row_h); doc.text(amIn, startX + cw_day + 7, ty + 3, { align: "center" });
-                        doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h); doc.text(amOut, startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
-                        doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
-                        doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                        if(dayLogs.length > 0 && (special === "SATURDAY/SUNDAY" || special.includes("HOLIDAY"))) {
+                            special = ""; 
+                        }
+
+                        if (special) {
+                            doc.setFont("helvetica", "bold"); doc.setFontSize(6);
+                            doc.rect(startX + cw_day, ty, cw_time * 4, row_h);
+                            doc.text(special.substring(0,30), startX + cw_day + (cw_time * 2), ty + 3, { align: "center" });
+                            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                        } else {
+                            doc.rect(startX + cw_day, ty, cw_time, row_h); doc.text(amIn, startX + cw_day + 7, ty + 3, { align: "center" });
+                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h); doc.text(amOut, startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                        }
                     } else {
                         doc.rect(startX + cw_day, ty, cw_time, row_h);
                         doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
