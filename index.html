@@ -410,10 +410,16 @@
                         if (remainingDays.length > 0) {
                             const remainderToNo = await generateToNo();
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
-                            const batchRemainder = origTO.map(p => ({ ...p, id: undefined, to_no: remainderToNo, status: 'APPROVED' }));
-                            const batchRemainderItin = remainingDays.map(i => ({ ...i, id: undefined, to_no: remainderToNo }));
-                            await supabase.from('travel_orders').insert(batchRemainder);
-                            await supabase.from('itinerary').insert(batchRemainderItin);
+                            
+                            // EXPLICIT DESTRUCTURING TO REMOVE 'id'
+                            const batchRemainder = origTO.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo, status: 'APPROVED' }));
+                            const batchRemainderItin = remainingDays.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo }));
+                            
+                            const { error: remErr1 } = await supabase.from('travel_orders').insert(batchRemainder);
+                            if (remErr1) throw new Error("Conflict TO Insert Error: " + remErr1.message);
+                            
+                            const { error: remErr2 } = await supabase.from('itinerary').insert(batchRemainderItin);
+                            if (remErr2) throw new Error("Conflict Itinerary Insert Error: " + remErr2.message);
                         }
                     }
                 }
@@ -428,7 +434,6 @@
                 else if (isMARPO) routeStatus = "PENDING_CHIEF";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
-                // Corrected Batch Personnel Logic to ensure everyone is recorded
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, 
                     emp_id: p.emp_id, 
@@ -442,8 +447,13 @@
                 }));
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
-                await supabase.from('travel_orders').insert(batchPersonnel);
-                await supabase.from('itinerary').insert(batchItin);
+                
+                // EXPLICIT SUPABASE ERROR CATCHING ADDED HERE
+                const { error: toError } = await supabase.from('travel_orders').insert(batchPersonnel);
+                if (toError) throw new Error("Travel Order DB Error: " + toError.message);
+                
+                const { error: itinError } = await supabase.from('itinerary').insert(batchItin);
+                if (itinError) throw new Error("Itinerary DB Error: " + itinError.message);
                 
                 alert("Logic Executed. Submitted: " + finalToNo);
                 
