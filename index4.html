@@ -262,7 +262,6 @@
         let itineraryDraft = []; 
         let personnelDraft = []; 
         const todayStr = new Date().toISOString().split('T')[0]; 
-        let calDate = new Date(); 
         let isSubmitting = false; 
         let conflictsToProcess = []; 
         let cachedHolidays = [];
@@ -1317,19 +1316,16 @@
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const mName = monthNames[month];
 
-                // GENERATE DTR RECORD TRACKING AND QR CODE
+                // GENERATE DTR RECORD TRACKING WITHOUT QR
                 const { data: existingDtr } = await supabase.from('dtr_generations').select('id').eq('emp_id', currentUser.emp_id).eq('month', mName).eq('year', year).maybeSingle();
-                let qrValidationId = crypto.randomUUID();
+                let validationId = crypto.randomUUID();
                 
                 if (existingDtr) {
-                    qrValidationId = existingDtr.id;
-                    await supabase.from('dtr_generations').update({ generated_at: new Date().toISOString() }).eq('id', qrValidationId);
+                    validationId = existingDtr.id;
+                    await supabase.from('dtr_generations').update({ generated_at: new Date().toISOString() }).eq('id', validationId);
                 } else {
-                    await supabase.from('dtr_generations').insert({ id: qrValidationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
+                    await supabase.from('dtr_generations').insert({ id: validationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
                 }
-
-                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrValidationId}`;
-                const qrImg = await urlToBase64(qrUrl);
 
                 // DYNAMIC SIGNATORY LOGIC (DIVISION CHIEF)
                 let chiefName = "_________________________";
@@ -1348,8 +1344,6 @@
                 }
 
                 const drawForm = (startX, startY) => {
-                    if (qrImg) { try { doc.addImage(qrImg, 'PNG', startX + 75, startY, 12, 12); } catch(e){} }
-
                     doc.setFont("helvetica", "italic"); doc.setFontSize(6);
                     doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
                     doc.setFont("helvetica", "bold"); doc.setFontSize(9);
