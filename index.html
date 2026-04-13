@@ -69,7 +69,6 @@
         .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
         .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
 
-        /* NEW CLASS FOR MAXIMIZING QR CODE */
         .qr-maximized {
             position: fixed !important;
             top: 50% !important;
@@ -288,10 +287,10 @@
 
         function renderPersonnel() {
             const list = document.getElementById('personnel-draft-list');
-            list.innerHTML = personnelDraft.map((p, i) => `<br>
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;"><br>
-                    <span>👤 ${p.name}</span><br>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}<br>
+            list.innerHTML = personnelDraft.map((p, i) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
+                    <span>👤 ${p.name}</span>
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}
                 </div>`).join('');
         }
         window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
@@ -351,16 +350,16 @@
                 }
 
                 const cardId = `card-${i}`;
-                container.innerHTML += `<br>
-                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);"><br>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><br>
-                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5><br>
-                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button><br>
-                        </div><br>
-                        <input type="text" id="dest-${i}" placeholder="Destination"><br>
-                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}<br>
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea><br>
-                        <input type="text" id="rep-${i}" placeholder="Report To"><br>
+                container.innerHTML += `
+                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
+                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
+                        </div>
+                        <input type="text" id="dest-${i}" placeholder="Destination">
+                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
+                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
+                        <input type="text" id="rep-${i}" placeholder="Report To">
                     </div>`;
                 itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId, hasPSO });
                 currentDt.setDate(currentDt.getDate() + 1);
@@ -402,7 +401,6 @@
                         
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
 
-                        let notifyTarget = currentUser.unit ? "UNIT HEAD" : "CHIEF";
                         await supabase.from('notifications').insert({ 
                             emp_id: currentUser.emp_id, 
                             message: `Approved TO ${conflict.to_no} was split/overwritten by ${currentUser.full_name}. Affected date: ${conflict.affected_date}`,
@@ -430,9 +428,15 @@
                 else if (isMARPO) routeStatus = "PENDING_CHIEF";
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
+                // Corrected Batch Personnel Logic to ensure everyone is recorded
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, 
-                    division: currentUser.division, status: routeStatus, transport, 
+                    to_no: finalToNo, 
+                    emp_id: p.emp_id, 
+                    emp_name: p.name, 
+                    unit: p.unit, 
+                    division: currentUser.division, 
+                    status: routeStatus, 
+                    transport, 
                     report_to: Array.from(reportTos).join(", "),
                     remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
@@ -511,17 +515,17 @@
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
-                container.innerHTML += `<br>
-                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);"><br>
-                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><br>
-                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5><br>
-                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span><br>
-                        </div><br>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;"><br>
-                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}<br>
-                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea><br>
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;"><br>
-                    </div><br>
+                container.innerHTML += `
+                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
+                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
+                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
+                        </div>
+                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
+                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                    </div>
                 `;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
             });
