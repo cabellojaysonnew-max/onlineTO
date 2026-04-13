@@ -262,6 +262,7 @@
         let itineraryDraft = []; 
         let personnelDraft = []; 
         const todayStr = new Date().toISOString().split('T')[0]; 
+        let calDate = new Date(); 
         let isSubmitting = false; 
         let conflictsToProcess = []; 
         let cachedHolidays = [];
@@ -1018,9 +1019,11 @@
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
-            doc.text("APPLICATION FOR LEAVE", 105, 30, { align: 'center' });
+            // PUSHED APPLICATION HEADER DOWN BY 10mm
+            doc.text("APPLICATION FOR LEAVE", 105, 40, { align: 'center' });
 
-            let ty = 35;
+            // PUSHED ENTIRE FORM Y-AXIS DOWN BY 10mm (ty = 45 instead of 35)
+            let ty = 45;
             doc.setFontSize(7); doc.setFont("helvetica", "normal");
             doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
             doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
@@ -1190,249 +1193,291 @@
         window.changeCalMonth = function(d) { calDate.setMonth(calDate.getMonth()+d); window.renderCalendar(); };
         
         window.renderCalendar = async function() {
-            document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
-            const monthEl = document.getElementById('dtr-month');
-            const yearEl = document.getElementById('dtr-year');
-            const month = parseInt(monthEl.value) - 1;
-            const year = parseInt(yearEl.value);
-            
-            const tbody = document.getElementById('cal-table-body');
-            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding: 20px;'>Crunching Logs...</td></tr>";
-
-            const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
-            const endDt = new Date(year, month + 1, 0);
-            const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
-
-            const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
-            const logsByDate = {};
-            (logs || []).forEach(l => {
-                const dateObj = new Date(l.log_time);
-                const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
-                if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
-                logsByDate[isoStr].push(dateObj);
-            });
-
-            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
-            const validTos = tos?.map(t => t.to_no) || [];
-            
-            let itins = [];
-            if(validTos.length > 0) {
-                const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
-                itins = data || [];
-            }
-
-            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
-            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
-
-            tbody.innerHTML = "";
-            for(let d=1; d<=endDt.getDate(); d++) {
-                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d);
-                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+            try {
+                document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
+                const monthEl = document.getElementById('dtr-month');
+                const yearEl = document.getElementById('dtr-year');
+                const month = parseInt(monthEl.value) - 1;
+                const year = parseInt(yearEl.value);
                 
-                const dayItins = itins.filter(i => i.travel_date === dateStr);
-                const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                const holiday = holidays?.find(h => h.date === dateStr);
-                const leave = leaves?.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                const tbody = document.getElementById('cal-table-body');
+                tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding: 20px;'>Crunching Logs...</td></tr>";
 
-                let activityHtml = "";
-                if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
-                if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`);
-                if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const endDt = new Date(year, month + 1, 0);
+                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-                let amIn="", amOut="", pmIn="", pmOut="";
-                const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
-                dayLogs.forEach(time => {
-                    const hr = time.getHours();
-                    const fmt = formatTime12(time);
-                    if(hr < 12 && !amIn) amIn = fmt;
-                    else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                    else if(hr <= 14 && !pmIn) pmIn = fmt;
-                    else pmOut = fmt;
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+                const logsByDate = {};
+                (logs || []).forEach(l => {
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                    logsByDate[isoStr].push(dateObj);
                 });
 
-                if(isWeekend && !activityHtml && !amIn && !pmIn) activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">WEEKEND</div>`;
-
-                let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                const validTos = tos?.map(t => t.to_no) || [];
                 
-                tbody.innerHTML += `<tr style="${rowStyle}">
-                    <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
-                    <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
-                    <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
-                    <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
-                    <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
-                    <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
-                </tr>`;
+                let itins = [];
+                if(validTos.length > 0) {
+                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                    itins = data || [];
+                }
+
+                const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+                const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
+                const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
+
+                tbody.innerHTML = "";
+                for(let d=1; d<=endDt.getDate(); d++) {
+                    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dateObj = new Date(year, month, d);
+                    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                    
+                    const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
+                    const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                    const holiday = (holidays || []).find(h => h.date === dateStr);
+                    const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+
+                    let activityHtml = "";
+                    if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
+                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
+                    if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`);
+                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+
+                    let amIn="", amOut="", pmIn="", pmOut="";
+                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                    dayLogs.forEach(time => {
+                        const hr = time.getHours();
+                        const fmt = formatTime12(time);
+                        if(hr < 12 && !amIn) amIn = fmt;
+                        else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
+                        else if(hr <= 14 && !pmIn) pmIn = fmt;
+                        else pmOut = fmt;
+                    });
+
+                    if(isWeekend && !activityHtml && !amIn && !pmIn) activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">WEEKEND</div>`;
+
+                    let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
+                    
+                    tbody.innerHTML += `<tr style="${rowStyle}">
+                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
+                        <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
+                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                    </tr>`;
+                }
+            } catch (error) {
+                document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`;
             }
         };
 
         window.generateForm48 = async function() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const monthEl = document.getElementById('dtr-month');
-            const yearEl = document.getElementById('dtr-year');
-            const month = parseInt(monthEl.value) - 1;
-            const year = parseInt(yearEl.value);
-            
-            const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
-            const endDt = new Date(year, month + 1, 0);
-            const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const monthEl = document.getElementById('dtr-month');
+                const yearEl = document.getElementById('dtr-year');
+                const month = parseInt(monthEl.value) - 1;
+                const year = parseInt(yearEl.value);
+                
+                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const endDt = new Date(year, month + 1, 0);
+                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-            alert("Generating Civil Service Form 48...");
+                alert("Generating Civil Service Form 48...");
 
-            const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
-            const logsByDate = {};
-            (logs || []).forEach(l => {
-                const dateObj = new Date(l.log_time);
-                const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
-                if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
-                logsByDate[isoStr].push(dateObj);
-            });
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+                const logsByDate = {};
+                (logs || []).forEach(l => {
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                    logsByDate[isoStr].push(dateObj);
+                });
 
-            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
-            const validTos = tos?.map(t => t.to_no) || [];
-            
-            let itins = [];
-            if(validTos.length > 0) {
-                const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
-                itins = data || [];
-            }
-
-            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
-            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
-
-            const drawForm = (startX, startY) => {
-                doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-                doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
-                doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-                doc.text("DAILY TIME RECORD", startX + 42.5, startY + 7, { align: "center" });
-
-                doc.setFontSize(8);
-                doc.text(currentUser.full_name, startX + 42.5, startY + 15, { align: "center" });
-                doc.line(startX, startY + 16, startX + 85, startY + 16);
-                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-                doc.text("Name", startX + 42.5, startY + 19, { align: "center" });
-
-                doc.text("For the month of", startX, startY + 23);
-                doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                const mName = `${monthNames[month]} ${year}`;
-                doc.text(mName, startX + 25, startY + 23);
-                doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
-
-                let ty = startY + 30;
-                let cw_day = 8, cw_time = 14, cw_u = 11;
-                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-
-                doc.rect(startX, ty, cw_day, 8); doc.text("Days", startX + 4, ty + 5, { align: "center" });
-                doc.rect(startX + cw_day, ty, cw_time * 2, 4); doc.text("A.M.", startX + cw_day + cw_time, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time * 2, 4); doc.text("P.M.", startX + cw_day + (cw_time * 3), ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u * 2, 4); doc.text("UNDERTIME", startX + cw_day + (cw_time * 4) + cw_u, ty + 3, { align: "center" });
-
-                ty += 4;
-                doc.rect(startX + cw_day, ty, cw_time, 4); doc.text("Arrival", startX + cw_day + 7, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + cw_time, ty, cw_time, 4); doc.text("Departure", startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, 4); doc.text("Arrival", startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, 4); doc.text("Departure", startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 4); doc.text("Hours", startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
-                doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 4); doc.text("Min.", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
-
-                ty += 4;
-                let row_h = 4.2;
-
-                for (let d = 1; d <= 31; d++) {
-                    doc.rect(startX, ty, cw_day, row_h);
-                    doc.text(String(d), startX + 4, ty + 3, { align: "center" });
-
-                    if (d <= endDt.getDate()) {
-                        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                        const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
-                        
-                        let special = "";
-                        const hol = holidays?.find(h => h.date === dateStr);
-                        if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
-                        
-                        const pso = psos?.find(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                        if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
-                        
-                        const to = itins?.find(i => i.travel_date === dateStr);
-                        if(to) special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
-                        
-                        const leave = leaves?.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-                        if(leave) special = String(leave.type).toUpperCase();
-
-                        const isWeekend = new Date(year, month, d).getDay() === 0 || new Date(year, month, d).getDay() === 6;
-                        if(isWeekend && !special) special = "SATURDAY/SUNDAY";
-                        
-                        let amIn="", amOut="", pmIn="", pmOut="";
-                        dayLogs.forEach(time => {
-                            const hr = time.getHours();
-                            const fmt = formatTime12(time);
-                            if(hr < 12 && !amIn) amIn = fmt;
-                            else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                            else if(hr <= 14 && !pmIn) pmIn = fmt;
-                            else pmOut = fmt;
-                        });
-
-                        if(dayLogs.length > 0 && (special === "SATURDAY/SUNDAY" || special.includes("HOLIDAY"))) {
-                            special = ""; 
-                        }
-
-                        if (special) {
-                            doc.setFont("helvetica", "bold"); doc.setFontSize(6);
-                            doc.rect(startX + cw_day, ty, cw_time * 4, row_h);
-                            doc.text(special.substring(0,45), startX + cw_day + (cw_time * 2), ty + 3, { align: "center" });
-                            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-                        } else {
-                            doc.rect(startX + cw_day, ty, cw_time, row_h); doc.text(amIn, startX + cw_day + 7, ty + 3, { align: "center" });
-                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h); doc.text(amOut, startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
-                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
-                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
-                        }
-                    } else {
-                        doc.rect(startX + cw_day, ty, cw_time, row_h);
-                        doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
-                        doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
-                        doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
-                    }
-                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
-                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
-                    ty += row_h;
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                const validTos = tos?.map(t => t.to_no) || [];
+                
+                let itins = [];
+                if(validTos.length > 0) {
+                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                    itins = data || [];
                 }
 
-                doc.text("Total", startX + cw_day + (cw_time * 4) - 2, ty + 3, { align: "right" });
-                doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 5);
-                doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5);
+                const [{ data: psos }, { data: holidays }, { data: leaves }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED'])
+                ]);
 
-                ty += 8;
-                doc.setFont("helvetica", "italic");
-                const cert = "I certify on my honor that the above is true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.";
-                doc.text(cert, startX, ty, { maxWidth: 85, align: "justify" });
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const mName = monthNames[month];
 
-                ty += 12;
-                doc.line(startX + 10, ty, startX + 75, ty);
-                doc.setFont("helvetica", "normal");
-                doc.text("(Employee's Signature)", startX + 42.5, ty + 3, { align: "center" });
-
-                ty += 8;
-                doc.text("Verified as to prescribed office hours:", startX, ty);
+                // GENERATE DTR RECORD TRACKING AND QR CODE
+                const { data: existingDtr } = await supabase.from('dtr_generations').select('id').eq('emp_id', currentUser.emp_id).eq('month', mName).eq('year', year).maybeSingle();
+                let qrValidationId = crypto.randomUUID();
                 
-                ty += 8;
-                doc.setFont("helvetica", "bold");
-                doc.text("DIVISION CHIEF / MARPO", startX + 42.5, ty, { align: "center" });
-                doc.line(startX + 10, ty + 1, startX + 75, ty + 1);
-                doc.setFont("helvetica", "normal");
-                doc.text("Authorized Officer", startX + 42.5, ty + 4, { align: "center" });
-            };
+                if (existingDtr) {
+                    qrValidationId = existingDtr.id;
+                    await supabase.from('dtr_generations').update({ generated_at: new Date().toISOString() }).eq('id', qrValidationId);
+                } else {
+                    await supabase.from('dtr_generations').insert({ id: qrValidationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
+                }
 
-            drawForm(10, 10);
-            drawForm(110, 10);
-            
-            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            doc.save(`Form48_${monthNames[month]}_${year}.pdf`);
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrValidationId}`;
+                const qrImg = await urlToBase64(qrUrl);
+
+                // DYNAMIC SIGNATORY LOGIC (DIVISION CHIEF)
+                let chiefName = "_________________________";
+                let chiefPos = "DIVISION CHIEF";
+                const isParpo = currentUser.division?.toUpperCase() === "PARPO" || currentUser.unit?.toUpperCase() === "PARPO";
+                
+                if (isParpo) {
+                    chiefName = "RICARDO C. GARCIA";
+                    chiefPos = "PARPO II";
+                } else {
+                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                    const { data: chiefData } = await supabase.from('users').select('full_name, role').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    if (chiefData) {
+                        chiefName = chiefData.full_name.toUpperCase();
+                    }
+                }
+
+                const drawForm = (startX, startY) => {
+                    if (qrImg) { try { doc.addImage(qrImg, 'PNG', startX + 75, startY, 12, 12); } catch(e){} }
+
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(6);
+                    doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                    doc.text("DAILY TIME RECORD", startX + 42.5, startY + 7, { align: "center" });
+
+                    doc.setFontSize(8);
+                    doc.text(currentUser.full_name, startX + 42.5, startY + 15, { align: "center" });
+                    doc.line(startX, startY + 16, startX + 85, startY + 16);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                    doc.text("Name", startX + 42.5, startY + 19, { align: "center" });
+
+                    doc.text("For the month of", startX, startY + 23);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                    doc.text(`${mName} ${year}`, startX + 25, startY + 23);
+                    doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
+
+                    let ty = startY + 30;
+                    let cw_day = 8, cw_time = 14, cw_u = 11;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+
+                    doc.rect(startX, ty, cw_day, 8); doc.text("Days", startX + 4, ty + 5, { align: "center" });
+                    doc.rect(startX + cw_day, ty, cw_time * 2, 4); doc.text("A.M.", startX + cw_day + cw_time, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time * 2, 4); doc.text("P.M.", startX + cw_day + (cw_time * 3), ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u * 2, 4); doc.text("UNDERTIME", startX + cw_day + (cw_time * 4) + cw_u, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    doc.rect(startX + cw_day, ty, cw_time, 4); doc.text("Arrival", startX + cw_day + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + cw_time, ty, cw_time, 4); doc.text("Departure", startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, 4); doc.text("Arrival", startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, 4); doc.text("Departure", startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 4); doc.text("Hours", startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 4); doc.text("Min.", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    let row_h = 4.2;
+
+                    for (let d = 1; d <= 31; d++) {
+                        doc.rect(startX, ty, cw_day, row_h);
+                        doc.text(String(d), startX + 4, ty + 3, { align: "center" });
+
+                        if (d <= endDt.getDate()) {
+                            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                            const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                            
+                            let special = "";
+                            const hol = (holidays || []).find(h => h.date === dateStr);
+                            if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+                            
+                            const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                            if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                            
+                            const to = (itins || []).find(i => i.travel_date === dateStr);
+                            if(to) special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                            
+                            const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                            if(leave) special = String(leave.type).toUpperCase();
+
+                            const isWeekend = new Date(year, month, d).getDay() === 0 || new Date(year, month, d).getDay() === 6;
+                            if(isWeekend && !special) special = "SATURDAY/SUNDAY";
+                            
+                            let amIn="", amOut="", pmIn="", pmOut="";
+                            dayLogs.forEach(time => {
+                                const hr = time.getHours();
+                                const fmt = formatTime12(time);
+                                if(hr < 12 && !amIn) amIn = fmt;
+                                else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
+                                else if(hr <= 14 && !pmIn) pmIn = fmt;
+                                else pmOut = fmt;
+                            });
+
+                            if(dayLogs.length > 0 && (special === "SATURDAY/SUNDAY" || special.includes("HOLIDAY"))) {
+                                special = ""; 
+                            }
+
+                            if (special) {
+                                doc.setFont("helvetica", "bold"); doc.setFontSize(6);
+                                doc.rect(startX + cw_day, ty, cw_time * 4, row_h);
+                                doc.text(special.substring(0, 40), startX + cw_day + (cw_time * 2), ty + 3, { align: "center" });
+                                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                            } else {
+                                doc.rect(startX + cw_day, ty, cw_time, row_h); doc.text(amIn, startX + cw_day + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h); doc.text(amOut, startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                            }
+                        } else {
+                            doc.rect(startX + cw_day, ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
+                        }
+                        doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
+                        doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
+                        ty += row_h;
+                    }
+
+                    doc.text("Total", startX + cw_day + (cw_time * 4) - 2, ty + 3, { align: "right" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 5);
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5);
+
+                    ty += 8;
+                    doc.setFont("helvetica", "italic");
+                    const cert = "I certify on my honor that the above is true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.";
+                    doc.text(cert, startX, ty, { maxWidth: 85, align: "justify" });
+
+                    ty += 12;
+                    doc.line(startX + 10, ty, startX + 75, ty);
+                    doc.setFont("helvetica", "normal");
+                    doc.text("(Employee's Signature)", startX + 42.5, ty + 3, { align: "center" });
+
+                    ty += 8;
+                    doc.text("Verified as to prescribed office hours:", startX, ty);
+                    
+                    ty += 8;
+                    doc.setFont("helvetica", "bold");
+                    doc.text(chiefName, startX + 42.5, ty, { align: "center" });
+                    doc.line(startX + 10, ty + 1, startX + 75, ty + 1);
+                    doc.setFont("helvetica", "normal");
+                    doc.text(chiefPos, startX + 42.5, ty + 4, { align: "center" });
+                };
+
+                drawForm(10, 10);
+                drawForm(110, 10);
+                
+                doc.save(`Form48_${mName}_${year}.pdf`);
+            } catch (err) {
+                alert("PDF Error: " + err.message);
+            }
         };
 
         window.changePassword = async function() {
