@@ -47,18 +47,19 @@
         .action-group { display: flex; gap: 8px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
 
-        .cal-container { background: white; border-radius: 8px; overflow-x: auto; }
+        .cal-container { background: white; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; }
-        .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
+        .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; white-space: nowrap; }
         .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
-        .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; }
+        .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; display: inline-block;}
         .entry-to { background: var(--dar-green); }
         .entry-pso { background: var(--dar-gold); color: #003811; }
         .entry-holiday { background: var(--danger); }
+        .entry-leave { background: #b45309; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-item { flex: 1; padding: 15px 0; text-align: center; color: #9ca3af; font-size: 10px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .nav-item { flex: 1; padding: 12px 0; text-align: center; color: #9ca3af; font-size: 9px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
 
         .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
@@ -84,6 +85,10 @@
             border: 4px solid var(--dar-gold) !important;
             cursor: pointer;
         }
+
+        .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .radio-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+        .radio-item input { width: auto; margin: 0; }
     </style>
 </head>
 <body>
@@ -95,7 +100,7 @@
                 <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 25px; font-weight: bold;">CAMARINES SUR I - MOBILE</p>
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
-                <button class="btn btn-primary" onclick="handleLogin()">SECURE LOGIN</button>
+                <button class="btn btn-primary" onclick="window.handleLogin()">SECURE LOGIN</button>
             </div>
         </div>
     </div>
@@ -111,7 +116,7 @@
 
         <div id="apply-view" class="view active">
             <div class="card" style="text-align: center;">
-                <button class="btn btn-gold btn-small" onclick="showEmployeeQR()" style="margin: 0;">Generate My QR Code</button>
+                <button class="btn btn-gold btn-small" onclick="window.showEmployeeQR()" style="margin: 0;">Generate My QR Code</button>
                 <div id="my-qr-container" style="display: none; margin-top: 15px;">
                     <img id="my-qr-img" src="" alt="QR Code" onclick="this.classList.toggle('qr-maximized')" style="width: 150px; height: 150px; border-radius: 8px; border: 2px solid var(--dar-green); padding: 5px; cursor: pointer; transition: all 0.3s ease;">
                     <div style="font-size: 12px; font-weight: bold; margin-top: 5px; color: var(--dar-green);" id="my-qr-text"></div>
@@ -123,7 +128,7 @@
                 <h4>1. Personnel (Max 5)</h4>
                 <div style="display: flex; gap: 5px;">
                     <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
-                    <button class="btn btn-primary" style="width: 70px; padding:0; height: 45px;" onclick="searchEmployees()">Find</button>
+                    <button class="btn btn-primary" style="width: 70px; padding:0; height: 45px;" onclick="window.searchEmployees()">Find</button>
                 </div>
                 <div id="search-results" class="search-results"></div>
                 <div id="personnel-draft-list" style="margin-top: 10px;"></div>
@@ -144,34 +149,77 @@
                 <h4>3. Itinerary Builder</h4>
                 <label>Date Range (From - To, Max 5 days)</label>
                 <div style="display: flex; gap: 5px;">
-                    <input type="date" id="itin-from" onchange="handleStartDateChange()" onkeydown="return false">
-                    <input type="date" id="itin-to" onchange="generateItinFields()" onkeydown="return false">
+                    <input type="date" id="itin-from" onchange="window.handleStartDateChange()" onkeydown="return false">
+                    <input type="date" id="itin-to" onchange="window.generateItinFields()" onkeydown="return false">
                 </div>
                 <div id="dynamic-itin-fields" style="margin-top: 15px;"></div>
             </div>
-            <button class="btn btn-gold" id="btn-submit-to" onclick="submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+            <button class="btn btn-gold" id="btn-submit-to" onclick="window.submitTO()">🚀 SUBMIT OFFICIAL REQUEST</button>
+        </div>
+
+        <div id="leave-view" class="view">
+            <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
+            <div class="card">
+                <h4>1. Type of Leave</h4>
+                <div class="radio-group">
+                    <div class="radio-item"><input type="radio" name="ltype" value="Vacation Leave" onchange="window.updateLeaveInputs()" checked> Vacation</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Sick Leave" onchange="window.updateLeaveInputs()"> Sick</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Mandatory/Forced Leave" onchange="window.updateLeaveInputs()"> Mandatory</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Special Privilege Leave" onchange="window.updateLeaveInputs()"> SPL</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Maternity Leave" onchange="window.updateLeaveInputs()"> Maternity</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Wellness Leave" onchange="window.updateLeaveInputs()"> Wellness</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Others" onchange="window.updateLeaveInputs()"> Others</div>
+                </div>
+
+                <h4 style="margin-top: 15px;">2. Details of Leave</h4>
+                <div id="leave-details-container"></div>
+
+                <h4 style="margin-top: 15px;">3. Inclusive Dates</h4>
+                <div style="display: flex; gap: 5px;">
+                    <input type="date" id="leave-from" onchange="window.calculateLeaveDays()" onkeydown="return false">
+                    <input type="date" id="leave-to" onchange="window.calculateLeaveDays()" onkeydown="return false">
+                </div>
+                <label>Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
+
+                <h4 style="margin-top: 15px;">4. Commutation</h4>
+                <select id="leave-commutation">
+                    <option value="Not Requested">Not Requested</option>
+                    <option value="Requested">Requested</option>
+                </select>
+            </div>
+            <button class="btn btn-success" id="btn-submit-leave" onclick="window.submitLeave()">📄 SUBMIT LEAVE APPLICATION</button>
         </div>
 
         <div id="status-view" class="view">
             <h3 style="color: var(--dar-green);">APPLICATIONS</h3>
+            <div class="radio-group" style="background: white; padding: 10px; border-radius: 8px;">
+                <div class="radio-item"><input type="radio" name="statusFilter" value="TO" onchange="window.loadStatus()" checked> Travel Orders</div>
+                <div class="radio-item"><input type="radio" name="statusFilter" value="LEAVE" onchange="window.loadStatus()"> Leave Applications</div>
+            </div>
             <div id="status-list"></div>
         </div>
 
         <div id="calendar-view" class="view">
-            <h3 style="color: var(--dar-green);">Personal Activity Schedule</h3>
+            <h3 style="color: var(--dar-green);">Personal Schedule</h3>
             <div class="card" style="padding:0;">
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f0f4f8;">
-                    <button onclick="changeCalMonth(-1)" class="btn-primary" style="width:auto; padding:5px 15px; margin:0;">&lt;</button>
-                    <div id="cal-month-year" style="font-weight:bold; color:var(--dar-green);"></div>
-                    <button onclick="changeCalMonth(1)" class="btn-primary" style="width:auto; padding:5px 15px; margin:0;">&gt;</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f0f4f8; gap: 10px;">
+                    <select id="dtr-month" style="margin:0; flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px;"></select>
+                    <select id="dtr-year" style="margin:0; width: 100px; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px;"></select>
+                    <button class="btn btn-primary" style="margin:0; width: auto; padding: 10px 20px;" onclick="window.renderCalendar()">LOAD</button>
                 </div>
-                <button class="btn btn-success" style="border-radius: 8px; margin: 10px;" onclick="generateForm48()">🖨️ PRINT CS FORM 48</button>
-                <div class="cal-container">
+                <div style="padding: 10px; background:#f0f4f8;">
+                    <button class="btn btn-success" style="margin: 0; width: 100%; border-radius: 8px;" onclick="window.generateForm48()">🖨️ PRINT CS FORM 48</button>
+                </div>
+                <div class="cal-container" style="margin-top: 0;">
                     <table class="cal-table">
                         <thead>
                             <tr>
-                                <th>Day</th>
-                                <th>Schedule / Details</th>
+                                <th>Date</th>
+                                <th>AM In</th>
+                                <th>AM Out</th>
+                                <th>PM In</th>
+                                <th>PM Out</th>
+                                <th>Particulars</th>
                             </tr>
                         </thead>
                         <tbody id="cal-table-body"></tbody>
@@ -190,15 +238,16 @@
                 <input type="password" id="pass-new">
                 <label>Confirm Password</label>
                 <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="changePassword()">UPDATE PASSWORD</button>
+                <button class="btn btn-primary" onclick="window.changePassword()">UPDATE PASSWORD</button>
             </div>
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-item active" onclick="switchTab('apply-view', this)">📝 Apply</div>
-            <div class="nav-item" onclick="switchTab('status-view', this)">📋 Status</div>
-            <div class="nav-item" onclick="switchTab('calendar-view', this)">📅 Calendar</div>
-            <div class="nav-item" onclick="switchTab('security-view', this)">🔒 Security</div>
+            <div class="nav-item active" onclick="window.switchTab('apply-view', this)">📝 Apply</div>
+            <div class="nav-item" onclick="window.switchTab('leave-view', this)">🍃 Leave</div>
+            <div class="nav-item" onclick="window.switchTab('status-view', this)">📋 Status</div>
+            <div class="nav-item" onclick="window.switchTab('calendar-view', this)">📅 DTR</div>
+            <div class="nav-item" onclick="window.switchTab('security-view', this)">🔒 Security</div>
         </div>
     </div>
 
@@ -213,9 +262,9 @@
         let itineraryDraft = []; 
         let personnelDraft = []; 
         const todayStr = new Date().toISOString().split('T')[0]; 
-        let calDate = new Date(); 
         let isSubmitting = false; 
         let conflictsToProcess = []; 
+        let cachedHolidays = [];
 
         const urlToBase64 = async (url) => {
             try {
@@ -230,21 +279,58 @@
             } catch (e) { return null; }
         };
 
+        const formatTime12 = (dateObj) => {
+            if(!dateObj) return "";
+            return dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        };
+
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
-            const { data } = await supabase.from('employees').select('*').eq('emp_id', id).single();
-            if (data && data.pass === pass) {
-                currentUser = data;
-                document.getElementById('user-name').innerText = data.full_name;
-                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                document.getElementById('login-screen').classList.remove('active');
-                document.getElementById('app-screen').classList.add('active');
-                document.getElementById('itin-from').min = todayStr;
-                document.getElementById('itin-to').min = todayStr;
-                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                renderPersonnel();
-            } else { alert("Invalid Credentials"); }
+            try {
+                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
+                
+                if (error) {
+                    alert("Database connection issue: " + error.message);
+                    return;
+                }
+                
+                if (data && data.pass === pass) {
+                    currentUser = data;
+                    document.getElementById('user-name').innerText = data.full_name;
+                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('app-screen').classList.add('active');
+                    document.getElementById('itin-from').min = todayStr;
+                    document.getElementById('itin-to').min = todayStr;
+                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                    window.renderPersonnel();
+
+                    const { data: hols } = await supabase.from('holidays').select('date, description');
+                    cachedHolidays = hols || [];
+                    window.updateLeaveInputs();
+                    
+                    // Initialize DTR Dropdowns safely after login
+                    const dtrMonth = document.getElementById('dtr-month');
+                    const dtrYear = document.getElementById('dtr-year');
+                    if (dtrMonth && dtrMonth.options.length === 0) {
+                        const monthsArr = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                        monthsArr.forEach((m, i) => {
+                            let opt = document.createElement('option'); opt.value = i + 1; opt.text = m; dtrMonth.appendChild(opt);
+                        });
+                        const currentYear = new Date().getFullYear();
+                        for(let y = 2024; y <= 2030; y++) {
+                            let opt = document.createElement('option'); opt.value = y; opt.text = y; dtrYear.appendChild(opt);
+                        }
+                        dtrMonth.value = new Date().getMonth() + 1;
+                        dtrYear.value = currentYear;
+                    }
+                } else { 
+                    alert("Invalid Credentials"); 
+                }
+            } catch (err) {
+                alert("Network Error");
+            }
         };
 
         window.switchTab = function(id, el) {
@@ -252,8 +338,8 @@
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             el.classList.add('active');
-            if (id === 'status-view') loadStatus();
-            if (id === 'calendar-view') renderCalendar();
+            if (id === 'status-view') window.loadStatus();
+            if (id === 'calendar-view') window.renderCalendar();
         };
 
         window.showEmployeeQR = function() {
@@ -280,27 +366,28 @@
                     if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
                     if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
                     personnelDraft.push({ emp_id: emp.emp_id, name: emp.full_name, unit: emp.unit });
-                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; renderPersonnel();
+                    resDiv.style.display = 'none'; document.getElementById('emp-search').value = ''; window.renderPersonnel();
                 };
                 resDiv.appendChild(row);
             });
         };
 
-        function renderPersonnel() {
+        window.renderPersonnel = function() {
             const list = document.getElementById('personnel-draft-list');
             list.innerHTML = personnelDraft.map((p, i) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
                     <span>👤 ${p.name}</span>
-                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="removePersonnel(${i})">X</button>` : ''}
+                    ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="window.removePersonnel(${i})">X</button>` : ''}
                 </div>`).join('');
         }
-        window.removePersonnel = (i) => { personnelDraft.splice(i,1); renderPersonnel(); };
+        
+        window.removePersonnel = function(i) { personnelDraft.splice(i,1); window.renderPersonnel(); };
 
         window.handleStartDateChange = function() {
             const fromDate = document.getElementById('itin-from').value;
             if (fromDate) {
                 document.getElementById('itin-to').value = fromDate;
-                generateItinFields();
+                window.generateItinFields();
             }
         };
 
@@ -355,7 +442,7 @@
                     <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
-                            <button onclick="removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
+                            <button onclick="window.removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
                         </div>
                         <input type="text" id="dest-${i}" placeholder="Destination">
                         ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
@@ -367,7 +454,7 @@
             }
         };
 
-        window.removeItinCard = (cardId, date) => {
+        window.removeItinCard = function(cardId, date) {
             if(!confirm(`Remove ${date}?`)) return;
             document.getElementById(cardId).remove();
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
@@ -409,7 +496,7 @@
                         });
 
                         if (remainingDays.length > 0) {
-                            const remainderToNo = await generateToNo();
+                            const remainderToNo = await window.generateToNo();
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
                             
                             // EXPLICIT DESTRUCTURING TO REMOVE 'id'
@@ -425,7 +512,7 @@
                     }
                 }
 
-                const finalToNo = await generateToNo(); 
+                const finalToNo = await window.generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 let routeStatus = "PENDING_CHIEF";
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
@@ -436,20 +523,13 @@
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, 
-                    emp_id: p.emp_id, 
-                    emp_name: p.name, 
-                    unit: p.unit, 
-                    division: currentUser.division, 
-                    status: routeStatus, 
-                    transport, 
-                    report_to: Array.from(reportTos).join(", "),
+                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: currentUser.division, 
+                    status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
                     remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
                 
-                // EXPLICIT SUPABASE ERROR CATCHING ADDED HERE
                 const { error: toError } = await supabase.from('travel_orders').insert(batchPersonnel);
                 if (toError) throw new Error("Travel Order DB Error: " + toError.message);
                 
@@ -463,10 +543,10 @@
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
                 document.getElementById('to-transport').selectedIndex = 0;
                 personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
-                renderPersonnel();
+                window.renderPersonnel();
                 itineraryDraft = [];
                 conflictsToProcess = [];
-                switchTab('status-view', document.querySelectorAll('.nav-item')[1]);
+                window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
                 
             } catch(e) { 
                 alert("Error: " + e.message); 
@@ -476,7 +556,7 @@
             }
         };
 
-        async function generateToNo() {
+        window.generateToNo = async function() {
             const year = new Date().getFullYear();
             const div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
             const { data } = await supabase.from('travel_orders')
@@ -494,20 +574,20 @@
                 }
             }
             return `${year}-${div}-${String(seq).padStart(5, '0')}`;
-        }
+        };
 
         window.deletePendingTO = async function(toNo) {
             if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            loadStatus();
+            window.loadStatus();
         };
 
         window.cancelApprovedTO = async function(toNo) {
             if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
             await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
             await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
-            loadStatus();
+            window.loadStatus();
         };
 
         window.modifyPendingTO = async function(toNo) {
@@ -530,7 +610,7 @@
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                              <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
-                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
+                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="window.removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
                         </div>
                         <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
@@ -543,7 +623,7 @@
             
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            switchTab('apply-view', document.querySelector('.nav-item'));
+            window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
         window.generateOfficialPDF = async function(toNo) {
@@ -567,13 +647,13 @@
                 let uh_data = null;
                 if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
                     const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle();
-                    uh_data = resUH.data;
+                    uh_data = resUH?.data;
                 }
 
                 let dc_data = null;
                 if (currentUser.unit !== "PARPO" && baseDiv) {
                     const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    dc_data = resDC.data;
+                    dc_data = resDC?.data;
                 }
 
                 const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
@@ -586,8 +666,8 @@
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} 
-                    if (img_qr) doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                    if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                    if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); } catch(e){} }
 
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
@@ -664,8 +744,8 @@
                     doc.text("Recommended by:", 20, 156);
                     
                     if (i > 0) {
-                        if(uh_data && !isMARPO) { if(img_uh) doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
-                        if(dc_data) { if(img_dc) doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
+                        if(uh_data && !isMARPO && img_uh) { try { doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); doc.text(uh_data.full_name.toUpperCase(), 34, 166); } catch(e){} }
+                        if(dc_data && img_dc) { try { doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); doc.text(dc_data.full_name.toUpperCase(), 104, 166); } catch(e){} }
                     } else {
                         if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
                         if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
@@ -674,7 +754,7 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); 
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -684,77 +764,503 @@
             } catch (e) { alert("PDF Error: " + e.message); }
         };
 
-        async function loadStatus() {
+        window.loadStatus = async function() {
+            const filterNode = document.querySelector('input[name="statusFilter"]:checked');
+            const filter = filterNode ? filterNode.value : "TO";
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(30);
-            let html = '';
-            for(let to of tos || []) {
-                const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
-                const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
-                const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
+            
+            if(filter === "TO") {
+                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).order('created_at', {ascending: false}).limit(30);
+                let html = '';
+                for(let to of tos || []) {
+                    const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
+                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCEL') ? 'bg-cancelled' : 'bg-pending');
+                    const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
-                html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
-                        <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
-                        ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
-                    </div>
-                    <div class="action-group" style="margin-top: 0;">
-                        ${isPending ? `<button class="btn btn-warning btn-small" onclick="modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="deletePendingTO('${to.to_no}')">Delete</button>` : ''}
-                        ${isApproved ? `<button class="btn btn-success btn-small" onclick="generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
-                    </div>
-                </div>`;
+                    html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
+                            <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                        </div>
+                        <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
+                            ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
+                        </div>
+                        <div class="action-group" style="margin-top: 0;">
+                            ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
+                            ${isApproved ? `<button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                        </div>
+                    </div>`;
+                }
+                list.innerHTML = html || "No Travel Orders found.";
+            } else {
+                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED']).order('created_at', {ascending: false});
+                let html = '';
+                for(let app of leaves || []) {
+                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : 'bg-pending';
+                    const isApp = app.transaction_type === 'APPROVED';
+                    html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
+                            <span class="badge ${sCls}">${app.transaction_type}</span>
+                        </div>
+                        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
+                        <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
+                        ${isApp ? `<button class="btn btn-success btn-small" style="margin-top:8px;" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                    </div>`;
+                }
+                list.innerHTML = html || "No Leave Applications found.";
             }
-            list.innerHTML = html || "No records found.";
-        }
+        };
 
-        window.changeCalMonth = (d) => { calDate.setMonth(calDate.getMonth()+d); window.renderCalendar(); };
-        
+        window.updateLeaveInputs = function() {
+            const type = document.querySelector('input[name="ltype"]:checked').value;
+            const container = document.getElementById('leave-details-container');
+            container.innerHTML = '';
+
+            if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
+                container.innerHTML = `
+                    <div class="radio-group">
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Within Philippines" checked> Within Philippines</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Abroad"> Abroad</div>
+                    </div>
+                    <input type="text" id="leave-specify" placeholder="Specify details...">`;
+            } else if (type === "Sick Leave") {
+                container.innerHTML = `
+                    <div class="radio-group">
+                        <div class="radio-item"><input type="radio" name="ldetail" value="In Hospital" checked> In Hospital</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Out Patient"> Out Patient</div>
+                    </div>
+                    <input type="text" id="leave-specify" placeholder="Specify Illness...">`;
+            } else if (type === "Others") {
+                container.innerHTML = `
+                    <div class="radio-group">
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Monetization" checked> Monetization</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Terminal"> Terminal Leave</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="CTO"> CTO</div>
+                    </div>`;
+            } else {
+                container.innerHTML = `<input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
+            }
+        };
+
+        window.calculateLeaveDays = function() {
+            const start = document.getElementById('leave-from').value;
+            const end = document.getElementById('leave-to').value;
+            if (!start || !end) return;
+
+            const sDate = new Date(start);
+            const eDate = new Date(end);
+            if (sDate > eDate) {
+                document.getElementById('leave-to').value = start;
+                document.getElementById('leave-days-count').innerText = "1";
+                return;
+            }
+
+            let count = 0;
+            let cur = new Date(sDate);
+            while (cur <= eDate) {
+                const dateStr = cur.toISOString().split('T')[0];
+                const day = cur.getDay();
+                const isHoliday = cachedHolidays.includes(dateStr);
+                if (day !== 0 && day !== 6 && !isHoliday) count++;
+                cur.setDate(cur.getDate() + 1);
+            }
+            document.getElementById('leave-days-count').innerText = count;
+        };
+
+        window.submitLeave = async function() {
+            if (isSubmitting) return;
+            const type = document.querySelector('input[name="ltype"]:checked').value;
+            const start = document.getElementById('leave-from').value;
+            const end = document.getElementById('leave-to').value;
+            const days = parseInt(document.getElementById('leave-days-count').innerText);
+            const comm = document.getElementById('leave-commutation').value;
+
+            if (!start || !end || days <= 0) return alert("Select valid working dates.");
+
+            const rDetail = document.querySelector('input[name="ldetail"]:checked');
+            const specify = document.getElementById('leave-specify');
+            let detailStr = rDetail ? rDetail.value : "See Remarks";
+            if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
+            const fullRemarks = `${detailStr} | Commutation: ${comm}`;
+
+            const dates_to_check = [];
+            let curr = new Date(start);
+            const eDate = new Date(end);
+            while (curr <= eDate) {
+                dates_to_check.push(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            const { data: toConflicts } = await supabase.from('itinerary').select('to_no, travel_date')
+                .gte('travel_date', start).lte('travel_date', end)
+                .in('to_no', (await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%')).data.map(t => t.to_no));
+            
+            if(toConflicts && toConflicts.length > 0) {
+                if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will CANCEL/SPLIT the TO. Continue?`)) return;
+                const uniqueToNos = [...new Set(toConflicts.map(t => t.to_no))];
+                for(let to_no of uniqueToNos) {
+                    await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
+                }
+            }
+
+            isSubmitting = true;
+            document.getElementById('btn-submit-leave').innerText = "Processing...";
+
+            try {
+                await supabase.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
+                    start_date: start, end_date: end, type: type, debit: days,
+                    transaction_type: "APPLICATION", remarks: fullRemarks
+                });
+                alert("Leave Application Submitted.");
+                document.getElementById('leave-from').value = '';
+                document.getElementById('leave-to').value = '';
+                document.getElementById('leave-days-count').innerText = "0";
+                window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
+            } catch(e) {
+                alert("Error: " + e.message);
+            } finally {
+                isSubmitting = false;
+                document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
+            }
+        };
+
+        window.printLeaveForm6 = async function(leaveId) {
+            alert("Fetching Leave Data to generate Form 6 PDF...");
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
+            
+            const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).maybeSingle();
+            if (error || !app) return alert("Application not found");
+
+            const { data: emp } = await supabase.from('employees').select('full_name, unit, position, salary, vl_balance, sl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            const empData = emp || {};
+
+            let vl_base = parseFloat(empData.vl_balance || 0);
+            let sl_base = parseFloat(empData.sl_balance || 0);
+
+            let app_date_str = app.created_at ? app.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
+
+            const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
+            let vl_deduct = 0.0, sl_deduct = 0.0;
+            (res_ledger || []).forEach(ledg => {
+                if (ledg.id === app.id) return;
+                const ttype = String(ledg.transaction_type || "").toUpperCase();
+                if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT")) && ttype !== "APPLICATION") {
+                    const l_type = String(ledg.type || "").toUpperCase();
+                    const debit_val = parseFloat(ledg.debit || 0);
+                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
+                        vl_deduct += debit_val;
+                    } else if (l_type.includes("SICK")) {
+                        sl_deduct += debit_val;
+                    }
+                }
+            });
+
+            const { data: res_gp } = await supabase.from('gate_pass_logs').select('*').eq('emp_id', currentUser.emp_id);
+            (res_gp || []).forEach(gp => {
+                const gp_date = String(gp.date || gp.created_at || "");
+                if (gp_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(gp.status || "PROCESSED").toUpperCase())) {
+                    vl_deduct += parseFloat(gp.deduction_credit || gp.deduction_cr || 0);
+                }
+            });
+
+            const { data: res_ut } = await supabase.from('undertime_logs').select('*').eq('emp_id', currentUser.emp_id);
+            (res_ut || []).forEach(ut => {
+                const ut_date = String(ut.created_at || ut.date || "");
+                if (ut_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(ut.status || "PROCESSED").toUpperCase())) {
+                    vl_deduct += parseFloat(ut.deduction_credit || 0);
+                }
+            });
+
+            let vl_total_earned = Math.max(0, vl_base - vl_deduct);
+            let sl_total_earned = Math.max(0, sl_base - sl_deduct);
+
+            let vl_less = 0.0, sl_less = 0.0;
+            const app_type = String(app.type || "").toUpperCase();
+            const app_days = parseFloat(app.debit || 0);
+
+            if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) vl_less = app_days;
+            else if (app_type.includes("SICK")) sl_less = app_days;
+
+            let vl_balance = vl_total_earned - vl_less;
+            let sl_balance = sl_total_earned - sl_less;
+
+            let full_name = String(empData.full_name || "").toUpperCase();
+            let parts = full_name.split(',');
+            let lname = "", fname = "", mname = "";
+            if (parts.length > 1) {
+                lname = parts[0].trim();
+                let fname_parts = parts[1].trim().split(' ');
+                fname = fname_parts.length > 1 ? fname_parts.slice(0, -1).join(" ") : parts[1].trim();
+                mname = fname_parts.length > 1 ? fname_parts[fname_parts.length - 1] : "";
+            } else {
+                lname = full_name;
+            }
+
+            const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
+            if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+
+            doc.setFontSize(14); doc.setFont("helvetica", "bold");
+            doc.text("APPLICATION FOR LEAVE", 105, 30, { align: 'center' });
+
+            let ty = 35;
+            doc.setFontSize(7); doc.setFont("helvetica", "normal");
+            doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
+            doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
+            
+            ty += 4;
+            doc.setFontSize(8); doc.setFont("helvetica", "bold");
+            doc.rect(10, ty, 50, 6); doc.text(String(empData.unit || "").toUpperCase(), 35, ty + 4, { align: 'center' });
+            let fNameFormatted = parts.length > 1 ? `${lname}, ${fname} ${mname}`.trim() : full_name;
+            doc.rect(60, ty, 140, 6); doc.text(fNameFormatted, 130, ty + 4, { align: 'center' });
+
+            ty += 6;
+            doc.setFontSize(7); doc.setFont("helvetica", "normal");
+            doc.rect(10, ty, 50, 4); doc.text("3. DATE OF FILING", 12, ty + 3);
+            doc.rect(60, ty, 70, 4); doc.text("4. POSITION", 62, ty + 3);
+            doc.rect(130, ty, 70, 4); doc.text("5. SALARY", 132, ty + 3);
+
+            ty += 4;
+            doc.setFontSize(8); doc.setFont("helvetica", "bold");
+            let dFmt = app_date_str;
+            try { dFmt = new Date(app_date_str).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch(e) {}
+            doc.rect(10, ty, 50, 6); doc.text(dFmt, 35, ty + 4, { align: 'center' });
+            doc.rect(60, ty, 70, 6); doc.text(String(empData.position || "").toUpperCase(), 95, ty + 4, { align: 'center' });
+            doc.rect(130, ty, 70, 6); doc.text(String(empData.salary || ""), 165, ty + 4, { align: 'center' });
+
+            ty += 6;
+            doc.setFontSize(9); doc.setFont("helvetica", "bold");
+            doc.rect(10, ty, 190, 6); doc.text("6. DETAILS OF APPLICATION", 105, ty + 4, { align: 'center' });
+
+            ty += 6;
+            let section6Y = ty;
+            doc.rect(10, ty, 95, 85);
+            doc.rect(105, ty, 95, 85);
+
+            doc.setFontSize(7); doc.setFont("helvetica", "normal");
+            doc.text("6.A TYPE OF LEAVE TO BE AVAILED OF", 12, ty + 4);
+
+            let tY_left = ty + 8;
+            const types = ["Vacation Leave", "Mandatory/Forced Leave", "Sick Leave", "Maternity Leave", "Paternity Leave", "Special Privilege Leave", "Solo Parent Leave", "Study Leave", "10-Day VAWC Leave", "Rehabilitation Privilege", "Special Leave Benefits for Women", "Special Emergency (Calamity) Leave", "Adoption Leave", "Wellness Leave"];
+            let s_type = String(app.type || "").toLowerCase();
+            
+            types.forEach(t => {
+                doc.rect(12, tY_left, 3, 3);
+                if(t.toLowerCase().includes(s_type) || s_type.includes(t.toLowerCase())) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+                }
+                doc.text(t, 16, tY_left + 2.5);
+                tY_left += 5;
+            });
+            
+            doc.rect(12, tY_left, 3, 3);
+            if(s_type.includes("other") && !s_type.includes("wellness")) {
+                doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+            }
+            doc.text("Others:", 16, tY_left + 2.5);
+            let remks = app.remarks || "";
+            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
+            doc.setFont("helvetica", "bold"); doc.text(oth_val, 30, tY_left + 2.5); doc.line(30, tY_left + 3, 90, tY_left + 3);
+
+            let tY_right = section6Y + 4;
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("6.B DETAILS OF LEAVE", 107, tY_right);
+            
+            tY_right += 6;
+            doc.setFont("helvetica", "italic"); doc.text("In case of Vacation/Special Privilege Leave:", 107, tY_right);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Abroad")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Abroad (Specify)", 115, tY_right + 2.5);
+            let abr_val = remks.includes("Abroad") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            doc.setFont("helvetica", "bold"); doc.text(abr_val, 135, tY_right + 2.5); doc.line(135, tY_right + 3, 195, tY_right + 3);
+
+            tY_right += 6;
+            doc.setFont("helvetica", "italic"); doc.text("In case of Sick Leave:", 107, tY_right);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("In Hospital")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("In Hospital (Specify Illness)", 115, tY_right + 2.5);
+            let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2.5); doc.line(150, tY_right + 3, 195, tY_right + 3);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Out Patient")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Out Patient (Specify Illness)", 115, tY_right + 2.5);
+            let out_val = remks.includes("Out Patient") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2.5); doc.line(150, tY_right + 3, 195, tY_right + 3);
+
+            ty = section6Y + 85;
+            doc.rect(10, ty, 95, 25);
+            doc.rect(105, ty, 95, 25);
+
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("6.C NUMBER OF WORKING DAYS APPLIED FOR", 12, ty + 4);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text(`${app_days} days`, 57.5, ty + 10, { align: 'center' }); doc.line(20, ty + 11, 95, ty + 11);
+            
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("INCLUSIVE DATES", 12, ty + 16);
+            let inc_dates = `From ${app.start_date} to ${app.end_date}`;
+            try { inc_dates = `From ${new Date(app.start_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})} to ${new Date(app.end_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`; } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+            doc.text(inc_dates, 57.5, ty + 21, { align: 'center' }); doc.line(20, ty + 22, 95, ty + 22);
+
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("6.D COMMUTATION", 107, ty + 4);
+            let req = remks.includes("Requested") && !remks.includes("Not Requested");
+            doc.rect(110, ty + 6, 3, 3); if(!req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 8.5); } doc.setFont("helvetica", "normal"); doc.text("Not Requested", 115, ty + 8.5);
+            doc.rect(110, ty + 10, 3, 3); if(req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 12.5); } doc.setFont("helvetica", "normal"); doc.text("Requested", 115, ty + 12.5);
+            doc.line(130, ty + 20, 190, ty + 20); doc.setFontSize(6); doc.text("(Signature of Applicant)", 160, ty + 23, { align: 'center' });
+
+            ty += 25;
+            doc.setFillColor(220, 220, 220); doc.rect(10, ty, 190, 5, 'F');
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("7. DETAILS OF ACTION ON APPLICATION", 105, ty + 3.5, { align: 'center' });
+
+            ty += 5;
+            let section7Y = ty;
+            doc.rect(10, ty, 95, 45);
+            doc.rect(105, ty, 95, 45);
+
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("7.A CERTIFICATION OF LEAVE CREDITS", 12, ty + 4);
+            doc.text("As of", 30, ty + 8); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(app_date_str, 52.5, ty + 8, {align: 'center'}); doc.line(40, ty + 9, 65, ty + 9);
+            
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.rect(20, ty + 10, 30, 5); doc.rect(50, ty + 10, 25, 5); doc.rect(75, ty + 10, 25, 5);
+            doc.text("Vacation Leave", 62.5, ty + 13.5, {align: 'center'}); doc.text("Sick Leave", 87.5, ty + 13.5, {align: 'center'});
+            
+            doc.rect(20, ty + 15, 30, 5); doc.rect(50, ty + 15, 25, 5); doc.rect(75, ty + 15, 25, 5);
+            doc.text("Total Earned", 22, ty + 18.5); doc.setFont("helvetica", "bold"); doc.text(vl_total_earned.toFixed(2), 62.5, ty + 18.5, {align: 'center'}); doc.text(sl_total_earned.toFixed(2), 87.5, ty + 18.5, {align: 'center'});
+            
+            doc.setFont("helvetica", "normal");
+            doc.rect(20, ty + 20, 30, 5); doc.rect(50, ty + 20, 25, 5); doc.rect(75, ty + 20, 25, 5);
+            doc.text("Less this application", 22, ty + 23.5); doc.setFont("helvetica", "bold"); doc.text(vl_less > 0 ? vl_less.toFixed(2) : "", 62.5, ty + 23.5, {align: 'center'}); doc.text(sl_less > 0 ? sl_less.toFixed(2) : "", 87.5, ty + 23.5, {align: 'center'});
+
+            doc.setFont("helvetica", "normal");
+            doc.rect(20, ty + 25, 30, 5); doc.rect(50, ty + 25, 25, 5); doc.rect(75, ty + 25, 25, 5);
+            doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
+
+            const hr_sig = await urlToBase64(getAssetUrl("hr.png"));
+            if(hr_sig) { try { doc.addImage(hr_sig, 'PNG', 45, ty + 22, 20, 10); } catch(e){} }
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
+
+            doc.text("7.B RECOMMENDATION", 107, ty + 4);
+            doc.rect(110, ty + 6, 3, 3); doc.text("For approval", 115, ty + 8.5);
+            doc.rect(110, ty + 10, 3, 3); doc.text("For disapproval due to", 115, ty + 12.5); doc.line(140, ty + 13, 195, ty + 13);
+            doc.line(115, ty + 17, 195, ty + 17);
+            doc.line(115, ty + 21, 195, ty + 21);
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("GERRY L. MATAMOROSA", 152.5, ty + 38, {align: 'center'}); doc.line(115, ty + 39, 190, ty + 39);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("Authorized Officer", 152.5, ty + 42, {align: 'center'});
+
+            ty += 45;
+            doc.rect(10, ty, 95, 20); doc.rect(105, ty, 95, 20);
+            doc.rect(10, ty + 20, 190, 25);
+
+            doc.text("7.C APPROVED FOR:", 12, ty + 4);
+            let pay = remks.toLowerCase().includes("without pay") || remks.toLowerCase().includes("no pay") ? `____ days with pay\n_${app_days}_ days without pay` : `_${app_days}_ days with pay\n____ days without pay`;
+            doc.text(pay, 15, ty + 8);
+            doc.text("____ others (Specify)", 15, ty + 16); doc.line(40, ty + 17, 95, ty + 17);
+
+            doc.text("7.D DISAPPROVED DUE TO:", 107, ty + 4); doc.line(140, ty + 5, 195, ty + 5);
+            doc.line(110, ty + 9, 195, ty + 9);
+            doc.line(110, ty + 13, 195, ty + 13);
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+            doc.text("RICARDO C. GARCIA", 105, ty + 35, {align: 'center'}); doc.line(60, ty + 36, 150, ty + 36);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("PARPO II", 105, ty + 40, {align: 'center'});
+
+            doc.save(`Form6_${app.id}.pdf`);
+        };
+
         window.renderCalendar = async function() {
             document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
-            const month = calDate.getMonth(), year = calDate.getFullYear();
+            const monthEl = document.getElementById('dtr-month');
+            const yearEl = document.getElementById('dtr-year');
+            const month = parseInt(monthEl.value) - 1;
+            const year = parseInt(yearEl.value);
+            
             const tbody = document.getElementById('cal-table-body');
-            tbody.innerHTML = "<tr><td colspan='2'>Loading...</td></tr>";
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding: 20px;'>Crunching Logs...</td></tr>";
 
             const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
             const endDt = new Date(year, month + 1, 0);
             const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-            const [{data: tos}, {data: itins}, {data: psos}, {data: holidays}] = await Promise.all([
-                supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED'),
-                supabase.from('itinerary').select('to_no, travel_date, destination, purpose').gte('travel_date', startDtStr).lte('travel_date', endDtStr),
-                supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
-                supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr)
-            ]);
+            // Sequential fetching to prevent mapping race conditions
+            const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr).lte('log_time', endDtStr + " 23:59:59");
+            const logsByDate = {};
+            (logs || []).forEach(l => {
+                const dateObj = new Date(l.log_time);
+                const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                logsByDate[isoStr].push(dateObj);
+            });
 
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
             const validTos = tos?.map(t => t.to_no) || [];
-            const validItins = itins?.filter(i => validTos.includes(i.to_no));
+            
+            let itins = [];
+            if(validTos.length > 0) {
+                const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                itins = data || [];
+            }
+
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
+            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
 
             tbody.innerHTML = "";
             for(let d=1; d<=endDt.getDate(); d++) {
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const dateObj = new Date(year, month, d), isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                const dateObj = new Date(year, month, d);
+                const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
                 
-                const dayItins = validItins?.filter(i => i.travel_date === dateStr);
+                const dayItins = itins.filter(i => i.travel_date === dateStr);
                 const dayPsos = psos?.filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
                 const holiday = holidays?.find(h => h.date === dateStr);
+                const leave = leaves?.find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
                 let activityHtml = "";
                 if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
                 if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
                 if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO: ${i.to_no} - ${i.destination}</div>`);
+                if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+
+                let amIn="", amOut="", pmIn="", pmOut="";
+                const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                dayLogs.forEach(time => {
+                    const hr = time.getHours();
+                    const fmt = formatTime12(time);
+                    if(hr < 12 && !amIn) amIn = fmt;
+                    else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
+                    else if(hr <= 14 && !pmIn) pmIn = fmt;
+                    else pmOut = fmt;
+                });
+
+                if(isWeekend && !activityHtml && !amIn && !pmIn) activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">WEEKEND</div>`;
 
                 let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
-                tbody.innerHTML += `<tr style="${rowStyle}"><td><span class="day-num">${d}</span> <br> <span style="color:gray;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td><td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td></tr>`;
+                
+                tbody.innerHTML += `<tr style="${rowStyle}">
+                    <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
+                    <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
+                    <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
+                    <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
+                    <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
+                    <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                </tr>`;
             }
         };
 
         window.generateForm48 = async function() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
-            const month = calDate.getMonth(), year = calDate.getFullYear();
+            const monthEl = document.getElementById('dtr-month');
+            const yearEl = document.getElementById('dtr-year');
+            const month = parseInt(monthEl.value) - 1;
+            const year = parseInt(yearEl.value);
+            
             const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
             const endDt = new Date(year, month + 1, 0);
             const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
@@ -765,25 +1271,23 @@
             const logsByDate = {};
             (logs || []).forEach(l => {
                 const dateObj = new Date(l.log_time);
-                const dKey = dateObj.toISOString().split('T')[0];
-                if(!logsByDate[dKey]) logsByDate[dKey] = [];
-                logsByDate[dKey].push(dateObj);
+                const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                logsByDate[isoStr].push(dateObj);
             });
 
-            const [{data: tos}, {data: psos}, {data: holidays}, {data: leaves}] = await Promise.all([
-                supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED'),
-                supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
-                supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
-                supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED'])
-            ]);
-
+            const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
             const validTos = tos?.map(t => t.to_no) || [];
-            const { data: itins } = validTos.length > 0 ? await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos) : { data: [] };
+            
+            let itins = [];
+            if(validTos.length > 0) {
+                const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                itins = data || [];
+            }
 
-            const formatTime12 = (dateObj) => {
-                if(!dateObj) return "";
-                return dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            };
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: holidays } = await supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr);
+            const { data: leaves } = await supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'PROCESSED']);
 
             const drawForm = (startX, startY) => {
                 doc.setFont("helvetica", "italic"); doc.setFontSize(6);
@@ -799,7 +1303,8 @@
 
                 doc.text("For the month of", startX, startY + 23);
                 doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-                const mName = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const mName = `${monthNames[month]} ${year}`;
                 doc.text(mName, startX + 25, startY + 23);
                 doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
 
