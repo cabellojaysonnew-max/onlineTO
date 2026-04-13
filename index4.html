@@ -299,46 +299,64 @@
         };
         
         // UNDERTIME CALCULATION HELPER
-        const calcUndertime = (timeLogs, schedule) => {
+        const calcUndertime = (timeLogs, schedule, schedType) => {
             if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
             
-            const schedStartParts = schedule.start_time.split(':');
-            const schedEndParts = schedule.end_time.split(':');
-            
-            const startHour = parseInt(schedStartParts[0]);
-            const startMin = parseInt(schedStartParts[1]);
-            const endHour = parseInt(schedEndParts[0]);
-            const endMin = parseInt(schedEndParts[1]);
-
-            let amIn = null, pmOut = null;
-            
+            let amIn = null, amOut = null, pmIn = null, pmOut = null;
             timeLogs.forEach(time => {
                 const hr = time.getHours();
                 if(hr < 12 && !amIn) amIn = time;
+                else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = time;
+                else if(hr <= 14 && !pmIn) pmIn = time;
                 else pmOut = time;
             });
-            
-            let totalUndertimeMinutes = 0;
 
-            if (amIn) {
-                const inHour = amIn.getHours();
-                const inMin = amIn.getMinutes();
-                if (inHour > startHour || (inHour === startHour && inMin > startMin)) {
-                    totalUndertimeMinutes += ((inHour - startHour) * 60) + (inMin - startMin);
-                }
+            if (!pmOut && timeLogs.length > 1) {
+                pmOut = timeLogs[timeLogs.length - 1]; 
             }
 
-            if (pmOut) {
-                const outHour = pmOut.getHours();
-                const outMin = pmOut.getMinutes();
-                if (outHour < endHour || (outHour === endHour && outMin < endMin)) {
-                    totalUndertimeMinutes += ((endHour - outHour) * 60) + (endMin - outMin);
+            let totalUndertimeMinutes = 0;
+
+            if (schedType === "Fixed") {
+                const schedStartParts = schedule.start_time.split(':');
+                const schedEndParts = schedule.end_time.split(':');
+                const startHour = parseInt(schedStartParts[0]);
+                const startMin = parseInt(schedStartParts[1]);
+                const endHour = parseInt(schedEndParts[0]);
+                const endMin = parseInt(schedEndParts[1]);
+
+                if (amIn) {
+                    const inHour = amIn.getHours();
+                    const inMin = amIn.getMinutes();
+                    if (inHour > startHour || (inHour === startHour && inMin > startMin)) {
+                        totalUndertimeMinutes += ((inHour - startHour) * 60) + (inMin - startMin);
+                    }
+                }
+                if (pmOut) {
+                    const outHour = pmOut.getHours();
+                    const outMin = pmOut.getMinutes();
+                    if (outHour < endHour || (outHour === endHour && outMin < endMin)) {
+                        totalUndertimeMinutes += ((endHour - outHour) * 60) + (endMin - outMin);
+                    }
+                }
+            } else {
+                // FLEXI SCHEDULE: check if completed 8 hours (480 mins)
+                let workMins = 0;
+                if (amIn && pmOut) {
+                    let diffMins = (pmOut - amIn) / 60000;
+                    if (amIn.getHours() < 12 && pmOut.getHours() > 13) {
+                        diffMins -= 60; // deduct lunch break
+                    }
+                    workMins = diffMins;
+                }
+                if (workMins > 0 && workMins < 480) {
+                    totalUndertimeMinutes = 480 - workMins;
                 }
             }
 
             return {
-                h: Math.floor(totalUndertimeMinutes / 60),
-                m: totalUndertimeMinutes % 60
+                h: Math.max(0, Math.floor(totalUndertimeMinutes / 60)),
+                m: Math.max(0, Math.floor(totalUndertimeMinutes % 60))
             };
         };
 
@@ -368,20 +386,6 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
-                    const dtrMonth = document.getElementById('dtr-month');
-                    const dtrYear = document.getElementById('dtr-year');
-                    if (dtrMonth && dtrMonth.options.length === 0) {
-                        const monthsArr = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                        monthsArr.forEach((m, i) => {
-                            let opt = document.createElement('option'); opt.value = i + 1; opt.text = m; dtrMonth.appendChild(opt);
-                        });
-                        const currentYear = new Date().getFullYear();
-                        for(let y = 2024; y <= 2030; y++) {
-                            let opt = document.createElement('option'); opt.value = y; opt.text = y; dtrYear.appendChild(opt);
-                        }
-                        dtrMonth.value = new Date().getMonth() + 1;
-                        dtrYear.value = currentYear;
-                    }
                 } else { 
                     alert("Invalid Credentials"); 
                 }
@@ -826,7 +830,6 @@
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
             
             if(filter === "TO") {
-                // Ensure cancelled and disapproved are not loaded in the applications view
                 const { data: tos } = await supabase.from('travel_orders')
                     .select('*')
                     .eq('emp_id', currentUser.emp_id)
@@ -857,7 +860,6 @@
                 }
                 list.innerHTML = html || "No Travel Orders found.";
             } else {
-                // Ensure cancelled and disapproved are not loaded in the applications view
                 const { data: leaves } = await supabase.from('leave_ledger')
                     .select('*')
                     .eq('emp_id', currentUser.emp_id)
@@ -1245,11 +1247,10 @@
             doc.save(`Form6_${app.id}.pdf`);
         };
 
-        window.changeCalMonth = function(d) { calDate.setMonth(calDate.getMonth()+d); window.renderCalendar(); };
+        window.changeCalMonth = function(d) { window.renderCalendar(); };
         
         window.renderCalendar = async function() {
             try {
-                document.getElementById('cal-month-year').innerText = calDate.toLocaleString('default',{month:'long',year:'numeric'});
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
@@ -1265,8 +1266,8 @@
                 const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTime = l.log_time.split('+')[0].replace('Z', '');
-                    const dateObj = new Date(cleanTime);
+                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
+                    const dateObj = new Date(cleanTimeStr);
                     const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
@@ -1369,8 +1370,8 @@
                 const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTime = l.log_time.split('+')[0].replace('Z', '');
-                    const dateObj = new Date(cleanTime);
+                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
+                    const dateObj = new Date(cleanTimeStr);
                     const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
@@ -1484,6 +1485,7 @@
                             let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
                             let activeSchedule = null;
+                            let schedType = "Flexi";
                             
                             if (schedOverrides) {
                                 const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
@@ -1492,6 +1494,8 @@
                                         start_time: override.start_time,
                                         end_time: override.end_time
                                     };
+                                    schedType = override.schedule_type || "Fixed";
+                                    
                                     if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
                                         isWeekend = true;
                                     }
@@ -1503,6 +1507,7 @@
                                     start_time: currentUser.flexi_range_start + ":00", 
                                     end_time: currentUser.flexi_range_end + ":00"
                                 };
+                                schedType = "Flexi";
                             }
 
                             let special = "";
@@ -1535,7 +1540,7 @@
 
                             let udH = "", udM = "";
                             if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
-                                const ud = calcUndertime(dayLogs, activeSchedule);
+                                const ud = calcUndertime(dayLogs, activeSchedule, schedType);
                                 if (ud.h > 0 || ud.m > 0) {
                                     totalUndertimeMins += (ud.h * 60) + ud.m;
                                     if(ud.h > 0) udH = String(ud.h);
