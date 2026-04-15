@@ -797,14 +797,25 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
+                    const renderFlexibleText = (text, x, y, maxWidth, defaultSize) => {
+                        let currentSize = defaultSize;
+                        doc.setFontSize(currentSize);
+                        while (doc.getTextWidth(text) > maxWidth && currentSize > 4) {
+                            currentSize -= 0.5;
+                            doc.setFontSize(currentSize);
+                        }
+                        doc.text(text, x, y);
+                        doc.setFontSize(defaultSize);
+                    };
+
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
-                    doc.text(names, 40, 48); doc.line(40, 49, 160, 49);
+                    renderFlexibleText(names, 40, 48, 120, 10); doc.line(40, 49, 160, 49);
 
                     doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 54);
-                    doc.setFont("helvetica", "normal"); doc.text(positions, 40, 54); doc.line(40, 55, 85, 55);
+                    doc.setFont("helvetica", "normal"); renderFlexibleText(positions, 40, 54, 45, 10); doc.line(40, 55, 85, 55);
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 54);
-                    doc.setFont("helvetica", "normal"); doc.text(stations, 110, 54); doc.line(110, 55, 160, 55);
+                    doc.setFont("helvetica", "normal"); renderFlexibleText(stations, 110, 54, 50, 10); doc.line(110, 55, 160, 55);
 
                     doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 61);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
