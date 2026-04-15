@@ -18,7 +18,7 @@
         #app-container { display: none; width: 100%; height: 100%; position: relative; }
         #app-iframe { width: 100%; height: 100%; border: none; background: #fff; }
         
-        #btn-switch { position: absolute; top: 12px; right: 15px; z-index: 9999; background: rgba(0, 56, 17, 0.8); color: white; border: 2px solid #D4AF37; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; backdrop-filter: blur(4px); transition: 0.2s; }
+        #btn-switch { position: absolute; bottom: 85px; right: 15px; z-index: 9999; background: rgba(0, 56, 17, 0.8); color: white; border: 2px solid #D4AF37; padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; backdrop-filter: blur(4px); transition: 0.2s; }
         #btn-switch:active { transform: scale(0.95); }
     </style>
 </head>
@@ -2165,7 +2165,13 @@
             
             // Fetch the exact, completely unedited code from the <xmp> tag
             const rawCode = document.getElementById(sysId).textContent;
-            const iframe = document.getElementById('app-iframe');
+            let iframe = document.getElementById('app-iframe');
+            
+            // Recreating the iframe avoids 'dead lock' state cache and unbinds all previous memory safely
+            const newIframe = document.createElement('iframe');
+            newIframe.id = 'app-iframe';
+            iframe.parentNode.replaceChild(newIframe, iframe);
+            iframe = newIframe;
             
             // Push the code directly into the isolated iframe document
             const doc = iframe.contentWindow.document;
@@ -2180,12 +2186,11 @@
                 document.getElementById('landing-menu').style.display = 'flex';
                 document.getElementById('app-container').style.display = 'none';
                 
-                // Clear the iframe to prevent background execution
+                // Clear the iframe entirely to prevent background execution or deadlock on reopening
                 const iframe = document.getElementById('app-iframe');
-                const doc = iframe.contentWindow.document;
-                doc.open();
-                doc.write("");
-                doc.close();
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'app-iframe';
+                iframe.parentNode.replaceChild(newIframe, iframe);
             }
         }
     </script>
