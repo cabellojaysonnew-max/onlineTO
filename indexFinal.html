@@ -749,27 +749,33 @@
                 const typeLabel = rawType === 'SPLIT' ? 'SPLIT/COS' : (rawType === 'REGULAR' ? 'REGULAR' : '');
 
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
-                const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
 
-                let uh_data = null;
-                if (!isMARPO && currentUser.unit && currentUser.unit !== "PARPO") {
-                    const resUH = await supabase.from('users').select('full_name, username').eq('unit', currentUser.unit).maybeSingle();
-                    uh_data = resUH?.data;
+                // Get Unique Units and Divisions from the Personnel in this TO
+                const uniqueUnits = [...new Set(group_orders.map(o => o.unit).filter(u => u && u !== "PARPO"))];
+                const uniqueDivs = [...new Set(group_orders.map(o => o.division ? o.division.split(',')[0].trim() : "").filter(d => d))];
+
+                let uh_list = [];
+                if (!isMARPO && uniqueUnits.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('unit', uniqueUnits);
+                    if (data) uh_list = data;
                 }
 
-                let dc_data = null;
-                if (currentUser.unit !== "PARPO" && baseDiv) {
-                    const resDC = await supabase.from('users').select('full_name, username').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    dc_data = resDC?.data;
+                let dc_list = [];
+                if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
+                    if (data) dc_list = data;
                 }
 
-                const [img_bg, img_qr, img_p2, img_uh, img_dc] = await Promise.all([
+                const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
                     urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
                     urlToBase64(getAssetUrl("P2.png")), 
-                    uh_data ? urlToBase64(getAssetUrl(`${uh_data.username}.png`)) : null,
-                    dc_data ? urlToBase64(getAssetUrl(`${dc_data.username}.png`)) : null
+                    ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
+                    ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
                 ]);
+                
+                const uh_imgs = sigs.slice(0, uh_list.length);
+                const dc_imgs = sigs.slice(uh_list.length);
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
@@ -850,19 +856,20 @@
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 156);
                     
-                    if (i > 0) {
-                        if(uh_data && !isMARPO) { 
-                            if(img_uh) { try { doc.addImage(img_uh, 'PNG', 34, 153, 20, 20); } catch(e){} }
-                            doc.text(uh_data.full_name.toUpperCase(), 34, 166); 
+                    const renderSigs = (list, imgs, startX, width) => {
+                        if (list.length === 0) return;
+                        const count = Math.min(list.length, 2);
+                        const step = width / count;
+                        doc.setFontSize(count > 1 ? 6 : 8);
+                        for (let j = 0; j < count; j++) {
+                            let cx = startX + (step * j) + (step / 2) - 10; 
+                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 153, 20, 20); } catch(e){} }
+                            doc.text(list[j].full_name.toUpperCase(), cx, 166);
                         }
-                        if(dc_data) { 
-                            if(img_dc) { try { doc.addImage(img_dc, 'PNG', 104, 153, 20, 20); } catch(e){} }
-                            doc.text(dc_data.full_name.toUpperCase(), 104, 166); 
-                        }
-                    } else {
-                        if(uh_data && !isMARPO) { doc.text(uh_data.full_name.toUpperCase(), 34, 166); }
-                        if(dc_data) { doc.text(dc_data.full_name.toUpperCase(), 104, 166); }
-                    }
+                    };
+
+                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                    renderSigs(dc_list, dc_imgs, 95, 60);
 
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
@@ -1784,6 +1791,7 @@
         let reportData = [];
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
+        let currentProcessToNo = null;
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
@@ -1843,8 +1851,28 @@
                         <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
+                
                 <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
-                <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Confirm Cancellation</button></div></div></div>`;
+                
+                <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Confirm Cancellation</button></div></div></div>
+            
+                <div id="processTOModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
+                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                        <div class="dar-green text-white p-4 font-bold text-center relative shrink-0">
+                            Process Personnel
+                            <button onclick="hideProcessTOModal()" class="absolute right-4 text-xl leading-none">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4 overflow-y-auto grow">
+                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-tight border-b pb-3 border-gray-100">Select personnel to <span class="text-red-600">DISAPPROVE (Cancel TO)</span>. Unselected personnel will <span class="text-dar-green">PROCEED</span>.</p>
+                            <div id="processTOList" class="space-y-2"></div>
+                            <input type="text" id="processReason" placeholder="Reason (if disapproving any)" class="w-full px-4 py-3 border rounded-xl text-sm mt-2 focus:ring-2 focus:ring-dar-green outline-none">
+                        </div>
+                        <div class="p-4 border-t bg-gray-50 shrink-0">
+                            <button onclick="confirmProcessTO()" class="w-full dar-green text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition-transform">Confirm Action</button>
+                        </div>
+                    </div>
+                </div>
+            `;
             
             if (currentTab === 'pending') loadPendingTab();
             else {
@@ -1872,7 +1900,7 @@
             alert("Updated!"); hideChangePassword();
         }
 
-        // --- CANCEL MODAL LOGIC ---
+        // --- CANCEL MODAL LOGIC (Approved Tab) ---
         function showCancelModal(to_no, datesEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
             currentCancelToNo = to_no;
@@ -2001,18 +2029,64 @@
             loadPendingTab();
         }
 
-        async function processSingle(to_no, action) {
-            let p = action === 'DISAPPROVED' ? { status: "DISAPPROVED", received: prompt("Reason:") } : getAppPayload(currentUser);
-            if(p.status === "DISAPPROVED" && !p.received) return;
-
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
-
-            await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+        // --- PERSONNEL PROCESSING LOGIC (Pending Tab) ---
+        async function showProcessTOModal(to_no) {
+            currentProcessToNo = to_no;
+            const { data } = await supabaseClient.from('travel_orders').select('emp_id, emp_name, unit, division').eq('to_no', to_no);
             
-            if (currentTab === 'pending') loadPendingTab();
-            else if (currentTab === 'approved') loadStatusTab('APPROVED');
-            else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
+            const list = document.getElementById('processTOList');
+            list.innerHTML = '';
+            data.forEach(p => {
+                list.innerHTML += `
+                    <label class="flex items-center justify-between p-3 border rounded-xl bg-gray-50 cursor-pointer shadow-sm hover:bg-gray-100 transition-colors">
+                        <div class="flex items-center space-x-3 w-full">
+                            <input type="checkbox" value="${p.emp_id}" class="process-to-cb w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500">
+                            <div>
+                                <span class="block text-sm font-bold text-gray-800">${p.emp_name}</span>
+                                <span class="block text-[10px] text-gray-500">UNIT: ${p.unit || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </label>
+                `;
+            });
+            document.getElementById('processReason').value = '';
+            document.getElementById('processTOModal').classList.remove('hidden');
+        }
+
+        function hideProcessTOModal() {
+            document.getElementById('processTOModal').classList.add('hidden');
+        }
+
+        async function confirmProcessTO() {
+            const checkboxes = document.querySelectorAll('.process-to-cb');
+            const denyIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            const approveIds = Array.from(checkboxes).filter(cb => !cb.checked).map(cb => cb.value);
+            const reason = document.getElementById('processReason').value.trim();
+
+            if (denyIds.length > 0 && !reason) return alert("Please provide a reason for the disapproved personnel.");
+
+            hideProcessTOModal();
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Personnel...</p>`;
+
+            let pApprove = getAppPayload(currentUser);
+
+            const updates = [];
+            if (denyIds.length > 0) {
+                updates.push(supabaseClient.from('travel_orders')
+                    .update({ status: 'CANCELLED', received: reason })
+                    .eq('to_no', currentProcessToNo)
+                    .in('emp_id', denyIds));
+            }
+            if (approveIds.length > 0) {
+                updates.push(supabaseClient.from('travel_orders')
+                    .update(pApprove)
+                    .eq('to_no', currentProcessToNo)
+                    .in('emp_id', approveIds));
+            }
+
+            await Promise.all(updates);
+            loadPendingTab();
         }
 
         // --- PENDING TAB ---
@@ -2023,15 +2097,17 @@
             const [oRes, iRes] = await Promise.all([supabaseClient.from('travel_orders').select('*'), supabaseClient.from('itinerary').select('*')]);
             let grp = {};
             (oRes.data || []).forEach(o => { if (!grp[o.to_no]) grp[o.to_no] = []; grp[o.to_no].push(o); });
-            pendingOrders = [];
+            let pendingOrders = [];
             for (const [to_no, list] of Object.entries(grp)) {
-                const o = list[0];
-                const s = (o.status || "").toUpperCase();
                 let show = false;
-                if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_RESERVATION") show = true;
-                else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") show = true;
-                else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && currentUser.divisions.includes(o.division?.toUpperCase())) show = true;
-                else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && currentUser.divisions.includes(o.division?.toUpperCase()) && currentUser.unit === o.unit?.toUpperCase()) show = true;
+                for (let o of list) {
+                    const s = (o.status || "").toUpperCase();
+                    if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_RESERVATION") show = true;
+                    else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") show = true;
+                    else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && currentUser.divisions.includes(o.division?.toUpperCase())) show = true;
+                    else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && currentUser.divisions.includes(o.division?.toUpperCase()) && currentUser.unit === o.unit?.toUpperCase()) show = true;
+                }
+                
                 if (show) {
                     let d = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                     let dt = "N/A";
@@ -2040,7 +2116,7 @@
                         const end = new Date(d[d.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                         dt = d.length === 1 ? end : `${start} - ${end}`;
                     }
-                    pendingOrders.push({ to_no, names: list.map(g => g.emp_name), destinations: [...new Set(d.map(i => i.destination))].join(', ') || 'N/A', purpose: [...new Set(d.map(i => i.purpose))].join(', ') || 'N/A', report_to: o.report_to || 'N/A', dateStr: dt });
+                    pendingOrders.push({ to_no, names: list.map(g => g.emp_name), destinations: [...new Set(d.map(i => i.destination))].join(', ') || 'N/A', purpose: [...new Set(d.map(i => i.purpose))].join(', ') || 'N/A', report_to: list[0].report_to || 'N/A', dateStr: dt });
                 }
             }
             if (pendingOrders.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
@@ -2068,9 +2144,8 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
-                            <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2">
-                                <button onclick="processSingle('${o.to_no}', 'DISAPPROVED')" class="px-4 py-1.5 bg-red-50 text-red-600 rounded-lg text-[11px] font-bold shadow-sm">Deny</button>
-                                <button onclick="processSingle('${o.to_no}', 'APPROVE')" class="px-4 py-1.5 dar-green text-white rounded-lg text-[11px] font-bold shadow-sm">Approve</button>
+                            <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end">
+                                <button onclick="showProcessTOModal('${o.to_no}')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-full active:scale-95 transition-transform">Process Personnel</button>
                             </div>
                         </div>
                     </div>`; 
@@ -2130,9 +2205,9 @@
                             }
                         }
                     } else if (tabStatus === 'DISAPPROVED') {
-                        if (o.status === 'DISAPPROVED') {
+                        if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED') {
                             show = true;
-                            displayStatus = 'DISAPPROVED';
+                            displayStatus = o.status;
                             textColor = 'text-red-500';
                         }
                     }
