@@ -1897,7 +1897,6 @@
 
         function hideCancelModal() {
             document.getElementById('cancelModal').classList.add('hidden');
-            currentCancelToNo = null;
         }
 
         async function confirmCancelTO() {
@@ -1907,21 +1906,22 @@
 
             if (selectedDates.length === 0) return alert("Select at least one date.");
 
+            const targetToNo = currentCancelToNo;
             hideCancelModal();
 
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Processing Cancellation...</p>`;
 
             if (selectedDates.length === totalDates) {
-                await processFullCancel(currentCancelToNo);
+                await processFullCancel(targetToNo);
             } else {
                 for (let d of selectedDates) {
-                    await supabaseClient.from('itinerary').delete().eq('to_no', currentCancelToNo).eq('travel_date', d);
+                    await supabaseClient.from('itinerary').delete().eq('to_no', targetToNo).eq('travel_date', d);
                 }
                 await supabaseClient.from('notifications').insert({
                     recipient_role: 'PARPO',
-                    message: `Approved TO ${currentCancelToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
-                    to_no: currentCancelToNo
+                    message: `Approved TO ${targetToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
+                    to_no: targetToNo
                 });
                 loadStatusTab('APPROVED');
             }
