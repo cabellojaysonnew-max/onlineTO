@@ -1783,6 +1783,7 @@
         let reportFilter = 'month'; 
         let reportData = [];
         let selectedPendingOrders = new Set(); 
+        let currentCancelToNo = null;
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
@@ -1842,7 +1843,8 @@
                         <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
-                <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>`;
+                <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
+                <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Confirm Cancellation</button></div></div></div>`;
             
             if (currentTab === 'pending') loadPendingTab();
             else {
@@ -1868,6 +1870,73 @@
             if (data.password !== o) return alert("Incorrect.");
             await supabaseClient.from('users').update({ password: n }).eq('username', currentUser.username);
             alert("Updated!"); hideChangePassword();
+        }
+
+        // --- CANCEL MODAL LOGIC ---
+        function showCancelModal(to_no, datesEncoded) {
+            const dates = JSON.parse(decodeURIComponent(datesEncoded));
+            currentCancelToNo = to_no;
+            const list = document.getElementById('cancelDatesList');
+            list.innerHTML = '';
+            if (dates.length === 1) {
+                if(confirm("Are you sure you want to cancel this entire TO?")) {
+                    processFullCancel(to_no);
+                }
+                return;
+            }
+            dates.forEach(d => {
+                list.innerHTML += `
+                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
+                        <input type="checkbox" value="${d}" class="cancel-date-cb w-5 h-5 text-red-600 rounded focus:ring-red-500 border-gray-300">
+                        <span class="text-sm font-bold text-gray-700">${d}</span>
+                    </label>
+                `;
+            });
+            document.getElementById('cancelModal').classList.remove('hidden');
+        }
+
+        function hideCancelModal() {
+            document.getElementById('cancelModal').classList.add('hidden');
+            currentCancelToNo = null;
+        }
+
+        async function confirmCancelTO() {
+            const checkboxes = document.querySelectorAll('.cancel-date-cb');
+            const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            const totalDates = checkboxes.length;
+
+            if (selectedDates.length === 0) return alert("Select at least one date.");
+
+            hideCancelModal();
+
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Processing Cancellation...</p>`;
+
+            if (selectedDates.length === totalDates) {
+                await processFullCancel(currentCancelToNo);
+            } else {
+                for (let d of selectedDates) {
+                    await supabaseClient.from('itinerary').delete().eq('to_no', currentCancelToNo).eq('travel_date', d);
+                }
+                await supabaseClient.from('notifications').insert({
+                    recipient_role: 'PARPO',
+                    message: `Approved TO ${currentCancelToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
+                    to_no: currentCancelToNo
+                });
+                loadStatusTab('APPROVED');
+            }
+        }
+
+        async function processFullCancel(to_no) {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Cancelling TO...</p>`;
+            await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', to_no);
+            await supabaseClient.from('notifications').insert({
+                recipient_role: 'PARPO',
+                message: `Approved TO ${to_no} was entirely cancelled by ${currentUser.fullName}`,
+                to_no: to_no
+            });
+            loadStatusTab('APPROVED');
         }
 
         // --- SHARED SCOPE CHECK ---
@@ -2080,7 +2149,8 @@
                         
                         let cancelBtn = '';
                         if (tabStatus === 'APPROVED') {
-                            cancelBtn = `<div class="mt-3 pt-3 border-t border-gray-100 flex justify-end"><button onclick="processSingle('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button></div>`;
+                            const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(i => i.travel_date)));
+                            cancelBtn = `<div class="mt-3 pt-3 border-t border-gray-100 flex justify-end"><button onclick="showCancelModal('${o.to_no}', '${datesEncoded}')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button></div>`;
                         }
                         
                         h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm"><div class="flex justify-between mb-1"><span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span><span class="text-[9px] text-gray-400">${o.to_no}</span></div><p class="font-bold text-gray-800 text-base">${o.emp_name}</p><p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p><p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>${cancelBtn}</div>`;
