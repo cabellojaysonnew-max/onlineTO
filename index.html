@@ -963,7 +963,7 @@
             if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 let ctoOption = type === "Vacation Leave" ? `
                     <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
-                        <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;"> Credit to CTO (If available)
+                        <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
                     </label>` : "";
 
                 container.innerHTML = `
@@ -992,7 +992,7 @@
             }
         };
 
-        window.calculateLeaveDays = function() {
+        window.calculateLeaveDays = async function() {
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
             if (!start || !end) return;
@@ -1015,6 +1015,39 @@
                 cur.setDate(cur.getDate() + 1);
             }
             document.getElementById('leave-days-count').innerText = count;
+
+            const ctoCheck = document.getElementById('vl-cto-credit');
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
+            const submitBtn = document.getElementById('btn-submit-leave');
+
+            if (count > 0 && isCtoCredited) {
+                const { data: empData } = await supabase.from('employees').select('cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
+
+                let earned = 0, used = 0;
+                (ctoData || []).forEach(r => {
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                });
+                
+                let ledgerUsed = 0;
+                (ledgerData || []).forEach(l => {
+                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
+                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                    }
+                });
+                
+                let availableCtoDays = (earned - used - ledgerUsed) / 8;
+                if (availableCtoDays < count) {
+                    alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
+                    if(submitBtn) submitBtn.disabled = true;
+                } else {
+                    if(submitBtn) submitBtn.disabled = false;
+                }
+            } else {
+                if(submitBtn) submitBtn.disabled = false;
+            }
         };
 
         window.submitLeave = async function() {
@@ -1390,7 +1423,7 @@
                     supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
                     supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
                     supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
-                    supabase.from('fleet_bookings').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
                 ]);
 
                 tbody.innerHTML = "";
@@ -1494,7 +1527,7 @@
                     supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
                     supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
                     supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
-                    supabase.from('fleet_bookings').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
                 ]);
 
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
