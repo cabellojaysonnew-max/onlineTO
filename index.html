@@ -961,7 +961,13 @@
             container.innerHTML = '';
 
             if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
+                let ctoOption = type === "Vacation Leave" ? `
+                    <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
+                        <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;"> Credit to CTO (If available)
+                    </label>` : "";
+
                 container.innerHTML = `
+                    ${ctoOption}
                     <div class="radio-group">
                         <div class="radio-item"><input type="radio" name="ldetail" value="Within Philippines" checked> Within Philippines</div>
                         <div class="radio-item"><input type="radio" name="ldetail" value="Abroad"> Abroad</div>
@@ -1021,9 +1027,36 @@
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
 
+            // CTO CHECK LOGIC
+            const ctoCheck = document.getElementById('vl-cto-credit');
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
+
+            if (isCtoCredited) {
+                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                let earned = 0, used = 0;
+                (ctoData || []).forEach(r => {
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                });
+                
+                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
+                let ledgerUsed = 0;
+                (ledgerData || []).forEach(l => {
+                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
+                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                    }
+                });
+                
+                let availableCtoDays = (earned - used - ledgerUsed) / 8;
+                if (availableCtoDays < days) {
+                    return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                }
+            }
+
             const rDetail = document.querySelector('input[name="ldetail"]:checked');
             const specify = document.getElementById('leave-specify');
             let detailStr = rDetail ? rDetail.value : "See Remarks";
+            if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             const fullRemarks = `${detailStr} | Commutation: ${comm}`;
 
@@ -1147,11 +1180,11 @@
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
-            // PUSHED APPLICATION HEADER DOWN BY ADDITIONAL 2 LINES
-            doc.text("APPLICATION FOR LEAVE", 105, 50, { align: 'center' });
+            // ADJUSTED 1 LINE UP (was 50)
+            doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
 
-            // PUSHED ENTIRE FORM Y-AXIS DOWN
-            let ty = 55;
+            // ADJUSTED ENTIRE FORM Y-AXIS UP (was 55)
+            let ty = 50;
             doc.setFontSize(7); doc.setFont("helvetica", "normal");
             doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
             doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
