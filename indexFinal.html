@@ -404,30 +404,6 @@
             };
         };
 
-        window.setupNotifications = function() {
-            if ("Notification" in window) {
-                Notification.requestPermission();
-            }
-            
-            supabase.channel('public-travel-orders-emp')
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'travel_orders', filter: `emp_id=eq.${currentUser.emp_id}` }, payload => {
-                    const oldStatus = payload.old.status;
-                    const newStatus = payload.new.status;
-                    if (oldStatus !== newStatus && (newStatus.includes('APPROVED') || newStatus.includes('DISAPPROVED') || newStatus.includes('CANCELLED'))) {
-                        if (Notification.permission === "granted") {
-                            new Notification("Travel Order Update", { body: `Your TO ${payload.new.to_no} is now ${newStatus.replace(/_/g, ' ')}` });
-                        }
-                    }
-                }).subscribe();
-
-            supabase.channel('public-notifications-emp')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `emp_id=eq.${currentUser.emp_id}` }, payload => {
-                    if (Notification.permission === "granted") {
-                        new Notification("DAR Alert", { body: payload.new.message });
-                    }
-                }).subscribe();
-        };
-
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -453,7 +429,6 @@
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
-                    window.setupNotifications();
                     
                 } else { 
                     alert("Invalid Credentials"); 
@@ -985,7 +960,15 @@
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
 
-            if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
+            if (type === "Vacation Leave") {
+                container.innerHTML = `
+                    <div class="radio-group">
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Within Philippines" checked> Within Philippines</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Abroad"> Abroad</div>
+                        <div class="radio-item"><input type="radio" name="ldetail" value="Credit to CTO"> Credit to CTO</div>
+                    </div>
+                    <input type="text" id="leave-specify" placeholder="Specify details...">`;
+            } else if (["Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 container.innerHTML = `
                     <div class="radio-group">
                         <div class="radio-item"><input type="radio" name="ldetail" value="Within Philippines" checked> Within Philippines</div>
@@ -1051,6 +1034,40 @@
             let detailStr = rDetail ? rDetail.value : "See Remarks";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             const fullRemarks = `${detailStr} | Commutation: ${comm}`;
+
+            if (type === "Vacation Leave" && detailStr.includes("Credit to CTO")) {
+                const { data: ctoData } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id);
+                let ctoEarned = 0, ctoUsed = 0;
+                (ctoData || []).forEach(r => {
+                    let hrs = parseFloat(r.calculated_hours || 0);
+                    let tType = (r.transaction_type || "").toUpperCase();
+                    if (tType.includes("EARN") || tType.includes("CREDIT")) ctoEarned += hrs;
+                    if (tType.includes("USE") || tType.includes("DEBIT")) ctoUsed += hrs;
+                });
+                
+                const { data: llData } = await supabase.from('leave_ledger')
+                    .select('debit')
+                    .eq('emp_id', currentUser.emp_id)
+                    .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                    .ilike('remarks', '%Credit to CTO%');
+                let ledgerPending = 0;
+                (llData || []).forEach(r => ledgerPending += parseFloat(r.debit || 0));
+                
+                let totalCtoDaysAvailable = (ctoEarned - ctoUsed) / 8;
+                if (currentUser.cto_balance !== undefined && currentUser.cto_balance !== null) {
+                    let empCto = parseFloat(currentUser.cto_balance);
+                    if (empCto > 0) totalCtoDaysAvailable = empCto;
+                }
+                totalCtoDaysAvailable -= ledgerPending;
+
+                if (totalCtoDaysAvailable < days) {
+                    alert("No available or sufficient CTO Credit. Please credit the leave on Vacation Leave and proceed.");
+                    document.querySelector('input[name="ldetail"][value="Within Philippines"]').checked = true;
+                    isSubmitting = false;
+                    document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
+                    return;
+                }
+            }
 
             const dates_to_check = [];
             let curr = new Date(start);
@@ -1172,11 +1189,11 @@
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
-            // PUSHED APPLICATION HEADER DOWN BY ADDITIONAL 2 LINES
-            doc.text("APPLICATION FOR LEAVE", 105, 50, { align: 'center' });
+            // Removed one line spacing on top, just single space
+            doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
 
-            // PUSHED ENTIRE FORM Y-AXIS DOWN
-            let ty = 55;
+            // ENTIRE FORM Y-AXIS 
+            let ty = 50;
             doc.setFontSize(7); doc.setFont("helvetica", "normal");
             doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
             doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
@@ -1829,38 +1846,6 @@
         let currentCancelToNo = null;
         let currentProcessToNo = null;
 
-        function setupNotifications() {
-            if ("Notification" in window) {
-                Notification.requestPermission();
-            }
-            supabaseClient.channel('public-notifications-admin')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_role=eq.${currentUser.role}` }, payload => {
-                    if (Notification.permission === "granted") {
-                        new Notification("DAR Admin Alert", { body: payload.new.message });
-                    }
-                }).subscribe();
-
-            supabaseClient.channel('public-travel-orders-admin')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'travel_orders' }, payload => {
-                    if (payload.new && payload.new.status) {
-                        const s = payload.new.status;
-                        let notify = false;
-                        if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_RESERVATION") notify = true;
-                        else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") notify = true;
-                        else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && currentUser.divisions.includes(payload.new.division?.toUpperCase())) notify = true;
-                        else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && currentUser.divisions.includes(payload.new.division?.toUpperCase())) {
-                            if (payload.new.division?.toUpperCase() === "PBDD" || currentUser.unit === payload.new.unit?.toUpperCase()) notify = true;
-                        }
-
-                        if (notify && (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.old && payload.old.status !== payload.new.status))) {
-                            if (Notification.permission === "granted") {
-                                new Notification("Action Required", { body: `TO ${payload.new.to_no} is waiting for your approval.` });
-                            }
-                        }
-                    }
-                }).subscribe();
-        }
-
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
         function renderLogin() {
@@ -1893,7 +1878,6 @@
                 if (u) {
                     currentUser = { username: u.username, fullName: u.full_name, role: u.role.toUpperCase(), divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], unit: u.unit ? u.unit.trim().toUpperCase() : '' };
                     render();
-                    setupNotifications();
                 } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
             } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
         }
