@@ -65,6 +65,7 @@
     <div id="print-table-section" class="w-full bg-white z-[9999]"></div>
 
     <script>
+        // NOTE: No revision should be made to this code structure unless explicitly instructed.
         const SB_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SB_KEY = "sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo"; 
         const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -223,7 +224,8 @@
                     <div class="grid grid-cols-2 gap-2 mb-4">
                         <select id="v-${o.to_no}" class="border border-slate-200 rounded-md font-bold p-1.5 text-[10px] text-dar bg-white outline-none"><option disabled selected hidden>Vehicle</option>${VEHICLES.map(v=>`<option>${v}</option>`).join('')}</select>
                         <select id="s-${o.to_no}" class="border border-slate-200 rounded-md font-bold p-1.5 text-[10px] text-slate-600 bg-white outline-none"><option>WHOLE DAY</option><option>AM</option><option>PM</option><option>DROP-OFF ONLY</option><option>PICK-UP ONLY</option></select>
-                        <input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="col-span-2 border border-slate-200 rounded-md p-1.5 text-[10px] font-bold outline-none bg-white">
+                        <input id="d-${o.to_no}" list="drivers" placeholder="Edit driver..." class="border border-slate-200 rounded-md p-1.5 text-[10px] font-bold outline-none bg-white">
+                        <input id="t-${o.to_no}" type="time" title="Departure Time" class="border border-slate-200 rounded-md p-1.5 text-[10px] font-bold outline-none bg-white text-slate-600">
                     </div>
                     <div class="flex gap-2 mt-auto"><button onclick="toLand('${o.to_no}','${o.unit}')" class="bg-red-50 text-red-600 rounded-lg px-3 py-2.5 text-[9px] font-bold uppercase flex-1 active:scale-95 transition border border-red-100">Reject</button><button onclick="approveTrip('${o.to_no}','${o.unit}')" class="btn-primary text-[10px] flex-[2] py-2.5 rounded-lg shadow-sm">Approve</button></div>
                 </div>`;
@@ -231,9 +233,19 @@
         }
 
         async function approveTrip(to, unit) {
-            const v = document.getElementById(`v-${to}`).value, s = document.getElementById(`s-${to}`).value, d = document.getElementById(`d-${to}`).value || "TBD";
+            const v = document.getElementById(`v-${to}`).value;
+            const s = document.getElementById(`s-${to}`).value;
+            const d = document.getElementById(`d-${to}`).value || "TBD";
+            const t = document.getElementById(`t-${to}`).value;
+            
             if(v === "Vehicle") return alert("Please select a vehicle.");
-            const { error } = await db.from('travel_orders').update({ received: v, driver: d, remarks: s, status: getApprovalTarget(unit) }).eq('to_no', to);
+            
+            let timeStr = s;
+            if (t) {
+                timeStr = `${s} (${formatTo12Hour(t)} Onward)`;
+            }
+
+            const { error } = await db.from('travel_orders').update({ received: v, driver: d, remarks: timeStr, status: getApprovalTarget(unit) }).eq('to_no', to);
             if (error) alert("Database Error: " + error.message);
             sync();
         }
