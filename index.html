@@ -189,8 +189,13 @@
                 </select>
             </div>
 
+            <div class="card" id="special-div-card" style="display: none;">
+                <h4>3. Special Assignment Division/s</h4>
+                <div id="special-div-list" class="radio-group"></div>
+            </div>
+
             <div class="card">
-                <h4>3. Itinerary Builder</h4>
+                <h4>4. Itinerary Builder</h4>
                 <label>Date Range (From - To, Max 5 days)</label>
                 <div style="display: flex; gap: 5px;">
                     <input type="date" id="itin-from" onchange="window.handleStartDateChange()" onkeydown="return false">
@@ -426,6 +431,19 @@
                     personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                     window.renderPersonnel();
 
+                    if (data.s_assignment === true) {
+                        document.getElementById('special-div-card').style.display = 'block';
+                        const sDivs = (data.division || "").split(',');
+                        let sdHtml = '';
+                        sDivs.forEach(d => {
+                            const val = d.trim();
+                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                        });
+                        document.getElementById('special-div-list').innerHTML = sdHtml;
+                    } else {
+                        document.getElementById('special-div-card').style.display = 'none';
+                    }
+
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
@@ -579,6 +597,14 @@
                 reportTos.add(rep);
             }
 
+            let finalDiv = currentUser.division;
+            if (currentUser.s_assignment === true) {
+                const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
+                if(checkedBoxes.length > 0) {
+                    finalDiv = Array.from(checkedBoxes).map(cb => cb.value).join(', ');
+                }
+            }
+
             isSubmitting = true;
             const submitBtn = document.getElementById('btn-submit-to');
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
@@ -627,7 +653,7 @@
                 else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
 
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: currentUser.division, 
+                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: finalDiv, 
                     status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
                     remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
@@ -696,7 +722,9 @@
 
         window.modifyPendingTO = async function(toNo) {
             if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
-            const { data: to } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).single();
+            const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+            if (!toGroup || toGroup.length === 0) return;
+            const to = toGroup[0];
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
             
             document.getElementById('to-transport').value = to.transport;
@@ -725,6 +753,16 @@
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
             });
             
+            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
+            window.renderPersonnel();
+
+            if (currentUser.s_assignment === true) {
+                const savedDivs = to.division.split(',').map(d => d.trim());
+                document.querySelectorAll('input[name="special_div"]').forEach(cb => {
+                    cb.checked = savedDivs.includes(cb.value);
+                });
+            }
+
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
             window.switchTab('apply-view', document.querySelector('.nav-item'));
@@ -1900,7 +1938,13 @@
                 const { data: users } = await supabaseClient.from('users').select('*');
                 const u = (users || []).find(x => x.username === uBox && x.password === pBox);
                 if (u) {
-                    currentUser = { username: u.username, fullName: u.full_name, role: u.role.toUpperCase(), divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], unit: u.unit ? u.unit.trim().toUpperCase() : '' };
+                    currentUser = { 
+                        username: u.username, 
+                        fullName: u.full_name, 
+                        role: u.role.toUpperCase(), 
+                        divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
+                        units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
+                    };
                     render();
                 } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
             } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
@@ -2051,10 +2095,16 @@
         const checkScope = (div, unit) => {
             const role = currentUser.role;
             if (role === "PARPO" || role === "VEHICLE_APPROVER") return true;
-            const dMatch = div && currentUser.divisions.includes(div.toUpperCase());
+            
+            const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
+            const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+            
             if (role === "CHIEF") return dMatch;
-            if (role === "UNIT_HEAD" && div && div.toUpperCase() === "PBDD" && dMatch) return true;
-            const uMatch = unit && unit.toUpperCase() === currentUser.unit;
+            if (role === "UNIT_HEAD" && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            
+            const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
+            const uMatch = oUnits.some(u => currentUser.units.includes(u));
+            
             return dMatch && uMatch;
         };
 
@@ -2211,11 +2261,16 @@
                 let show = false;
                 for (let o of list) {
                     const s = (o.status || "").toUpperCase();
+                    const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
+                    const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+                    const oUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()) : [];
+                    const uMatch = oUnits.some(u => currentUser.units.includes(u));
+
                     if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_RESERVATION") show = true;
                     else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && currentUser.divisions.includes(o.division?.toUpperCase())) show = true;
-                    else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && currentUser.divisions.includes(o.division?.toUpperCase())) {
-                        if (o.division?.toUpperCase() === "PBDD" || currentUser.unit === o.unit?.toUpperCase()) show = true;
+                    else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                        if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
                 
