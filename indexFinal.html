@@ -933,6 +933,18 @@
             } catch (e) { alert("PDF Error: " + e.message); }
         };
 
+        window.cancelLeaveApp = async function(leaveId) {
+            if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
+            try {
+                const { error } = await supabase.from('leave_ledger').delete().eq('id', leaveId);
+                if (error) throw error;
+                alert("Leave application successfully cancelled and deleted.");
+                window.loadStatus();
+            } catch(e) {
+                alert("Error: " + e.message);
+            }
+        };
+
         window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
@@ -986,7 +998,10 @@
                         </div>
                         <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
-                        ${isApp ? `<button class="btn btn-success btn-small" style="margin-top:8px;" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                        <div class="action-group" style="margin-top: 8px;">
+                            ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                            <button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>
+                        </div>
                     </div>`;
                 }
                 list.innerHTML = html || "No Leave Applications found.";
@@ -1250,6 +1265,19 @@
             const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
+            // Civil Service Details based on Official Format Form 6
+            doc.setFontSize(8); doc.setFont("helvetica", "italic");
+            doc.text("Civil Service Form No. 6", 10, 15);
+            doc.text("Revised 2020", 10, 19);
+
+            doc.setFontSize(10); doc.setFont("helvetica", "normal");
+            doc.text("Republic of the Philippines", 105, 20, { align: 'center' });
+            doc.setFont("helvetica", "bold");
+            doc.text("DEPARTMENT OF AGRARIAN REFORM", 105, 25, { align: 'center' });
+            doc.setFontSize(9); doc.setFont("helvetica", "normal");
+            doc.text("Camarines Sur I Provincial Office", 105, 30, { align: 'center' });
+            doc.text("San Jose, Pili, Camarines Sur", 105, 34, { align: 'center' });
+
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
             // ADJUSTED 1 LINE UP (was 50)
             doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
@@ -1386,8 +1414,8 @@
             doc.rect(20, ty + 25, 30, 5); doc.rect(50, ty + 25, 25, 5); doc.rect(75, ty + 25, 25, 5);
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
-            const hr_sig = await urlToBase64(getAssetUrl("hr.png"));
-            if(hr_sig) { try { doc.addImage(hr_sig, 'PNG', 45, ty + 22, 20, 10); } catch(e){} }
+            const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 22, 20, 10); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
