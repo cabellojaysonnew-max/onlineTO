@@ -426,23 +426,23 @@
                     personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                     window.renderPersonnel();
 
-                    if (data.s_assignment === true) {
-                        const logisticsCard = document.getElementById('to-transport').parentNode;
-                        let divContainer = document.getElementById('division-selection');
-                        if(!divContainer) {
-                            divContainer = document.createElement('div');
-                            divContainer.id = 'division-selection';
-                            logisticsCard.appendChild(divContainer);
-                        }
-                        let cbHtml = '<label style="margin-top:10px;">Select Division(s) for Approval</label><div class="radio-group">';
-                        if (data.division) {
-                            data.division.split(',').forEach(d => {
-                                cbHtml += `<div class="radio-item"><input type="checkbox" value="${d.trim()}" class="to-div-cb" checked> ${d.trim()}</div>`;
-                            });
-                        }
-                        cbHtml += '</div>';
-                        divContainer.innerHTML = cbHtml;
-                    }
+                    if (data.s_assignment === true) {
+                        const logisticsCard = document.getElementById('to-transport').parentNode;
+                        let divContainer = document.getElementById('division-selection');
+                        if(!divContainer) {
+                            divContainer = document.createElement('div');
+                            divContainer.id = 'division-selection';
+                            logisticsCard.appendChild(divContainer);
+                        }
+                        let cbHtml = '<label style="margin-top:10px;">Select Division(s) for Approval</label><div class="radio-group">';
+                        if (data.division) {
+                            data.division.split(',').forEach(d => {
+                                cbHtml += `<div class="radio-item"><input type="checkbox" value="${d.trim()}" class="to-div-cb" checked> ${d.trim()}</div>`;
+                            });
+                        }
+                        cbHtml += '</div>';
+                        divContainer.innerHTML = cbHtml;
+                    }
 
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
@@ -1312,7 +1312,7 @@
             }
             doc.text("Others:", 16, tY_left + 2.5);
             let remks = app.remarks || "";
-            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
+            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("-")[0].split("|")[0].trim()) : "";
             doc.setFont("helvetica", "bold"); doc.text(oth_val, 30, tY_left + 2.5); doc.line(30, tY_left + 3, 90, tY_left + 3);
 
             let tY_right = section6Y + 4;
@@ -1585,4 +1585,150 @@
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${validationId}`;
                 const dtr_qr = await urlToBase64(qrUrl);
 
-                let chiefName = "
+                let chiefName = "_________________________";
+                let chiefPos = "DIVISION CHIEF";
+                const empDiv = (currentUser.division || "").toUpperCase().trim();
+                const empUnit = (currentUser.unit || "").toUpperCase().trim();
+                
+                if (empDiv === "PARPO") {
+                    chiefName = "RICARDO C. GARCIA";
+                    chiefPos = "PARPO II";
+                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                    const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
+                    if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                    chiefPos = "MARPO";
+                } else {
+                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                    chiefPos = "DIVISION CHIEF";
+                }
+
+                let grandUndertimeH = 0;
+                let grandUndertimeM = 0;
+
+                const drawForm = (startX, startY) => {
+                    if (dtr_qr) { try { doc.addImage(dtr_qr, 'PNG', startX + 73, startY, 12, 12); } catch(e){} }
+                    
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(6);
+                    doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                    doc.text("DAILY TIME RECORD", startX + 42.5, startY + 7, { align: "center" });
+
+                    doc.setFontSize(8);
+                    doc.text(currentUser.full_name, startX + 42.5, startY + 15, { align: "center" });
+                    doc.line(startX, startY + 16, startX + 85, startY + 16);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                    doc.text("Name", startX + 42.5, startY + 19, { align: "center" });
+
+                    doc.text("For the month of", startX, startY + 23);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                    doc.text(`${mName} ${year}`, startX + 25, startY + 23);
+                    doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
+
+                    let ty = startY + 30;
+                    let cw_day = 8, cw_time = 14, cw_u = 11;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+
+                    doc.rect(startX, ty, cw_day, 8); doc.text("Days", startX + 4, ty + 5, { align: "center" });
+                    doc.rect(startX + cw_day, ty, cw_time * 2, 4); doc.text("A.M.", startX + cw_day + cw_time, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time * 2, 4); doc.text("P.M.", startX + cw_day + (cw_time * 3), ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u * 2, 4); doc.text("UNDERTIME", startX + cw_day + (cw_time * 4) + cw_u, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    doc.rect(startX + cw_day, ty, cw_time, 4); doc.text("Arrival", startX + cw_day + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + cw_time, ty, cw_time, 4); doc.text("Departure", startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, 4); doc.text("Arrival", startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, 4); doc.text("Departure", startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 4); doc.text("Hours", startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 4); doc.text("Min.", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    let row_h = 4.2;
+                    let totalUndertimeMins = 0;
+
+                    for (let d = 1; d <= 31; d++) {
+                        doc.rect(startX, ty, cw_day, row_h);
+                        doc.text(String(d), startX + 4, ty + 3, { align: "center" });
+
+                        if (d <= endDt.getDate()) {
+                            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                            const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                            
+                            const dateObj = new Date(year, month, d);
+                            const dayOfWeek = dateObj.getDay();
+                            
+                            let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                            let activeSchedule = null;
+                            let schedType = "Flexi";
+                            
+                            if (schedOverrides) {
+                                const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                                if (override) {
+                                    activeSchedule = {
+                                        start_time: override.start_time,
+                                        end_time: override.end_time
+                                    };
+                                    schedType = override.schedule_type || "Fixed";
+                                    
+                                    if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
+                                        isWeekend = true;
+                                    }
+                                }
+                            }
+
+                            if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
+                                activeSchedule = {
+                                    start_time: currentUser.flexi_range_start + ":00", 
+                                    end_time: currentUser.flexi_range_end + ":00"
+                                };
+                                schedType = "Flexi";
+                            }
+
+                            let special = "";
+                            const hol = (holidays || []).find(h => h.date === dateStr);
+                            if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+                            
+                            const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                            if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                            
+                            const to = (itins || []).find(i => i.travel_date === dateStr);
+                            if(to) special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                            
+                            const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                            if(leave) special = String(leave.type).toUpperCase();
+
+                            if (isWeekend && !special) {
+                                special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                                if (dayOfWeek === 5) special = "NO FRIDAY WORK";
+                            }
+                            
+                            let amIn="", amOut="", pmIn="", pmOut="";
+                            dayLogs.forEach(time => {
+                                const hr = time.getHours();
+                                const fmt = formatTime12(time);
+                                if(hr < 12 && !amIn) amIn = fmt;
+                                else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
+                                else if(hr <= 14 && !pmIn) pmIn = fmt;
+                                else pmOut = fmt;
+                            });
+
+                            let udH = "", udM = "";
+                            if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
+                                const ud = calcUndertime(dayLogs, activeSchedule, schedType);
+                                if (ud.h > 0 || ud.m > 0) {
+                                    totalUndertimeMins += (ud.h * 60) + ud.m;
+                                    if(ud.h > 0) udH = String(ud.h);
+                                    if(ud.m > 0) udM = String(ud.m);
+                                }
+                            }
+
+                            if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special === "NO FRIDAY WORK" || special.includes("HOLIDAY"))) {
+                                special = ""; 
+                            }
+
+                            if (special) {
+                                doc.setFont("helvetica", "bold"); doc.setFontSize(6);
+                                doc.rect(startX + cw_day, ty, cw_time * 4, row_h);
+                                doc.text(special.substring(0, 40), startX + cw_day + (cw_time * 2), ty + 3, { align: "center" });
