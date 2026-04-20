@@ -426,23 +426,23 @@
                     personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                     window.renderPersonnel();
 
-                    if (data.s_assignment === true) {
-                        const logisticsCard = document.getElementById('to-transport').parentNode;
-                        let divContainer = document.getElementById('division-selection');
-                        if(!divContainer) {
-                            divContainer = document.createElement('div');
-                            divContainer.id = 'division-selection';
-                            logisticsCard.appendChild(divContainer);
-                        }
-                        let cbHtml = '<label style="margin-top:10px;">Select Division(s) for Approval</label><div class="radio-group">';
-                        if (data.division) {
-                            data.division.split(',').forEach(d => {
-                                cbHtml += `<div class="radio-item"><input type="checkbox" value="${d.trim()}" class="to-div-cb" checked> ${d.trim()}</div>`;
-                            });
-                        }
-                        cbHtml += '</div>';
-                        divContainer.innerHTML = cbHtml;
-                    }
+                    if (data.s_assignment === true) {
+                        const logisticsCard = document.getElementById('to-transport').parentNode;
+                        let divContainer = document.getElementById('division-selection');
+                        if(!divContainer) {
+                            divContainer = document.createElement('div');
+                            divContainer.id = 'division-selection';
+                            logisticsCard.appendChild(divContainer);
+                        }
+                        let cbHtml = '<label style="margin-top:10px;">Select Division(s) for Approval</label><div class="radio-group">';
+                        if (data.division) {
+                            data.division.split(',').forEach(d => {
+                                cbHtml += `<div class="radio-item"><input type="checkbox" value="${d.trim()}" class="to-div-cb" checked> ${d.trim()}</div>`;
+                            });
+                        }
+                        cbHtml += '</div>';
+                        divContainer.innerHTML = cbHtml;
+                    }
 
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
@@ -1585,9 +1585,4 @@
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${validationId}`;
                 const dtr_qr = await urlToBase64(qrUrl);
 
-                let chiefName = "_________________________";
-                let chiefPos = "DIVISION CHIEF";
-                const empDiv = (currentUser.division || "").toUpperCase().trim();
-                const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                
-                if (empDiv === "PARPO") {
+                let chiefName = "
