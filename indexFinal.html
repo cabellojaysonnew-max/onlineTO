@@ -1265,24 +1265,9 @@
             const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
-            // Civil Service Details based on Official Format Form 6 HEADER HAS BEEN REMOVED
-            // doc.setFontSize(8); doc.setFont("helvetica", "italic");
-            // doc.text("Civil Service Form No. 6", 10, 15);
-            // doc.text("Revised 2020", 10, 19);
-
-            // doc.setFontSize(10); doc.setFont("helvetica", "normal");
-            // doc.text("Republic of the Philippines", 105, 20, { align: 'center' });
-            // doc.setFont("helvetica", "bold");
-            // doc.text("DEPARTMENT OF AGRARIAN REFORM", 105, 25, { align: 'center' });
-            // doc.setFontSize(9); doc.setFont("helvetica", "normal");
-            // doc.text("Camarines Sur I Provincial Office", 105, 30, { align: 'center' });
-            // doc.text("San Jose, Pili, Camarines Sur", 105, 34, { align: 'center' });
-
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
-            // ADJUSTED 1 LINE UP (was 50)
             doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
 
-            // ADJUSTED ENTIRE FORM Y-AXIS UP (was 55)
             let ty = 50;
             doc.setFontSize(7); doc.setFont("helvetica", "normal");
             doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
@@ -1321,22 +1306,41 @@
             doc.text("6.A TYPE OF LEAVE TO BE AVAILED OF", 12, ty + 4);
 
             let tY_left = ty + 8;
-            const types = ["Vacation Leave", "Mandatory/Forced Leave", "Sick Leave", "Maternity Leave", "Paternity Leave", "Special Privilege Leave", "Solo Parent Leave", "Study Leave", "10-Day VAWC Leave", "Rehabilitation Privilege", "Special Leave Benefits for Women", "Special Emergency (Calamity) Leave", "Adoption Leave", "Wellness Leave"];
+            const types = [
+                { name: "Vacation Leave", detail: "(Sec. 51, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "Mandatory/Forced Leave", detail: "(Sec. 25, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "Sick Leave", detail: "(Sec. 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "Maternity Leave", detail: "(R.A. No. 11210 / IRR issued by CSC, DOLE and SSS)" },
+                { name: "Paternity Leave", detail: "(R.A. No. 8187 / CSC MC No. 71, s. 1998, as amended)" },
+                { name: "Special Privilege Leave", detail: "(Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "Solo Parent Leave", detail: "(RA No. 8972 / CSC MC No. 8, s. 2004)" },
+                { name: "Study Leave", detail: "(Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "10-Day VAWC Leave", detail: "(RA No. 9262 / CSC MC No. 15, s. 2005)" },
+                { name: "Rehabilitation Privilege", detail: "(Sec. 55, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                { name: "Special Leave Benefits for Women", detail: "(RA No. 9710 / CSC MC No. 25, s. 2010)" },
+                { name: "Special Emergency (Calamity) Leave", detail: "(CSC MC No. 2, s. 2012, as amended)" },
+                { name: "Adoption Leave", detail: "(R.A. No. 8552)" }
+            ];
             let s_type = String(app.type || "").toLowerCase();
-            
+
             types.forEach(t => {
                 doc.rect(12, tY_left, 3, 3);
-                if(t.toLowerCase().includes(s_type) || s_type.includes(t.toLowerCase())) {
+                if(t.name.toLowerCase().includes(s_type) || s_type.includes(t.name.toLowerCase())) {
                     doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
                 }
-                doc.text(t, 16, tY_left + 2.5);
+                doc.setFontSize(7);
+                doc.text(t.name, 16, tY_left + 2.5);
+                let nameWidth = doc.getTextWidth(t.name);
+                doc.setFontSize(4.5);
+                doc.text(t.detail, 16 + nameWidth + 1, tY_left + 2.5);
                 tY_left += 5;
             });
-            
+
             doc.rect(12, tY_left, 3, 3);
             if(s_type.includes("other") && !s_type.includes("wellness")) {
                 doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
             }
+            doc.setFontSize(7);
             doc.text("Others:", 16, tY_left + 2.5);
             let remks = app.remarks || "";
             let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
@@ -1345,22 +1349,39 @@
             let tY_right = section6Y + 4;
             doc.setFont("helvetica", "normal"); doc.setFontSize(7);
             doc.text("6.B DETAILS OF LEAVE", 107, tY_right);
-            
+
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Vacation/Special Privilege Leave:", 107, tY_right);
-            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5); doc.line(143, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Abroad")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Abroad (Specify)", 115, tY_right + 2.5);
             let abr_val = remks.includes("Abroad") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
-            doc.setFont("helvetica", "bold"); doc.text(abr_val, 135, tY_right + 2.5); doc.line(135, tY_right + 3, 195, tY_right + 3);
+            doc.setFont("helvetica", "bold"); doc.text(abr_val, 138, tY_right + 2); doc.line(138, tY_right + 2.5, 195, tY_right + 2.5);
 
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Sick Leave:", 107, tY_right);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("In Hospital")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("In Hospital (Specify Illness)", 115, tY_right + 2.5);
             let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
-            doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2.5); doc.line(150, tY_right + 3, 195, tY_right + 3);
+            doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Out Patient")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Out Patient (Specify Illness)", 115, tY_right + 2.5);
             let out_val = remks.includes("Out Patient") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
-            doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2.5); doc.line(150, tY_right + 3, 195, tY_right + 3);
+            doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
+
+            tY_right += 6;
+            doc.setFont("helvetica", "italic"); doc.text("In case of Special Leave Benefits for Women:", 107, tY_right);
+            tY_right += 4; doc.setFont("helvetica", "normal"); doc.text("(Specify Illness)", 110, tY_right + 2.5);
+            let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            doc.setFont("helvetica", "bold"); doc.text(wom_val, 132, tY_right + 2); doc.line(132, tY_right + 2.5, 195, tY_right + 2.5);
+            tY_right += 4; doc.line(110, tY_right + 2.5, 195, tY_right + 2.5);
+
+            tY_right += 6;
+            doc.setFont("helvetica", "italic"); doc.text("In case of Study Leave:", 107, tY_right);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Completion of Master's Degree")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Completion of Master's Degree", 115, tY_right + 2.5);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("BAR/Board Examination Review")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("BAR/Board Examination Review", 115, tY_right + 2.5);
+
+            tY_right += 6;
+            doc.setFont("helvetica", "italic"); doc.text("Other purpose:", 107, tY_right);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Monetization")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Monetization of Leave Credits", 115, tY_right + 2.5);
+            tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Terminal Leave")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Terminal Leave", 115, tY_right + 2.5);
 
             ty = section6Y + 85;
             doc.rect(10, ty, 95, 25);
@@ -1383,7 +1404,9 @@
             let req = remks.includes("Requested") && !remks.includes("Not Requested");
             doc.rect(110, ty + 6, 3, 3); if(!req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 8.5); } doc.setFont("helvetica", "normal"); doc.text("Not Requested", 115, ty + 8.5);
             doc.rect(110, ty + 10, 3, 3); if(req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 12.5); } doc.setFont("helvetica", "normal"); doc.text("Requested", 115, ty + 12.5);
-            doc.line(130, ty + 20, 190, ty + 20); doc.setFontSize(6); doc.text("(Signature of Applicant)", 160, ty + 23, { align: 'center' });
+            doc.setFontSize(8); doc.setFont("helvetica", "bold");
+            doc.text(full_name, 160, ty + 19, { align: 'center' });
+            doc.line(130, ty + 20, 190, ty + 20); doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.text("(Signature of Applicant)", 160, ty + 23, { align: 'center' });
 
             ty += 25;
             doc.setFillColor(220, 220, 220); doc.rect(10, ty, 190, 5, 'F');
