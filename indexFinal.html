@@ -155,7 +155,24 @@
                 <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
                 <div id="user-info" style="font-size: 10px; color: var(--dar-gold); font-weight: bold;">Division | Position</div>
             </div>
-            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
+                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            </div>
+        </div>
+
+        <div id="pwdModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1000; justify-content:center; align-items:center;">
+            <div class="card" style="width: 85%; max-width: 350px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <button onclick="window.hideChangePassword()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--dar-green);">Security</h3>
+                <label>Current Password</label>
+                <input type="password" id="pass-curr">
+                <label>New Password</label>
+                <input type="password" id="pass-new">
+                <label>Confirm Password</label>
+                <input type="password" id="pass-conf">
+                <button class="btn btn-primary" onclick="window.changePassword()">UPDATE PASSWORD</button>
+            </div>
         </div>
 
         <div id="apply-view" class="view active">
@@ -277,17 +294,15 @@
             </div>
         </div>
 
-        <div id="security-view" class="view">
-            <h3 style="color: var(--dar-green);">Security</h3>
+        <div id="credits-view" class="view">
+            <h3 style="color: var(--dar-green);">My Credits</h3>
             <div class="card">
-                <h4>Update Portal Password</h4>
-                <label>Current Password</label>
-                <input type="password" id="pass-curr">
-                <label>New Password</label>
-                <input type="password" id="pass-new">
-                <label>Confirm Password</label>
-                <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="window.changePassword()">UPDATE PASSWORD</button>
+                <h4>Leave Balances</h4>
+                <div id="leave-balances-container">Loading...</div>
+            </div>
+            <div class="card">
+                <h4>CTO For Posting</h4>
+                <div id="cto-posting-container">Loading...</div>
             </div>
         </div>
 
@@ -296,7 +311,7 @@
             <div class="nav-item" onclick="window.switchTab('leave-view', this)">🍃 Leave</div>
             <div class="nav-item" onclick="window.switchTab('status-view', this)">📋 Status</div>
             <div class="nav-item" onclick="window.switchTab('calendar-view', this)">📅 DTR</div>
-            <div class="nav-item" onclick="window.switchTab('security-view', this)">🔒 Security</div>
+            <div class="nav-item" onclick="window.switchTab('credits-view', this)">💳 Credits</div>
         </div>
     </div>
 
@@ -463,6 +478,38 @@
             el.classList.add('active');
             if (id === 'status-view') window.loadStatus();
             if (id === 'calendar-view') window.renderCalendar();
+            if (id === 'credits-view') window.loadCredits();
+        };
+
+        window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
+        window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
+
+        window.loadCredits = async function() {
+            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            if(emp) {
+                document.getElementById('leave-balances-container').innerHTML = `
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px;">
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${emp.vl_balance || 0}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${emp.sl_balance || 0}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${emp.spl_balance || 0}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${emp.wl_balance || 0}</div>
+                        <div style="background:#fefce8; padding:10px; border-radius:8px; grid-column: span 2; border: 1px solid #fef08a; color: #854d0e;"><strong>CTO:</strong> ${emp.cto_balance || 0} hrs</div>
+                    </div>
+                `;
+            }
+            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false}).limit(10);
+            let ctoHtml = '';
+            if(cto && cto.length > 0) {
+                cto.forEach(c => {
+                    ctoHtml += `<div style="font-size:11px; border-bottom:1px solid #eee; padding:8px 0;">
+                        <strong>${c.date}</strong> - ${c.transaction_type}: <span style="color:var(--dar-green); font-weight:bold;">${c.calculated_hours} hrs</span> <br>
+                        <span style="color:gray;">${c.remarks || c.purpose || ''}</span>
+                    </div>`;
+                });
+            } else {
+                ctoHtml = '<span style="font-size:11px; color:gray;">No CTO records found.</span>';
+            }
+            document.getElementById('cto-posting-container').innerHTML = ctoHtml;
         };
 
         window.showEmployeeQR = function() {
@@ -1439,7 +1486,7 @@
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 22, 20, 10); } catch(e){} }
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 27, 25, 12); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
@@ -2037,7 +2084,7 @@
                 <div id="processTOModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
                     <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                         <div class="dar-green text-white p-4 font-bold text-center relative shrink-0">
-                            Process Personnel
+                            Approve / Deny Personnel
                             <button onclick="hideProcessTOModal()" class="absolute right-4 text-xl leading-none">✕</button>
                         </div>
                         <div class="p-6 space-y-4 overflow-y-auto grow">
@@ -2367,7 +2414,7 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end">
-                                <button onclick="showProcessTOModal('${o.to_no}')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-full active:scale-95 transition-transform">Process Personnel</button>
+                                <button onclick="showProcessTOModal('${o.to_no}')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-full active:scale-95 transition-transform">APPROVE / DENY</button>
                             </div>
                         </div>
                     </div>`; 
