@@ -329,6 +329,14 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
+        // PASSWORD HASHING UTILITY
+        const hashPassword = async (msg) => {
+            const msgUint8 = new TextEncoder().encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
         // INIT DROPDOWNS
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const dtrMonth = document.getElementById('dtr-month');
@@ -434,7 +442,9 @@
                     return;
                 }
                 
-                if (data && data.pass === pass) {
+                const hashedPass = await hashPassword(pass);
+
+                if (data && (data.pass === pass || data.pass === hashedPass)) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -505,6 +515,8 @@
 
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
+                    if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
+
                     hasDeductions = true;
                     const isSick = (l.type || '').toUpperCase().includes('SICK');
                     const isVL = (l.type || '').toUpperCase().includes('VACATION') || (l.type || '').toUpperCase().includes('MANDATORY') || (l.type || '').toUpperCase().includes('FORCED');
@@ -1552,7 +1564,7 @@
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 24, 28, 16); } catch(e){} }
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 42, ty + 18, 35, 20); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
@@ -1963,8 +1975,14 @@
 
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            if(curr !== currentUser.pass) return alert("Wrong current password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            const hashedCurr = await hashPassword(curr);
+            
+            if(curr !== currentUser.pass && hashedCurr !== currentUser.pass) {
+                return alert("Wrong current password.");
+            }
+            
+            const hashedNew = await hashPassword(nw);
+            await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
             alert("Updated."); location.reload();
         };
     </script>
@@ -2076,6 +2094,27 @@
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
 
+        // PASSWORD HASHING UTILITY
+        async function hashPassword(msg) {
+            const msgUint8 = new TextEncoder().encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function checkSession() {
+            const stored = localStorage.getItem('dar_admin_session');
+            if (stored) {
+                const session = JSON.parse(stored);
+                // Valid for 30 days
+                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
+                    currentUser = session.user;
+                } else {
+                    localStorage.removeItem('dar_admin_session');
+                }
+            }
+        }
+
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
         function renderLogin() {
@@ -2103,8 +2142,10 @@
             const pBox = document.getElementById('password').value.trim();
             const err = document.getElementById('loginError');
             try {
+                const hashedPBox = await hashPassword(pBox);
                 const { data: users } = await supabaseClient.from('users').select('*');
-                const u = (users || []).find(x => x.username === uBox && x.password === pBox);
+                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+                
                 if (u) {
                     currentUser = { 
                         username: u.username, 
@@ -2113,12 +2154,13 @@
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
                     render();
                 } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
             } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
         }
 
-        function logout() { currentUser = null; render(); }
+        function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
 
         function renderMain() {
             document.getElementById('app').innerHTML = `
@@ -2167,8 +2209,14 @@
             const o = document.getElementById('oldPwd').value.trim();
             const n = document.getElementById('newPwd').value.trim();
             const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
-            if (data.password !== o) return alert("Incorrect.");
-            await supabaseClient.from('users').update({ password: n }).eq('username', currentUser.username);
+            const hashedOld = await hashPassword(o);
+            
+            if (data.password !== o && data.password !== hashedOld) {
+                return alert("Incorrect.");
+            }
+            
+            const hashedNew = await hashPassword(n);
+            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
             alert("Updated!"); hideChangePassword();
         }
 
@@ -2557,7 +2605,7 @@
             container.innerHTML = h;
         }
 
-        window.onload = render;
+        window.onload = () => { checkSession(); render(); };
     </script>
 </body>
 </html>
