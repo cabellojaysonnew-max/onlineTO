@@ -1565,7 +1565,7 @@
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 42, ty + 25, 35, 20); } catch(e){} }
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 42, ty + 27, 40, 25); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
