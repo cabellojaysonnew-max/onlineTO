@@ -500,10 +500,12 @@
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT']);
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
             
             let vl_deduct = 0;
             let sl_deduct = 0;
+            let spl_deduct = 0;
+            let wl_deduct = 0;
             let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
                 <tr style="background: var(--dar-green); color: white;">
                     <th style="padding: 5px; text-align: left;">Date</th>
@@ -518,11 +520,13 @@
                     if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
 
                     hasDeductions = true;
-                    const isSick = (l.type || '').toUpperCase().includes('SICK');
-                    const isVL = (l.type || '').toUpperCase().includes('VACATION') || (l.type || '').toUpperCase().includes('MANDATORY') || (l.type || '').toUpperCase().includes('FORCED');
-                    
-                    if (isSick) sl_deduct += parseFloat(l.debit || 0);
-                    if (isVL) vl_deduct += parseFloat(l.debit || 0);
+                    const l_type = (l.type || '').toUpperCase();
+                    const debit_val = parseFloat(l.debit || 0);
+
+                    if (l_type.includes('SICK')) sl_deduct += debit_val;
+                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_deduct += debit_val;
+                    else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
+                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
 
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
@@ -537,14 +541,16 @@
 
             let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) - vl_deduct).toFixed(2) : 0;
             let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) - sl_deduct).toFixed(2) : 0;
+            let currentSPL = emp ? Math.max(0, parseFloat(emp.spl_balance || 0) - spl_deduct).toFixed(2) : 0;
+            let currentWL = emp ? Math.max(0, parseFloat(emp.wl_balance || 0) - wl_deduct).toFixed(2) : 0;
 
             if(emp) {
                 container.innerHTML = `
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
                         <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
                         <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${emp.spl_balance || 0}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${emp.wl_balance || 0}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${currentSPL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${currentWL}</div>
                     </div>
                     <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
                     ${deductionsHtml}
@@ -943,7 +949,18 @@
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
-                    if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } } catch(e){} }
+                    if (img_qr) { 
+                        try { 
+                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+                            
+                            // AUDIT TRAIL TIMESTAMPS
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(4);
+                            let auditText = `UH: ${od.unithead_date || 'N/A'} | DC: ${od.dc_date || 'N/A'} | PARPO: ${od.parpo_date || 'N/A'}`;
+                            doc.text(auditText, 190, 36, {align: 'center'});
+                        } catch(e){} 
+                    }
 
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
@@ -1335,7 +1352,7 @@
             (res_ledger || []).forEach(ledg => {
                 if (ledg.id === app.id) return;
                 const ttype = String(ledg.transaction_type || "").toUpperCase();
-                if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT")) && ttype !== "APPLICATION") {
+                if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
                     if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
@@ -1343,22 +1360,6 @@
                     } else if (l_type.includes("SICK")) {
                         sl_deduct += debit_val;
                     }
-                }
-            });
-
-            const { data: res_gp } = await supabase.from('gate_pass_logs').select('*').eq('emp_id', currentUser.emp_id);
-            (res_gp || []).forEach(gp => {
-                const gp_date = String(gp.date || gp.created_at || "");
-                if (gp_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(gp.status || "PROCESSED").toUpperCase())) {
-                    vl_deduct += parseFloat(gp.deduction_credit || gp.deduction_cr || 0);
-                }
-            });
-
-            const { data: res_ut } = await supabase.from('undertime_logs').select('*').eq('emp_id', currentUser.emp_id);
-            (res_ut || []).forEach(ut => {
-                const ut_date = String(ut.created_at || ut.date || "");
-                if (ut_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(ut.status || "PROCESSED").toUpperCase())) {
-                    vl_deduct += parseFloat(ut.deduction_credit || 0);
                 }
             });
 
@@ -2450,9 +2451,10 @@
         }
 
         function getAppPayload(u) {
-            if (u.role === "UNIT_HEAD" || u.role === "MARPO") return { status: "PENDING_CHIEF", unithead_signed: u.fullName };
-            if (u.role === "CHIEF") return { status: "PENDING_PARPO", dc_signed: u.fullName };
-            if (u.role === "PARPO") return { status: "APPROVED", parpo_signed: "RICARDO C. GARCIA" };
+            const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+            if (u.role === "UNIT_HEAD" || u.role === "MARPO") return { status: "PENDING_CHIEF", unithead_signed: u.fullName, unithead_date: now };
+            if (u.role === "CHIEF") return { status: "PENDING_PARPO", dc_signed: u.fullName, dc_date: now };
+            if (u.role === "PARPO") return { status: "APPROVED", parpo_signed: "RICARDO C. GARCIA", parpo_date: now };
             return {};
         }
 
