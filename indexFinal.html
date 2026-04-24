@@ -297,11 +297,10 @@
         <div id="credits-view" class="view">
             <h3 style="color: var(--dar-green);">My Credits</h3>
             <div class="card">
-                <h4>Leave Balances</h4>
                 <div id="leave-balances-container">Loading...</div>
             </div>
             <div class="card">
-                <h4>CTO For Posting</h4>
+                <h4>CTO Status</h4>
                 <div id="cto-posting-container">Loading...</div>
             </div>
         </div>
@@ -485,31 +484,98 @@
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
         window.loadCredits = async function() {
+            const container = document.getElementById('leave-balances-container');
+            const ctoContainer = document.getElementById('cto-posting-container');
+            container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
+
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT']);
+            
+            let vl_deduct = 0;
+            let sl_deduct = 0;
+            let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
+                <tr style="background: var(--dar-green); color: white;">
+                    <th style="padding: 5px; text-align: left;">Date</th>
+                    <th style="padding: 5px; text-align: left;">Type</th>
+                    <th style="padding: 5px; text-align: center;">Days</th>
+                    <th style="padding: 5px; text-align: left;">Remarks</th>
+                </tr>`;
+            let hasDeductions = false;
+
+            if (ledgers && ledgers.length > 0) {
+                ledgers.forEach(l => {
+                    hasDeductions = true;
+                    const isSick = (l.type || '').toUpperCase().includes('SICK');
+                    const isVL = (l.type || '').toUpperCase().includes('VACATION') || (l.type || '').toUpperCase().includes('MANDATORY') || (l.type || '').toUpperCase().includes('FORCED');
+                    
+                    if (isSick) sl_deduct += parseFloat(l.debit || 0);
+                    if (isVL) vl_deduct += parseFloat(l.debit || 0);
+
+                    deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                        <td style="padding: 5px;">${l.type}</td>
+                        <td style="padding: 5px; text-align: center; color: var(--danger); font-weight:bold;">-${l.debit || 0}</td>
+                        <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                    </tr>`;
+                });
+            }
+            deductionsHtml += `</table>`;
+            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No approved deductions found.</p>`;
+
+            let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) - vl_deduct).toFixed(2) : 0;
+            let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) - sl_deduct).toFixed(2) : 0;
+
             if(emp) {
-                document.getElementById('leave-balances-container').innerHTML = `
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${emp.vl_balance || 0}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${emp.sl_balance || 0}</div>
+                container.innerHTML = `
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
                         <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${emp.spl_balance || 0}</div>
                         <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${emp.wl_balance || 0}</div>
-                        <div style="background:#fefce8; padding:10px; border-radius:8px; grid-column: span 2; border: 1px solid #fef08a; color: #854d0e;"><strong>CTO:</strong> ${emp.cto_balance || 0} hrs</div>
                     </div>
+                    <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
+                    ${deductionsHtml}
                 `;
             }
-            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false}).limit(10);
-            let ctoHtml = '';
+
+            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
+            
+            let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
+                <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
+                    <th style="padding: 5px; text-align: left;">Date</th>
+                    <th style="padding: 5px; text-align: left;">Type</th>
+                    <th style="padding: 5px; text-align: center;">Hrs</th>
+                    <th style="padding: 5px; text-align: left;">Remarks</th>
+                </tr>`;
+            let hasCto = false;
+            
             if(cto && cto.length > 0) {
                 cto.forEach(c => {
-                    ctoHtml += `<div style="font-size:11px; border-bottom:1px solid #eee; padding:8px 0;">
-                        <strong>${c.date}</strong> - ${c.transaction_type}: <span style="color:var(--dar-green); font-weight:bold;">${c.calculated_hours} hrs</span> <br>
-                        <span style="color:gray;">${c.remarks || c.purpose || ''}</span>
-                    </div>`;
+                    const ttype = (c.transaction_type || '').toUpperCase();
+                    if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
+                        hasCto = true;
+                        let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
+                        let sign = ttype === 'USED' ? '-' : '+';
+                        ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 5px;">${c.date}</td>
+                            <td style="padding: 5px;">${ttype}</td>
+                            <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
+                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                        </tr>`;
+                    }
                 });
-            } else {
-                ctoHtml = '<span style="font-size:11px; color:gray;">No CTO records found.</span>';
             }
-            document.getElementById('cto-posting-container').innerHTML = ctoHtml;
+            ctoHtml += `</table>`;
+
+            if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
+            
+            ctoContainer.innerHTML = `
+                <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
+                    <strong>Total CTO Balance:</strong> ${emp?.cto_balance || 0} hrs
+                </div>
+                ${ctoHtml}
+            `;
         };
 
         window.showEmployeeQR = function() {
@@ -959,7 +1025,7 @@
                         doc.setFontSize(count > 1 ? 6 : 8);
                         for (let j = 0; j < count; j++) {
                             let cx = startX + (step * j) + (step / 2) - 10; 
-                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 153, 20, 20); } catch(e){} }
+                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 150, 25, 25); } catch(e){} }
                             doc.text(list[j].full_name.toUpperCase(), cx, 166);
                         }
                     };
@@ -970,7 +1036,7 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -1486,7 +1552,7 @@
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 27, 25, 12); } catch(e){} }
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 24, 28, 16); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
@@ -2009,7 +2075,6 @@
         let reportData = [];
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
-        let currentProcessToNo = null;
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
@@ -2072,7 +2137,6 @@
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
                     <div class="space-x-2">
                         <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
-                        <button id="btnForwardNA" onclick="processBatch('NA')" class="hidden px-4 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-xs font-bold shadow-md border border-yellow-200">Forward (N/A)</button>
                         <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
@@ -2080,24 +2144,6 @@
                 <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
                 
                 <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Cancel Selected Dates</button><button onclick="cancelEntireTO()" class="w-full bg-red-800 text-white font-bold py-3 rounded-xl mt-2">Cancel Entire TO</button></div></div></div>
-            
-                <div id="processTOModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
-                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                        <div class="dar-green text-white p-4 font-bold text-center relative shrink-0">
-                            Approve / Deny Personnel
-                            <button onclick="hideProcessTOModal()" class="absolute right-4 text-xl leading-none">✕</button>
-                        </div>
-                        <div class="p-6 space-y-4 overflow-y-auto grow">
-                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-tight border-b pb-3 border-gray-100">Select personnel to <span class="text-red-600">DISAPPROVE (Cancel TO)</span>. Unselected personnel will <span class="text-dar-green">PROCEED</span>.</p>
-                            <div id="processTOList" class="space-y-2"></div>
-                            <input type="text" id="processReason" placeholder="Reason (if disapproving any)" class="w-full px-4 py-3 border rounded-xl text-sm mt-2 focus:ring-2 focus:ring-dar-green outline-none">
-                        </div>
-                        <div class="p-4 border-t bg-gray-50 shrink-0 flex gap-2">
-                            <button id="btnProcessNA" onclick="confirmProcessTO('NA')" class="hidden w-1/3 bg-yellow-50 text-yellow-600 font-bold py-3.5 rounded-xl shadow-sm active:scale-95 transition-transform text-xs border border-yellow-200">Forward (N/A)</button>
-                            <button id="btnProcessApprove" onclick="confirmProcessTO('APPROVE')" class="w-full dar-green text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition-transform text-sm">Confirm Action</button>
-                        </div>
-                    </div>
-                </div>
             `;
             
             if (currentTab === 'pending') loadPendingTab();
@@ -2234,14 +2280,6 @@
             if (selectedPendingOrders.size > 0) {
                 countText.innerText = `${selectedPendingOrders.size} selected`;
                 bar.classList.remove('translate-y-full');
-                const btnForwardNA = document.getElementById('btnForwardNA');
-                if (btnForwardNA) {
-                    if (currentUser.role === 'UNIT_HEAD' && currentUser.divisions.includes('PBDD')) {
-                        btnForwardNA.classList.remove('hidden');
-                    } else {
-                        btnForwardNA.classList.add('hidden');
-                    }
-                }
             } else {
                 hideBatchActionBar();
             }
@@ -2259,8 +2297,6 @@
             if (action === 'DISAPPROVED') {
                 p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
                 if (!p.received) return;
-            } else if (action === 'NA') {
-                p = { status: "PENDING_CHIEF", unithead_signed: "N/A" };
             } else {
                 p = getAppPayload(currentUser);
             }
@@ -2278,76 +2314,17 @@
             loadPendingTab();
         }
 
-        // --- PERSONNEL PROCESSING LOGIC (Pending Tab) ---
-        async function showProcessTOModal(to_no) {
-            currentProcessToNo = to_no;
-            const { data } = await supabaseClient.from('travel_orders').select('emp_id, emp_name, unit, division').eq('to_no', to_no);
-            
-            const list = document.getElementById('processTOList');
-            list.innerHTML = '';
-            data.forEach(p => {
-                list.innerHTML += `
-                    <label class="flex items-center justify-between p-3 border rounded-xl bg-gray-50 cursor-pointer shadow-sm hover:bg-gray-100 transition-colors">
-                        <div class="flex items-center space-x-3 w-full">
-                            <input type="checkbox" value="${p.emp_id}" class="process-to-cb w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500">
-                            <div>
-                                <span class="block text-sm font-bold text-gray-800">${p.emp_name}</span>
-                                <span class="block text-[10px] text-gray-500">UNIT: ${p.unit || 'N/A'}</span>
-                            </div>
-                        </div>
-                    </label>
-                `;
-            });
-            document.getElementById('processReason').value = '';
-            
-            const btnProcessNA = document.getElementById('btnProcessNA');
-            const btnProcessApprove = document.getElementById('btnProcessApprove');
-            if (btnProcessNA && btnProcessApprove) {
-                if (currentUser.role === 'UNIT_HEAD' && currentUser.divisions.includes('PBDD')) {
-                    btnProcessNA.classList.remove('hidden');
-                    btnProcessApprove.classList.replace('w-full', 'w-2/3');
-                } else {
-                    btnProcessNA.classList.add('hidden');
-                    btnProcessApprove.classList.replace('w-2/3', 'w-full');
-                }
+        async function processDirectTO(to_no, action) {
+            let p;
+            if (action === 'DISAPPROVED') {
+                p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
+                if (!p.received) return;
+            } else {
+                p = getAppPayload(currentUser);
             }
-
-            document.getElementById('processTOModal').classList.remove('hidden');
-        }
-
-        function hideProcessTOModal() {
-            document.getElementById('processTOModal').classList.add('hidden');
-        }
-
-        async function confirmProcessTO(actionType = 'APPROVE') {
-            const checkboxes = document.querySelectorAll('.process-to-cb');
-            const denyIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
-            const approveIds = Array.from(checkboxes).filter(cb => !cb.checked).map(cb => cb.value);
-            const reason = document.getElementById('processReason').value.trim();
-
-            if (denyIds.length > 0 && !reason) return alert("Please provide a reason for the disapproved personnel.");
-
-            hideProcessTOModal();
             const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Personnel...</p>`;
-
-            let pApprove = actionType === 'NA' ? { status: "PENDING_CHIEF", unithead_signed: "N/A" } : getAppPayload(currentUser);
-
-            const updates = [];
-            if (denyIds.length > 0) {
-                updates.push(supabaseClient.from('travel_orders')
-                    .update({ status: 'CANCELLED', received: reason })
-                    .eq('to_no', currentProcessToNo)
-                    .in('emp_id', denyIds));
-            }
-            if (approveIds.length > 0) {
-                updates.push(supabaseClient.from('travel_orders')
-                    .update(pApprove)
-                    .eq('to_no', currentProcessToNo)
-                    .in('emp_id', approveIds));
-            }
-
-            await Promise.all(updates);
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
+            await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
             loadPendingTab();
         }
 
@@ -2413,8 +2390,9 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
-                            <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end">
-                                <button onclick="showProcessTOModal('${o.to_no}')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-full active:scale-95 transition-transform">APPROVE / DENY</button>
+                            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
