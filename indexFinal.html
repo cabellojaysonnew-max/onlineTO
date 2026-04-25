@@ -2582,7 +2582,6 @@
                         if (avail && localStorage.getItem('dar_admin_bio_cred')) {
                             const btn = document.getElementById('bioLoginBtn');
                             if(btn) btn.classList.remove('hidden');
-                            // Removed auto trigger to prevent hanging
                         }
                     });
                 }
@@ -3065,6 +3064,46 @@
 </html>
     </xmp>
 
+    <script>
+        // LAUNCHER SCRIPT
+        function bootSystem(sysId) {
+            // Hide the menu, show the application container
+            document.getElementById('landing-menu').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            
+            // Fetch the exact, completely unedited code from the <xmp> tag
+            const rawCode = document.getElementById(sysId).textContent;
+            let iframe = document.getElementById('app-iframe');
+            
+            // Recreating the iframe avoids 'dead lock' state cache and unbinds all previous memory safely
+            const newIframe = document.createElement('iframe');
+            newIframe.id = 'app-iframe';
+            iframe.parentNode.replaceChild(newIframe, iframe);
+            iframe = newIframe;
+            
+            // Push the code directly into the isolated iframe document
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(rawCode);
+            doc.close();
+        }
+
+        function returnToMenu() {
+            // Confirm exit to prevent accidental loss of data
+            if(confirm("Are you sure you want to switch portals? Any unsaved data or current session will be cleared.")) {
+                document.getElementById('landing-menu').style.display = 'flex';
+                document.getElementById('app-container').style.display = 'none';
+                
+                // Clear the iframe entirely to prevent background execution or deadlock on reopening
+                const iframe = document.getElementById('app-iframe');
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'app-iframe';
+                iframe.parentNode.replaceChild(newIframe, iframe);
+            }
+        }
+    </script>
+</body>
+</html>
     <script>
         // LAUNCHER SCRIPT
         function bootSystem(sysId) {
