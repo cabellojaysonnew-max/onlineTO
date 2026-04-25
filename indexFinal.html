@@ -145,6 +145,7 @@
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="window.handleLogin()">SECURE LOGIN</button>
+                <button class="btn btn-gold" id="btn-bio-login" onclick="window.handleBiometricLogin()" style="display: none; margin-top: 10px; color: var(--dar-green);">🧬 BIOMETRIC LOGIN</button>
             </div>
         </div>
     </div>
@@ -337,6 +338,110 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         };
 
+        // WEBAUTHN UTILS
+        const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const base64ToBuffer = (b64) => {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
+        };
+
+        // SETUP BIOMETRIC
+        window.setupBiometric = async function(empId, hashedPass) {
+            if (!window.PublicKeyCredential) return;
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (!available) return;
+
+            if (!localStorage.getItem('dar_emp_bio_cred')) {
+                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
+                    try {
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        const userId = new Uint8Array(16);
+                        window.crypto.getRandomValues(userId);
+
+                        const cred = await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "DAR Portal" },
+                                user: { id: userId, name: empId, displayName: empId },
+                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        localStorage.setItem('dar_emp_bio_cred', bufferToBase64(cred.rawId));
+                        localStorage.setItem('dar_emp_id', empId);
+                        localStorage.setItem('dar_emp_token', hashedPass);
+                        alert("Biometric login enabled!");
+                        document.getElementById('btn-bio-login').style.display = 'flex';
+                    } catch(e) {
+                        console.log("Biometric setup failed or cancelled", e);
+                    }
+                }
+            }
+        };
+
+        // HANDLE BIOMETRIC LOGIN
+        window.handleBiometricLogin = async function() {
+            try {
+                const credId = localStorage.getItem('dar_emp_bio_cred');
+                const empId = localStorage.getItem('dar_emp_id');
+                const token = localStorage.getItem('dar_emp_token');
+                if (!credId || !empId) return;
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                // Authenticated locally, proceed to app
+                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
+                if (data && (data.pass === token)) {
+                    currentUser = data;
+                    document.getElementById('user-name').innerText = data.full_name;
+                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('app-screen').classList.add('active');
+                    document.getElementById('itin-from').min = todayStr;
+                    document.getElementById('itin-to').min = todayStr;
+                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                    window.renderPersonnel();
+
+                    if (data.s_assignment === true) {
+                        document.getElementById('special-div-card').style.display = 'block';
+                        const sDivs = (data.division || "").split(',');
+                        let sdHtml = '';
+                        sDivs.forEach(d => {
+                            const val = d.trim();
+                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                        });
+                        document.getElementById('special-div-list').innerHTML = sdHtml;
+                    } else {
+                        document.getElementById('special-div-card').style.display = 'none';
+                    }
+
+                    const { data: hols } = await supabase.from('holidays').select('date, description');
+                    cachedHolidays = hols || [];
+                    window.updateLeaveInputs();
+                } else {
+                    alert("Authentication failed. Please use password.");
+                }
+            } catch(e) {
+                console.log("Biometric auth failed", e);
+            }
+        };
+
         // INIT DROPDOWNS
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const dtrMonth = document.getElementById('dtr-month');
@@ -350,6 +455,15 @@
         }
         dtrMonth.value = new Date().getMonth() + 1;
         dtrYear.value = currentYear;
+
+        // Show Bio Button on load if supported and registered
+        if (window.PublicKeyCredential) {
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+                if (avail && localStorage.getItem('dar_emp_bio_cred')) {
+                    document.getElementById('btn-bio-login').style.display = 'flex';
+                }
+            });
+        }
 
         const urlToBase64 = async (url) => {
             try {
@@ -471,6 +585,9 @@
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
+                    
+                    // Setup Biometric post-login
+                    window.setupBiometric(id, data.pass);
                     
                 } else { 
                     alert("Invalid Credentials"); 
@@ -2126,6 +2243,94 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        // WEBAUTHN UTILS
+        function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+        function base64ToBuffer(b64) {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
+        }
+
+        // SETUP BIOMETRIC (ADMIN)
+        async function setupAdminBiometric(username, hashedPass) {
+            if (!window.PublicKeyCredential) return;
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (!available) return;
+
+            if (!localStorage.getItem('dar_admin_bio_cred')) {
+                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
+                    try {
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        const userId = new Uint8Array(16);
+                        window.crypto.getRandomValues(userId);
+
+                        const cred = await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "DAR Admin Console" },
+                                user: { id: userId, name: username, displayName: username },
+                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        localStorage.setItem('dar_admin_bio_cred', bufferToBase64(cred.rawId));
+                        localStorage.setItem('dar_admin_user', username);
+                        localStorage.setItem('dar_admin_token', hashedPass);
+                        alert("Biometric login enabled!");
+                        const bioBtn = document.getElementById('bioLoginBtn');
+                        if(bioBtn) bioBtn.classList.remove('hidden');
+                    } catch(e) {
+                        console.log("Biometric setup failed or cancelled", e);
+                    }
+                }
+            }
+        }
+
+        // HANDLE BIOMETRIC LOGIN (ADMIN)
+        async function handleBiometricLogin() {
+            try {
+                const credId = localStorage.getItem('dar_admin_bio_cred');
+                const username = localStorage.getItem('dar_admin_user');
+                const token = localStorage.getItem('dar_admin_token');
+                if (!credId || !username) return;
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                // Authenticated
+                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
+                if (users && (users.password === token)) {
+                    currentUser = {
+                        username: users.username,
+                        fullName: users.full_name,
+                        role: users.role.toUpperCase(),
+                        divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
+                        units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : []
+                    };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    render();
+                } else {
+                    alert("Authentication failed. Please use password.");
+                }
+            } catch(e) {
+                console.log("Biometric auth failed", e);
+            }
+        }
+
         function checkSession() {
             const stored = localStorage.getItem('dar_admin_session');
             if (stored) {
@@ -2154,11 +2359,23 @@
                                 <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
                                 <p id="loginError" class="text-red-600 text-[10px] font-bold text-center hidden"></p>
                                 <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg">LOG IN</button>
+                                <button onclick="handleBiometricLogin()" id="bioLoginBtn" class="w-full mt-2 bg-gray-200 text-dar-green font-bold py-3.5 rounded-xl shadow-lg hidden">🧬 BIOMETRIC LOGIN</button>
                             </div>
                         </div>
                     </div>
                 </div>`;
             document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
+
+            setTimeout(() => {
+                if (window.PublicKeyCredential) {
+                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+                        if (avail && localStorage.getItem('dar_admin_bio_cred')) {
+                            const btn = document.getElementById('bioLoginBtn');
+                            if(btn) btn.classList.remove('hidden');
+                        }
+                    });
+                }
+            }, 100);
         }
 
         async function handleLogin() {
@@ -2179,6 +2396,7 @@
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
                     localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    setupAdminBiometric(u.username, u.password);
                     render();
                 } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
             } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
