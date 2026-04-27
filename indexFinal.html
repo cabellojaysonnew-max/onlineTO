@@ -41,7 +41,11 @@
         <iframe id="app-iframe"></iframe>
     </div>
 
-<xmp id="employee_portal" style="display: none;">
+
+
+
+
+    <xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,6 +55,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <style>
         :root {
             --dar-green: #003811;
@@ -358,15 +363,7 @@
         // SAFE PASSWORD HASHING UTILITY
         window.hashPassword = async function(msg) {
             if (!msg) return "";
-            try {
-                const msgUint8 = new TextEncoder().encode(msg);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            } catch (e) {
-                console.warn("Crypto API blocked by insecure context. Falling back to plaintext.");
-                return msg;
-            }
+            return sha256(msg); // Using external CDN, 100% works on HTTP/LAN
         };
 
         // WEBAUTHN UTILS
@@ -610,7 +607,7 @@
 
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
-            const pass = document.getElementById('login-pass').value; // Inalis ang trim sa input just in case
+            const pass = document.getElementById('login-pass').value.trim();
             
             if (!id || !pass) return alert("Please enter ID and Password");
 
@@ -628,7 +625,6 @@
                 
                 const hashedPass = await window.hashPassword(pass);
 
-                // Matches exact plaintext, hashed, and also auto-trims any saved spacing issues from DB
                 if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
@@ -657,7 +653,6 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
-                    // Setup Biometric post-login
                     window.setupBiometric(id, data.pass);
                     
                 } else { 
@@ -833,8 +828,8 @@
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value;
-            const nw = document.getElementById('pass-new').value;
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
             
             if(!curr || !nw) return alert("Please fill out both fields.");
 
@@ -2260,8 +2255,8 @@
         };
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value;
-            const nw = document.getElementById('pass-new').value;
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
             
             if(!curr || !nw) return alert("Please fill out both fields.");
 
@@ -2281,7 +2276,7 @@
 
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew; // Update local session
+                currentUser.pass = hashedNew; // Update session
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
@@ -2294,6 +2289,21 @@
 </html>
 </xmp>
 
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+    
     
 
 
