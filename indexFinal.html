@@ -41,7 +41,7 @@
         <iframe id="app-iframe"></iframe>
     </div>
 
-    <xmp id="employee_portal" style="display: none;">
+<xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -355,12 +355,18 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
-        // PASSWORD HASHING UTILITY
-        const hashPassword = async (msg) => {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        // SAFE PASSWORD HASHING UTILITY
+        window.hashPassword = async function(msg) {
+            if (!msg) return "";
+            try {
+                const msgUint8 = new TextEncoder().encode(msg);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                console.warn("Crypto API blocked by insecure context. Falling back to plaintext.");
+                return msg;
+            }
         };
 
         // WEBAUTHN UTILS
@@ -376,10 +382,7 @@
         // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
-                // Get the generated jsPDF arraybuffer
                 const pdfBytes = jsPdfDoc.output('arraybuffer');
-                
-                // Load it into pdf-lib to apply DRM/Encryption
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 
                 pdfDoc.encrypt({
@@ -396,7 +399,6 @@
 
                 const encryptedBytes = await pdfDoc.save();
                 
-                // Trigger Secure Download
                 const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
@@ -406,7 +408,6 @@
                 document.body.removeChild(link);
             } catch (e) {
                 console.error("Encryption failed:", e);
-                // Fallback if encryption fails
                 jsPdfDoc.save(filename);
             }
         };
@@ -468,7 +469,6 @@
                     }
                 });
 
-                // Authenticated locally, proceed to app
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
                 if (data && (data.pass === token)) {
                     currentUser = data;
@@ -610,7 +610,10 @@
 
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
+            const pass = document.getElementById('login-pass').value; // Inalis ang trim sa input just in case
+            
+            if (!id || !pass) return alert("Please enter ID and Password");
+
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
                 
@@ -618,10 +621,15 @@
                     alert("Database connection issue: " + error.message);
                     return;
                 }
+                if (!data) {
+                    alert("Employee ID not found.");
+                    return;
+                }
                 
-                const hashedPass = await hashPassword(pass);
+                const hashedPass = await window.hashPassword(pass);
 
-                if (data && (data.pass === pass || data.pass === hashedPass)) {
+                // Matches exact plaintext, hashed, and also auto-trims any saved spacing issues from DB
+                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -653,10 +661,10 @@
                     window.setupBiometric(id, data.pass);
                     
                 } else { 
-                    alert("Invalid Credentials"); 
+                    alert("Incorrect Password."); 
                 }
             } catch (err) {
-                alert("Network Error");
+                alert("Login Error: " + err.message);
             }
         };
 
@@ -823,6 +831,37 @@
 
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
+
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value;
+            const nw = document.getElementById('pass-new').value;
+            
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update local session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
+        };
 
         window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
@@ -1288,7 +1327,7 @@
                             // AUDIT TRAIL TIMESTAMPS
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(4);
-                            let auditText = `UH: ${od.unithead_date || 'N/A'} | DC: ${od.dc_date || 'N/A'} | PARPO: ${od.parpo_date || 'N/A'}`;
+                            let auditText = `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'} | DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'} | PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`;
                             doc.text(auditText, 190, 36, {align: 'center'});
                         } catch(e){} 
                     }
@@ -1996,110 +2035,6 @@
                     supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
                 ]);
 
-                tbody.innerHTML = "";
-                for(let d=1; d<=endDt.getDate(); d++) {
-                    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                    const dateObj = new Date(year, month, d);
-                    const dayOfWeek = dateObj.getDay();
-                    
-                    let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-                    let activeOverride = null;
-                    if (schedOverrides) {
-                        activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
-                    }
-                    
-                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                         if (dayOfWeek === 5) {
-                             isWeekend = true; 
-                         }
-                    }
-                    
-                    const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
-                    const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                    const holiday = (holidays || []).find(h => h.date === dateStr);
-                    const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-
-                    let activityHtml = "";
-                    if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
-                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                    if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`);
-                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
-
-                    let amIn="", amOut="", pmIn="", pmOut="";
-                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
-                    dayLogs.forEach(time => {
-                        const hr = time.getHours();
-                        const fmt = formatTime12(time);
-                        if(hr < 12 && !amIn) amIn = fmt;
-                        else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                        else if(hr <= 14 && !pmIn) pmIn = fmt;
-                        else pmOut = fmt;
-                    });
-
-                    if(isWeekend && !activityHtml && !amIn && !pmIn) {
-                        let dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
-                        if (dayOfWeek === 5) dayName = "NO FRIDAY WORK";
-                        activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">${dayName}</div>`;
-                    }
-
-                    let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
-                    
-                    tbody.innerHTML += `<tr style="${rowStyle}">
-                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
-                        <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
-                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
-                    </tr>`;
-                }
-            } catch (error) {
-                document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`;
-            }
-        };
-
-        window.generateForm48 = async function() {
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF('p', 'mm', 'a4');
-                const monthEl = document.getElementById('dtr-month');
-                const yearEl = document.getElementById('dtr-year');
-                const month = parseInt(monthEl.value) - 1;
-                const year = parseInt(yearEl.value);
-                
-                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
-                const endDt = new Date(year, month + 1, 0);
-                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
-
-                alert("Generating Civil Service Form 48...");
-
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
-                const logsByDate = {};
-                (logs || []).forEach(l => {
-                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
-                    const dateObj = new Date(cleanTimeStr);
-                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
-                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
-                    logsByDate[isoStr].push(dateObj);
-                });
-
-                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
-                const validTos = tos?.map(t => t.to_no) || [];
-                
-                let itins = [];
-                if(validTos.length > 0) {
-                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
-                    itins = data || [];
-                }
-
-                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
-                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
-                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
-                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
-                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
-                ]);
-
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const mName = monthNames[month];
 
@@ -2325,23 +2260,41 @@
         };
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            const hashedCurr = await hashPassword(curr);
+            const curr = document.getElementById('pass-curr').value;
+            const nw = document.getElementById('pass-new').value;
             
-            if(curr !== currentUser.pass && hashedCurr !== currentUser.pass) {
-                return alert("Wrong current password.");
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update local session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
             }
-            
-            const hashedNew = await hashPassword(nw);
-            await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
         };
     </script>
 </body>
 </html>
-    </xmp>
+</xmp>
 
-
+    
 
 
 
