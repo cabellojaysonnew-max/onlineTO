@@ -52,7 +52,12 @@
 
 
 
-<xmp id="employee_portal" style="display: none;">
+
+
+
+
+
+    <xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2004,6 +2009,11 @@
         
         window.renderCalendar = async function() {
             try {
+                // BUG FIX: The 'doc' variable (jsPDF instance) was missing in this function scope.
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                // END BUG FIX
+
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
@@ -2300,9 +2310,6 @@
 </body>
 </html>
 </xmp>
-
-
-
     
 
     
