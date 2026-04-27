@@ -45,7 +45,9 @@
 
 
 
-    <xmp id="employee_portal" style="display: none;">
+
+
+<xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -893,10 +895,14 @@
                     else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
                     else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
 
+                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
+                    let tSign = isCredit ? '+' : '-';
+
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                         <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: var(--danger); font-weight:bold;">-${l.debit || 0}</td>
+                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${l.debit || 0}</td>
                         <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                     </tr>`;
                 });
@@ -912,10 +918,10 @@
             if(emp) {
                 container.innerHTML = `
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${currentSPL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${currentWL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
                     </div>
                     <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
                     ${deductionsHtml}
@@ -955,7 +961,7 @@
             
             ctoContainer.innerHTML = `
                 <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> ${emp?.cto_balance || 0} hrs
+                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
                 </div>
                 ${ctoHtml}
             `;
@@ -2288,9 +2294,6 @@
 </body>
 </html>
 </xmp>
-
-
-
 
 
 
