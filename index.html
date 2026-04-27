@@ -50,6 +50,7 @@
     <title>DAR CS I - Mobile Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <style>
         :root {
             --dar-green: #003811;
@@ -145,6 +146,7 @@
                 <input type="text" id="login-id" placeholder="Employee ID" inputmode="numeric">
                 <input type="password" id="login-pass" placeholder="Password">
                 <button class="btn btn-primary" onclick="window.handleLogin()">SECURE LOGIN</button>
+                <button class="btn btn-gold" id="btn-bio-login" onclick="window.handleBiometricLogin()" style="display: none; margin-top: 10px; color: var(--dar-green);">🧬 BIOMETRIC LOGIN</button>
             </div>
         </div>
     </div>
@@ -155,7 +157,47 @@
                 <div id="user-name" style="font-weight: bold; font-size: 14px;">User</div>
                 <div id="user-info" style="font-size: 10px; color: var(--dar-gold); font-weight: bold;">Division | Position</div>
             </div>
-            <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
+                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+            </div>
+        </div>
+
+        <div id="pwdModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1000; justify-content:center; align-items:center;">
+            <div class="card" style="width: 85%; max-width: 350px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <button onclick="window.hideChangePassword()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--dar-green);">Security</h3>
+                <label>Current Password</label>
+                <input type="password" id="pass-curr">
+                <label>New Password</label>
+                <input type="password" id="pass-new">
+                <label>Confirm Password</label>
+                <input type="password" id="pass-conf">
+                <button class="btn btn-primary" onclick="window.changePassword()">UPDATE PASSWORD</button>
+            </div>
+        </div>
+
+        <div id="attendance-view" class="view">
+            <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 20px;">
+                <h4 style="margin:0; border:none; padding:0; color: #6b7280; font-size: 12px; letter-spacing: 1px;">TODAY'S STATUS</h4>
+                <span id="att-status-badge" class="badge" style="background:#fefce8; color:#854d0e; padding: 6px 12px; border-radius: 15px;">Not Started</span>
+            </div>
+            
+            <button id="btn-clock" class="btn btn-success" style="padding: 20px; font-size: 18px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" onclick="window.recordAttendance()">
+                <span id="btn-clock-text">→] Clock In</span>
+            </button>
+
+            <div style="font-size: 12px; font-weight: bold; color: #6b7280; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; padding-left: 5px;">RECENT HISTORY</div>
+            <div class="card" id="att-history-card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <div style="font-weight: bold; font-size: 16px; color: var(--text-main);" id="att-emp-name"></div>
+                    <span id="att-badge-active" class="badge" style="background:#ecfdf5; color:#166534; padding: 4px 10px;">Active</span>
+                </div>
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 20px;" id="att-date-today"></div>
+                
+                <div id="att-logs-container" style="display: flex; flex-direction: column; gap: 15px;">
+                </div>
+            </div>
         </div>
 
         <div id="apply-view" class="view active">
@@ -277,26 +319,24 @@
             </div>
         </div>
 
-        <div id="security-view" class="view">
-            <h3 style="color: var(--dar-green);">Security</h3>
+        <div id="credits-view" class="view">
+            <h3 style="color: var(--dar-green);">My Credits</h3>
             <div class="card">
-                <h4>Update Portal Password</h4>
-                <label>Current Password</label>
-                <input type="password" id="pass-curr">
-                <label>New Password</label>
-                <input type="password" id="pass-new">
-                <label>Confirm Password</label>
-                <input type="password" id="pass-conf">
-                <button class="btn btn-primary" onclick="window.changePassword()">UPDATE PASSWORD</button>
+                <div id="leave-balances-container">Loading...</div>
+            </div>
+            <div class="card">
+                <h4>CTO Status</h4>
+                <div id="cto-posting-container">Loading...</div>
             </div>
         </div>
 
         <div class="bottom-nav">
+            <div class="nav-item" onclick="window.switchTab('attendance-view', this)">📍 Attend</div>
             <div class="nav-item active" onclick="window.switchTab('apply-view', this)">📝 Apply</div>
             <div class="nav-item" onclick="window.switchTab('leave-view', this)">🍃 Leave</div>
             <div class="nav-item" onclick="window.switchTab('status-view', this)">📋 Status</div>
             <div class="nav-item" onclick="window.switchTab('calendar-view', this)">📅 DTR</div>
-            <div class="nav-item" onclick="window.switchTab('security-view', this)">🔒 Security</div>
+            <div class="nav-item" onclick="window.switchTab('credits-view', this)">💳 Credits</div>
         </div>
     </div>
 
@@ -315,6 +355,156 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
+        // PASSWORD HASHING UTILITY
+        const hashPassword = async (msg) => {
+            const msgUint8 = new TextEncoder().encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        // WEBAUTHN UTILS
+        const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const base64ToBuffer = (b64) => {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
+        };
+
+        // --- PDF-LIB SECURE SAVE HELPER ---
+        window.saveSecurePDF = async function(jsPdfDoc, filename) {
+            try {
+                // Get the generated jsPDF arraybuffer
+                const pdfBytes = jsPdfDoc.output('arraybuffer');
+                
+                // Load it into pdf-lib to apply DRM/Encryption
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+                
+                pdfDoc.encrypt({
+                    ownerPassword: 'DAR-ADMIN-MASTER-KEY',
+                    permissions: {
+                        printing: 'highResolution',
+                        modifying: false,
+                        copying: false,
+                        annotating: false,
+                        fillingForms: false,
+                        contentAccessibility: true
+                    }
+                });
+
+                const encryptedBytes = await pdfDoc.save();
+                
+                // Trigger Secure Download
+                const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (e) {
+                console.error("Encryption failed:", e);
+                // Fallback if encryption fails
+                jsPdfDoc.save(filename);
+            }
+        };
+
+        // SETUP BIOMETRIC
+        window.setupBiometric = async function(empId, hashedPass) {
+            if (!window.PublicKeyCredential) return;
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (!available) return;
+
+            if (!localStorage.getItem('dar_emp_bio_cred')) {
+                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
+                    try {
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        const userId = new Uint8Array(16);
+                        window.crypto.getRandomValues(userId);
+
+                        const cred = await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "DAR Portal" },
+                                user: { id: userId, name: empId, displayName: empId },
+                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        localStorage.setItem('dar_emp_bio_cred', bufferToBase64(cred.rawId));
+                        localStorage.setItem('dar_emp_id', empId);
+                        localStorage.setItem('dar_emp_token', hashedPass);
+                        alert("Biometric login enabled!");
+                        document.getElementById('btn-bio-login').style.display = 'flex';
+                    } catch(e) {
+                        console.log("Biometric setup failed or cancelled", e);
+                    }
+                }
+            }
+        };
+
+        // HANDLE BIOMETRIC LOGIN
+        window.handleBiometricLogin = async function() {
+            try {
+                const credId = localStorage.getItem('dar_emp_bio_cred');
+                const empId = localStorage.getItem('dar_emp_id');
+                const token = localStorage.getItem('dar_emp_token');
+                if (!credId || !empId) return;
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                // Authenticated locally, proceed to app
+                const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
+                if (data && (data.pass === token)) {
+                    currentUser = data;
+                    document.getElementById('user-name').innerText = data.full_name;
+                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('app-screen').classList.add('active');
+                    document.getElementById('itin-from').min = todayStr;
+                    document.getElementById('itin-to').min = todayStr;
+                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                    window.renderPersonnel();
+
+                    if (data.s_assignment === true) {
+                        document.getElementById('special-div-card').style.display = 'block';
+                        const sDivs = (data.division || "").split(',');
+                        let sdHtml = '';
+                        sDivs.forEach(d => {
+                            const val = d.trim();
+                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                        });
+                        document.getElementById('special-div-list').innerHTML = sdHtml;
+                    } else {
+                        document.getElementById('special-div-card').style.display = 'none';
+                    }
+
+                    const { data: hols } = await supabase.from('holidays').select('date, description');
+                    cachedHolidays = hols || [];
+                    window.updateLeaveInputs();
+                } else { 
+                    alert("Invalid Credentials"); 
+                }
+            } catch(e) {
+                console.log("Biometric auth failed", e);
+            }
+        };
+
         // INIT DROPDOWNS
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const dtrMonth = document.getElementById('dtr-month');
@@ -328,6 +518,15 @@
         }
         dtrMonth.value = new Date().getMonth() + 1;
         dtrYear.value = currentYear;
+
+        // Show Bio Button on load if supported and registered - MANUAL CLICK ONLY
+        if (window.PublicKeyCredential) {
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+                if (avail && localStorage.getItem('dar_emp_bio_cred')) {
+                    document.getElementById('btn-bio-login').style.display = 'flex';
+                }
+            });
+        }
 
         const urlToBase64 = async (url) => {
             try {
@@ -420,7 +619,9 @@
                     return;
                 }
                 
-                if (data && data.pass === pass) {
+                const hashedPass = await hashPassword(pass);
+
+                if (data && (data.pass === pass || data.pass === hashedPass)) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -448,6 +649,9 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
+                    // Setup Biometric post-login
+                    window.setupBiometric(id, data.pass);
+                    
                 } else { 
                     alert("Invalid Credentials"); 
                 }
@@ -456,13 +660,271 @@
             }
         };
 
+        // --- ATTENDANCE LOGIC ---
+        window.loadAttendance = async function() {
+            document.getElementById('att-emp-name').innerText = currentUser.full_name;
+            const fDate = new Date(todayStr).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            document.getElementById('att-date-today').innerText = fDate.replace(/\//g, '-'); 
+            
+            const { data: logs, error } = await supabase
+                .from('attendance_logs')
+                .select('*')
+                .eq('emp_id', currentUser.emp_id)
+                .gte('log_time', todayStr + 'T00:00:00')
+                .lte('log_time', todayStr + 'T23:59:59')
+                .order('log_time', { ascending: true });
+                
+            let logCount = logs ? logs.length : 0;
+            const btn = document.getElementById('btn-clock');
+            const btnText = document.getElementById('btn-clock-text');
+            const statusBadge = document.getElementById('att-status-badge');
+            const container = document.getElementById('att-logs-container');
+            container.innerHTML = '';
+            
+            let labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
+            
+            if (logCount === 0) {
+                statusBadge.innerText = "Not Started";
+                statusBadge.style.background = "#fefce8"; statusBadge.style.color = "#854d0e";
+                btn.disabled = false;
+                btn.style.background = "var(--success)";
+                btnText.innerText = "→] Clock In";
+            } else if (logCount >= 4) {
+                statusBadge.innerText = "Max Reached";
+                statusBadge.style.background = "#f3f4f6"; statusBadge.style.color = "#374151";
+                btn.disabled = true;
+                btn.style.background = "gray";
+                btnText.innerText = "Max 4 Logs Reached";
+            } else {
+                statusBadge.innerText = "Active";
+                statusBadge.style.background = "#ecfdf5"; statusBadge.style.color = "#166534";
+                btn.disabled = false;
+                btn.style.background = (logCount % 2 === 0) ? "var(--success)" : "var(--danger)"; 
+                btnText.innerText = (logCount % 2 === 0) ? `→] Clock In` : `[← Clock Out`;
+            }
+            
+            if (logs) {
+                logs.forEach((l, i) => {
+                    const timeObj = new Date(l.log_time);
+                    const fmtTime = formatTime12(timeObj);
+                    const icon = (i % 2 === 0) ? `→]` : `[←`;
+                    const currentStatus = l.status || labels[i]; // Fallback to index mapping
+                    
+                    container.innerHTML += `
+                        <div style="display:flex; flex-direction:column; border-left: 2px solid var(--dar-green); padding-left: 10px; margin-bottom: 5px;">
+                            <div style="font-size: 12px; color: var(--dar-green); font-weight: bold; margin-bottom: 2px;">
+                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')}
+                            </div>
+                            <div style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-bottom: 2px;">${fmtTime}</div>
+                            <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${l.place_name || l.address || 'Unknown Location'}</div>
+                        </div>
+                    `;
+                });
+            }
+        };
+
+        window.recordAttendance = async function() {
+            if (isSubmitting) return;
+            
+            const { data: checkLogs } = await supabase
+                .from('attendance_logs')
+                .select('id')
+                .eq('emp_id', currentUser.emp_id)
+                .gte('log_time', todayStr + 'T00:00:00')
+                .lte('log_time', todayStr + 'T23:59:59');
+                
+            if (checkLogs && checkLogs.length >= 4) {
+                alert("Maximum of 4 logs per day reached.");
+                return window.loadAttendance();
+            }
+            
+            isSubmitting = true;
+            document.getElementById('btn-clock-text').innerText = "📍 Getting Location...";
+            
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser.");
+                isSubmitting = false;
+                window.loadAttendance();
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const acc = position.coords.accuracy;
+                
+                document.getElementById('btn-clock-text').innerText = "Identifying Place...";
+                let placeName = "Unknown Location";
+                let addressStr = "";
+                
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                    const data = await res.json();
+                    if (data && data.display_name) {
+                        addressStr = data.display_name;
+                        // Extract a reasonable place name
+                        placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
+                        if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
+                    }
+                } catch(e) { console.log("Geocoding failed", e); }
+                
+                document.getElementById('btn-clock-text').innerText = "Saving Log...";
+                
+                try {
+                    const nextIndex = checkLogs ? checkLogs.length : 0;
+                    const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
+                    const statusVal = labels[nextIndex];
+                    
+                    const { error } = await supabase.from('attendance_logs').insert({
+                        emp_id: currentUser.emp_id,
+                        log_time: new Date().toISOString(),
+                        latitude: lat,
+                        longitude: lng,
+                        place_name: placeName,
+                        status: statusVal,
+                        device_id: 'MOBILE_WEB'
+                    });
+                    
+                    if(error) throw error;
+                    
+                    window.loadAttendance();
+                } catch(e) {
+                    alert("Failed to save log: " + e.message);
+                } finally {
+                    isSubmitting = false;
+                }
+                
+            }, (error) => {
+                alert("Please enable GPS/Location services to clock in. " + error.message);
+                isSubmitting = false;
+                window.loadAttendance();
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        };
+
         window.switchTab = function(id, el) {
+            if (id === 'leave-view' && currentUser && String(currentUser.type).toUpperCase() !== 'REGULAR') {
+                alert("Leave Application is only available for REGULAR employees.");
+                return;
+            }
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             el.classList.add('active');
+            
+            if (id === 'attendance-view') window.loadAttendance();
             if (id === 'status-view') window.loadStatus();
             if (id === 'calendar-view') window.renderCalendar();
+            if (id === 'credits-view') window.loadCredits();
+        };
+
+        window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
+        window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
+
+        window.loadCredits = async function() {
+            const container = document.getElementById('leave-balances-container');
+            const ctoContainer = document.getElementById('cto-posting-container');
+            container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
+
+            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
+            
+            let vl_deduct = 0;
+            let sl_deduct = 0;
+            let spl_deduct = 0;
+            let wl_deduct = 0;
+            let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
+                <tr style="background: var(--dar-green); color: white;">
+                    <th style="padding: 5px; text-align: left;">Date</th>
+                    <th style="padding: 5px; text-align: left;">Type</th>
+                    <th style="padding: 5px; text-align: center;">Days</th>
+                    <th style="padding: 5px; text-align: left;">Remarks</th>
+                </tr>`;
+            let hasDeductions = false;
+
+            if (ledgers && ledgers.length > 0) {
+                ledgers.forEach(l => {
+                    if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
+
+                    hasDeductions = true;
+                    const l_type = (l.type || '').toUpperCase();
+                    const debit_val = parseFloat(l.debit || 0);
+
+                    if (l_type.includes('SICK')) sl_deduct += debit_val;
+                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_deduct += debit_val;
+                    else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
+                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
+
+                    deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                        <td style="padding: 5px;">${l.type}</td>
+                        <td style="padding: 5px; text-align: center; color: var(--danger); font-weight:bold;">-${l.debit || 0}</td>
+                        <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                    </tr>`;
+                });
+            }
+            deductionsHtml += `</table>`;
+            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No approved deductions found.</p>`;
+
+            let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) - vl_deduct).toFixed(2) : 0;
+            let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) - sl_deduct).toFixed(2) : 0;
+            let currentSPL = emp ? Math.max(0, parseFloat(emp.spl_balance || 0) - spl_deduct).toFixed(2) : 0;
+            let currentWL = emp ? Math.max(0, parseFloat(emp.wl_balance || 0) - wl_deduct).toFixed(2) : 0;
+
+            if(emp) {
+                container.innerHTML = `
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${currentSPL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${currentWL}</div>
+                    </div>
+                    <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
+                    ${deductionsHtml}
+                `;
+            }
+
+            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
+            
+            let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
+                <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
+                    <th style="padding: 5px; text-align: left;">Date</th>
+                    <th style="padding: 5px; text-align: left;">Type</th>
+                    <th style="padding: 5px; text-align: center;">Hrs</th>
+                    <th style="padding: 5px; text-align: left;">Remarks</th>
+                </tr>`;
+            let hasCto = false;
+            
+            if(cto && cto.length > 0) {
+                cto.forEach(c => {
+                    const ttype = (c.transaction_type || '').toUpperCase();
+                    if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
+                        hasCto = true;
+                        let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
+                        let sign = ttype === 'USED' ? '-' : '+';
+                        ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 5px;">${c.date}</td>
+                            <td style="padding: 5px;">${ttype}</td>
+                            <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
+                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                        </tr>`;
+                    }
+                });
+            }
+            ctoHtml += `</table>`;
+
+            if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
+            
+            ctoContainer.innerHTML = `
+                <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
+                    <strong>Total CTO Balance:</strong> ${emp?.cto_balance || 0} hrs
+                </div>
+                ${ctoHtml}
+            `;
         };
 
         window.showEmployeeQR = function() {
@@ -818,7 +1280,18 @@
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
-                    if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } } catch(e){} }
+                    if (img_qr) { 
+                        try { 
+                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+                            
+                            // AUDIT TRAIL TIMESTAMPS
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(4);
+                            let auditText = `UH: ${od.unithead_date || 'N/A'} | DC: ${od.dc_date || 'N/A'} | PARPO: ${od.parpo_date || 'N/A'}`;
+                            doc.text(auditText, 190, 36, {align: 'center'});
+                        } catch(e){} 
+                    }
 
                     if (od.transport === "GOV'T VEHICLE") {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
@@ -912,7 +1385,7 @@
                         doc.setFontSize(count > 1 ? 6 : 8);
                         for (let j = 0; j < count; j++) {
                             let cx = startX + (step * j) + (step / 2) - 10; 
-                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 153, 20, 20); } catch(e){} }
+                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 150, 25, 25); } catch(e){} }
                             doc.text(list[j].full_name.toUpperCase(), cx, 166);
                         }
                     };
@@ -923,13 +1396,13 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 122, 187, 20, 20); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
                 }
-                doc.save(`TO_${toNo}.pdf`);
+                await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
 
@@ -1058,13 +1531,29 @@
                 return;
             }
 
+            const { data: schedOverrides } = await supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', start).lte('start_date', end);
+
             let count = 0;
             let cur = new Date(sDate);
             while (cur <= eDate) {
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
-                const isHoliday = cachedHolidays.includes(dateStr);
-                if (day !== 0 && day !== 6 && !isHoliday) count++;
+                const isHoliday = cachedHolidays.some(h => h.date === dateStr);
+                
+                let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
+
+                if (schedOverrides) {
+                    const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                    if (override) {
+                        if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && day === 5) {
+                            isWorkingDay = false;
+                        } else if (!isHoliday) {
+                            isWorkingDay = true;
+                        }
+                    }
+                }
+
+                if (isWorkingDay) count++;
                 cur.setDate(cur.getDate() + 1);
             }
             document.getElementById('leave-days-count').innerText = count;
@@ -1210,7 +1699,7 @@
             (res_ledger || []).forEach(ledg => {
                 if (ledg.id === app.id) return;
                 const ttype = String(ledg.transaction_type || "").toUpperCase();
-                if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT")) && ttype !== "APPLICATION") {
+                if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
                     if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
@@ -1218,22 +1707,6 @@
                     } else if (l_type.includes("SICK")) {
                         sl_deduct += debit_val;
                     }
-                }
-            });
-
-            const { data: res_gp } = await supabase.from('gate_pass_logs').select('*').eq('emp_id', currentUser.emp_id);
-            (res_gp || []).forEach(gp => {
-                const gp_date = String(gp.date || gp.created_at || "");
-                if (gp_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(gp.status || "PROCESSED").toUpperCase())) {
-                    vl_deduct += parseFloat(gp.deduction_credit || gp.deduction_cr || 0);
-                }
-            });
-
-            const { data: res_ut } = await supabase.from('undertime_logs').select('*').eq('emp_id', currentUser.emp_id);
-            (res_ut || []).forEach(ut => {
-                const ut_date = String(ut.created_at || ut.date || "");
-                if (ut_date <= app.created_at && ["PROCESSED", "APPROVED"].includes(String(ut.status || "PROCESSED").toUpperCase())) {
-                    vl_deduct += parseFloat(ut.deduction_credit || 0);
                 }
             });
 
@@ -1264,6 +1737,9 @@
 
             const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+
+            const form6_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${app.transaction_id}`);
+            if (form6_qr) { try { doc.addImage(form6_qr, 'PNG', 180, 15, 20, 20); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
             doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
@@ -1439,7 +1915,7 @@
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 22, 20, 10); } catch(e){} }
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 35, ty + 25, 50, 30); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
@@ -1475,7 +1951,7 @@
             doc.setFont("helvetica", "italic"); doc.setFontSize(7);
             doc.text("Compliance Details: Any falsification of this document shall be dealt with under existing civil service rules.", 10, ty + 50);
 
-            doc.save(`Form6_${app.id}.pdf`);
+            await window.saveSecurePDF(doc, `Form6_${app.id}_Secure.pdf`);
         };
 
         window.changeCalMonth = function(d) { window.renderCalendar(); };
@@ -1842,7 +2318,7 @@
                 drawForm(10, 10);
                 drawForm(110, 10);
                 
-                doc.save(`Form48_${mName}_${year}.pdf`);
+                await window.saveSecurePDF(doc, `Form48_${mName}_${year}_Secure.pdf`);
             } catch (err) {
                 alert("PDF Error: " + err.message);
             }
@@ -1850,14 +2326,21 @@
 
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            if(curr !== currentUser.pass) return alert("Wrong current password.");
-            await supabase.from('employees').update({ pass: nw }).eq('emp_id', currentUser.emp_id);
+            const hashedCurr = await hashPassword(curr);
+            
+            if(curr !== currentUser.pass && hashedCurr !== currentUser.pass) {
+                return alert("Wrong current password.");
+            }
+            
+            const hashedNew = await hashPassword(nw);
+            await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
             alert("Updated."); location.reload();
         };
     </script>
 </body>
 </html>
     </xmp>
+
 
     <xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
@@ -1962,7 +2445,115 @@
         let reportData = [];
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
-        let currentProcessToNo = null;
+
+        // PASSWORD HASHING UTILITY
+        async function hashPassword(msg) {
+            const msgUint8 = new TextEncoder().encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // WEBAUTHN UTILS
+        function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+        function base64ToBuffer(b64) {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
+        }
+
+        // SETUP BIOMETRIC (ADMIN)
+        async function setupAdminBiometric(username, hashedPass) {
+            if (!window.PublicKeyCredential) return;
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (!available) return;
+
+            if (!localStorage.getItem('dar_admin_bio_cred')) {
+                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
+                    try {
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        const userId = new Uint8Array(16);
+                        window.crypto.getRandomValues(userId);
+
+                        const cred = await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "DAR Admin Console" },
+                                user: { id: userId, name: username, displayName: username },
+                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        localStorage.setItem('dar_admin_bio_cred', bufferToBase64(cred.rawId));
+                        localStorage.setItem('dar_admin_user', username);
+                        localStorage.setItem('dar_admin_token', hashedPass);
+                        alert("Biometric login enabled!");
+                        const bioBtn = document.getElementById('bioLoginBtn');
+                        if(bioBtn) bioBtn.classList.remove('hidden');
+                    } catch(e) {
+                        console.log("Biometric setup failed or cancelled", e);
+                    }
+                }
+            }
+        }
+
+        // HANDLE BIOMETRIC LOGIN (ADMIN)
+        async function handleBiometricLogin() {
+            try {
+                const credId = localStorage.getItem('dar_admin_bio_cred');
+                const username = localStorage.getItem('dar_admin_user');
+                const token = localStorage.getItem('dar_admin_token');
+                if (!credId || !username) return;
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                // Authenticated
+                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
+                if (users && (users.password === token)) {
+                    currentUser = {
+                        username: users.username,
+                        fullName: users.full_name,
+                        role: users.role.toUpperCase(),
+                        divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
+                        units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : []
+                    };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    render();
+                } else {
+                    alert("Authentication failed. Please use password.");
+                }
+            } catch(e) {
+                console.log("Biometric auth failed", e);
+            }
+        }
+
+        function checkSession() {
+            const stored = localStorage.getItem('dar_admin_session');
+            if (stored) {
+                const session = JSON.parse(stored);
+                // Valid for 30 days
+                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
+                    currentUser = session.user;
+                } else {
+                    localStorage.removeItem('dar_admin_session');
+                }
+            }
+        }
 
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
@@ -1979,11 +2570,23 @@
                                 <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
                                 <p id="loginError" class="text-red-600 text-[10px] font-bold text-center hidden"></p>
                                 <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg">LOG IN</button>
+                                <button onclick="handleBiometricLogin()" id="bioLoginBtn" class="w-full mt-2 bg-gray-200 text-dar-green font-bold py-3.5 rounded-xl shadow-lg hidden">🧬 BIOMETRIC LOGIN</button>
                             </div>
                         </div>
                     </div>
                 </div>`;
             document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
+
+            setTimeout(() => {
+                if (window.PublicKeyCredential) {
+                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+                        if (avail && localStorage.getItem('dar_admin_bio_cred')) {
+                            const btn = document.getElementById('bioLoginBtn');
+                            if(btn) btn.classList.remove('hidden');
+                        }
+                    });
+                }
+            }, 100);
         }
 
         async function handleLogin() {
@@ -1991,8 +2594,10 @@
             const pBox = document.getElementById('password').value.trim();
             const err = document.getElementById('loginError');
             try {
+                const hashedPBox = await hashPassword(pBox);
                 const { data: users } = await supabaseClient.from('users').select('*');
-                const u = (users || []).find(x => x.username === uBox && x.password === pBox);
+                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+                
                 if (u) {
                     currentUser = { 
                         username: u.username, 
@@ -2001,12 +2606,14 @@
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    setupAdminBiometric(u.username, u.password);
                     render();
                 } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
             } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
         }
 
-        function logout() { currentUser = null; render(); }
+        function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
 
         function renderMain() {
             document.getElementById('app').innerHTML = `
@@ -2025,7 +2632,6 @@
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
                     <div class="space-x-2">
                         <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
-                        <button id="btnForwardNA" onclick="processBatch('NA')" class="hidden px-4 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-xs font-bold shadow-md border border-yellow-200">Forward (N/A)</button>
                         <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
@@ -2033,24 +2639,8 @@
                 <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
                 
                 <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Cancel Selected Dates</button><button onclick="cancelEntireTO()" class="w-full bg-red-800 text-white font-bold py-3 rounded-xl mt-2">Cancel Entire TO</button></div></div></div>
-            
-                <div id="processTOModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
-                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                        <div class="dar-green text-white p-4 font-bold text-center relative shrink-0">
-                            Process Personnel
-                            <button onclick="hideProcessTOModal()" class="absolute right-4 text-xl leading-none">✕</button>
-                        </div>
-                        <div class="p-6 space-y-4 overflow-y-auto grow">
-                            <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wide leading-tight border-b pb-3 border-gray-100">Select personnel to <span class="text-red-600">DISAPPROVE (Cancel TO)</span>. Unselected personnel will <span class="text-dar-green">PROCEED</span>.</p>
-                            <div id="processTOList" class="space-y-2"></div>
-                            <input type="text" id="processReason" placeholder="Reason (if disapproving any)" class="w-full px-4 py-3 border rounded-xl text-sm mt-2 focus:ring-2 focus:ring-dar-green outline-none">
-                        </div>
-                        <div class="p-4 border-t bg-gray-50 shrink-0 flex gap-2">
-                            <button id="btnProcessNA" onclick="confirmProcessTO('NA')" class="hidden w-1/3 bg-yellow-50 text-yellow-600 font-bold py-3.5 rounded-xl shadow-sm active:scale-95 transition-transform text-xs border border-yellow-200">Forward (N/A)</button>
-                            <button id="btnProcessApprove" onclick="confirmProcessTO('APPROVE')" class="w-full dar-green text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition-transform text-sm">Confirm Action</button>
-                        </div>
-                    </div>
-                </div>
+
+                <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
             `;
             
             if (currentTab === 'pending') loadPendingTab();
@@ -2060,6 +2650,8 @@
                 else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
                 else loadReportsTab();
             }
+
+            checkHRNotifications();
         }
 
         function switchTab(tab) { 
@@ -2074,8 +2666,14 @@
             const o = document.getElementById('oldPwd').value.trim();
             const n = document.getElementById('newPwd').value.trim();
             const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
-            if (data.password !== o) return alert("Incorrect.");
-            await supabaseClient.from('users').update({ password: n }).eq('username', currentUser.username);
+            const hashedOld = await hashPassword(o);
+            
+            if (data.password !== o && data.password !== hashedOld) {
+                return alert("Incorrect.");
+            }
+            
+            const hashedNew = await hashPassword(n);
+            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
             alert("Updated!"); hideChangePassword();
         }
 
@@ -2149,14 +2747,14 @@
 
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
-            const role = currentUser.role;
-            if (role === "PARPO" || role === "VEHICLE_APPROVER") return true;
+            const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
             
             if (role === "CHIEF") return dMatch;
-            if (role === "UNIT_HEAD" && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
             
             const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
             const uMatch = oUnits.some(u => currentUser.units.includes(u));
@@ -2187,14 +2785,6 @@
             if (selectedPendingOrders.size > 0) {
                 countText.innerText = `${selectedPendingOrders.size} selected`;
                 bar.classList.remove('translate-y-full');
-                const btnForwardNA = document.getElementById('btnForwardNA');
-                if (btnForwardNA) {
-                    if (currentUser.role === 'UNIT_HEAD' && currentUser.divisions.includes('PBDD')) {
-                        btnForwardNA.classList.remove('hidden');
-                    } else {
-                        btnForwardNA.classList.add('hidden');
-                    }
-                }
             } else {
                 hideBatchActionBar();
             }
@@ -2206,103 +2796,165 @@
         }
 
         async function processBatch(action) {
-            if (selectedPendingOrders.size === 0) return;
-            
-            let p;
-            if (action === 'DISAPPROVED') {
-                p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
-                if (!p.received) return;
-            } else if (action === 'NA') {
-                p = { status: "PENDING_CHIEF", unithead_signed: "N/A" };
-            } else {
-                p = getAppPayload(currentUser);
-            }
+            try {
+                if (selectedPendingOrders.size === 0) return;
 
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-            hideBatchActionBar();
+                hideBatchActionBar();
 
-            const updates = Array.from(selectedPendingOrders).map(to_no => 
-                supabaseClient.from('travel_orders').update(p).eq('to_no', to_no)
-            );
-            
-            await Promise.all(updates);
-            selectedPendingOrders.clear();
-            loadPendingTab();
-        }
+                if (action === 'DISAPPROVED') {
+                    let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
+                    if (!p.received) { loadPendingTab(); return; }
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+                    
+                    const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
+                        const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(error) throw error;
+                    });
+                    await Promise.all(updatePromises);
 
-        // --- PERSONNEL PROCESSING LOGIC (Pending Tab) ---
-        async function showProcessTOModal(to_no) {
-            currentProcessToNo = to_no;
-            const { data } = await supabaseClient.from('travel_orders').select('emp_id, emp_name, unit, division').eq('to_no', to_no);
-            
-            const list = document.getElementById('processTOList');
-            list.innerHTML = '';
-            data.forEach(p => {
-                list.innerHTML += `
-                    <label class="flex items-center justify-between p-3 border rounded-xl bg-gray-50 cursor-pointer shadow-sm hover:bg-gray-100 transition-colors">
-                        <div class="flex items-center space-x-3 w-full">
-                            <input type="checkbox" value="${p.emp_id}" class="process-to-cb w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500">
-                            <div>
-                                <span class="block text-sm font-bold text-gray-800">${p.emp_name}</span>
-                                <span class="block text-[10px] text-gray-500">UNIT: ${p.unit || 'N/A'}</span>
-                            </div>
-                        </div>
-                    </label>
-                `;
-            });
-            document.getElementById('processReason').value = '';
-            
-            const btnProcessNA = document.getElementById('btnProcessNA');
-            const btnProcessApprove = document.getElementById('btnProcessApprove');
-            if (btnProcessNA && btnProcessApprove) {
-                if (currentUser.role === 'UNIT_HEAD' && currentUser.divisions.includes('PBDD')) {
-                    btnProcessNA.classList.remove('hidden');
-                    btnProcessApprove.classList.replace('w-full', 'w-2/3');
                 } else {
-                    btnProcessNA.classList.add('hidden');
-                    btnProcessApprove.classList.replace('w-2/3', 'w-full');
+                    const toNos = Array.from(selectedPendingOrders);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').in('to_no', toNos);
+                    if (error) throw error;
+
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+
+                    const updatePromises = toNos.map(async (to_no) => {
+                        const toRec = (toDataList || []).find(t => t.to_no === to_no);
+                        const p = getAppPayload(currentUser, toRec);
+                        
+                        if (Object.keys(p).length === 0) return null; 
+
+                        const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(updError) throw updError;
+                        return true;
+                    });
+
+                    const results = await Promise.all(updatePromises);
+                    const validUpdates = results.filter(r => r !== null);
+                    
+                    if (validUpdates.length === 0) {
+                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
+                    }
                 }
-            }
 
-            document.getElementById('processTOModal').classList.remove('hidden');
+                selectedPendingOrders.clear();
+                loadPendingTab();
+            } catch (err) {
+                alert("Batch processing error: " + err.message);
+                loadPendingTab();
+            }
         }
 
-        function hideProcessTOModal() {
-            document.getElementById('processTOModal').classList.add('hidden');
+        async function processDirectTO(to_no, action) {
+            try {
+                let p;
+                if (action === 'DISAPPROVED') {
+                    p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
+                    if (!p.received) return;
+                } else {
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').eq('to_no', to_no).limit(1);
+                    if (error) throw error;
+                    p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
+                }
+                
+                // Guard against blank payload if role mapping failed
+                if (Object.keys(p).length === 0) {
+                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
+                    return;
+                }
+
+                const content = document.getElementById('mainContent');
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
+                
+                const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                if (updErr) throw updErr;
+                
+                loadPendingTab();
+            } catch (err) {
+                alert("Error processing TO: " + err.message);
+                loadPendingTab();
+            }
         }
 
-        async function confirmProcessTO(actionType = 'APPROVE') {
-            const checkboxes = document.querySelectorAll('.process-to-cb');
-            const denyIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
-            const approveIds = Array.from(checkboxes).filter(cb => !cb.checked).map(cb => cb.value);
-            const reason = document.getElementById('processReason').value.trim();
-
-            if (denyIds.length > 0 && !reason) return alert("Please provide a reason for the disapproved personnel.");
-
-            hideProcessTOModal();
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Personnel...</p>`;
-
-            let pApprove = actionType === 'NA' ? { status: "PENDING_CHIEF", unithead_signed: "N/A" } : getAppPayload(currentUser);
-
-            const updates = [];
-            if (denyIds.length > 0) {
-                updates.push(supabaseClient.from('travel_orders')
-                    .update({ status: 'CANCELLED', received: reason })
-                    .eq('to_no', currentProcessToNo)
-                    .in('emp_id', denyIds));
-            }
-            if (approveIds.length > 0) {
-                updates.push(supabaseClient.from('travel_orders')
-                    .update(pApprove)
-                    .eq('to_no', currentProcessToNo)
-                    .in('emp_id', approveIds));
+        function getAppPayload(u, toRecord = null) {
+            const nowISO = new Date().toISOString(); 
+            const role = u.role ? u.role.trim().toUpperCase() : "";
+            
+            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
+                let nextStatus = "PENDING_CHIEF";
+                if (toRecord && toRecord.unit) {
+                    const unt = toRecord.unit.trim().toUpperCase();
+                    if (unt === "PARPO") nextStatus = "PENDING_PARPO";
+                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
+                }
+                return { status: nextStatus };
             }
 
-            await Promise.all(updates);
-            loadPendingTab();
+            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+                return { 
+                    status: "PENDING_CHIEF", 
+                    unithead_signed: u.fullName, 
+                    uh_signed_time: nowISO 
+                };
+            }
+            if (role === "CHIEF") {
+                return { 
+                    status: "PENDING_PARPO", 
+                    dc_signed: u.fullName, 
+                    dc_signed_time: nowISO 
+                };
+            }
+            if (role === "PARPO") {
+                return { 
+                    status: "APPROVED", 
+                    parpo_signed: u.fullName, 
+                    parpo_signed_time: nowISO 
+                };
+            }
+            
+            return {};
         }
+
+        // --- HR NOTIFICATIONS ---
+        async function checkHRNotifications() {
+            if (!currentUser) return;
+            const sessionKey = 'hr_notif_shown_' + currentUser.username;
+            if (sessionStorage.getItem(sessionKey)) return;
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('hr_notifications')
+                    .select('*')
+                    .eq('emp_id', currentUser.username)
+                    .eq('is_read', false);
+
+                if (data && data.length > 0) {
+                    const content = document.getElementById('hrNotifContent');
+                    if (content) {
+                        content.innerHTML = data.map(n => `
+                            <div class="p-3 bg-gray-50 border rounded-xl">
+                                <p class="font-bold text-xs text-dar-green mb-1">${n.sender_name || 'HR Office'}</p>
+                                <p class="leading-relaxed">${n.message}</p>
+                                <p class="text-[9px] text-gray-400 mt-2 text-right">${new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })}</p>
+                            </div>
+                        `).join('');
+                        
+                        document.getElementById('hrNotifModal').classList.remove('hidden');
+                        
+                        const ids = data.map(n => n.id);
+                        await supabaseClient.from('hr_notifications').update({ is_read: true }).in('id', ids);
+                    }
+                    sessionStorage.setItem(sessionKey, 'true');
+                }
+            } catch (e) {
+                console.log("HR Notifications error", e);
+            }
+        }
+
+        function closeHRNotifModal() { document.getElementById('hrNotifModal').classList.add('hidden'); }
 
         // --- PENDING TAB ---
         async function loadPendingTab() {
@@ -2316,16 +2968,17 @@
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
                 for (let o of list) {
-                    const s = (o.status || "").toUpperCase();
+                    const s = (o.status || "").trim().toUpperCase();
                     const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
                     const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
                     const oUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()) : [];
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_RESERVATION") show = true;
-                    else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
+                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
@@ -2366,21 +3019,15 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
-                            <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end">
-                                <button onclick="showProcessTOModal('${o.to_no}')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-full active:scale-95 transition-transform">Process Personnel</button>
+                            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
                 });
                 content.innerHTML = h + `</div>`;
             }
-        }
-
-        function getAppPayload(u) {
-            if (u.role === "UNIT_HEAD" || u.role === "MARPO") return { status: "PENDING_CHIEF", unithead_signed: u.fullName };
-            if (u.role === "CHIEF") return { status: "PENDING_PARPO", dc_signed: u.fullName };
-            if (u.role === "PARPO") return { status: "APPROVED", parpo_signed: "RICARDO C. GARCIA" };
-            return {};
         }
 
         // --- APPROVED / DENIED TAB (DETAILED) ---
@@ -2401,13 +3048,14 @@
                     let displayStatus = o.status;
                     let borderColor = tabStatus === 'APPROVED' ? 'border-dar-green' : 'border-red-500';
                     let textColor = 'text-gray-400';
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
                     if (tabStatus === 'APPROVED') {
-                        if (currentUser.role === 'UNIT_HEAD' || currentUser.role === 'MARPO') {
+                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (currentUser.role === 'CHIEF') {
+                        } else if (r === 'CHIEF') {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (currentUser.role === 'PARPO' || currentUser.role === 'VEHICLE_APPROVER') {
+                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -2532,11 +3180,18 @@
             container.innerHTML = h;
         }
 
-        window.onload = render;
+        window.onload = () => { checkSession(); render(); };
     </script>
 </body>
 </html>
-    </xmp>
+</xmp>
+
+... (katapusan ng code na binigay ko) ...
+        window.onload = () => { checkSession(); render(); };
+    </script>
+</body>
+</html>
+</xmp>
 
     <script>
         // LAUNCHER SCRIPT
@@ -2578,3 +3233,4 @@
     </script>
 </body>
 </html>
+    
