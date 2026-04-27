@@ -47,6 +47,11 @@
 
 
 
+
+
+
+
+
 <xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
@@ -898,11 +903,12 @@
                     let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
                     let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
                     let tSign = isCredit ? '+' : '-';
+                    let displayVal = isCredit ? (l.credit || l.debit || 0) : (l.debit || 0);
 
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                         <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${l.debit || 0}</td>
+                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
                         <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                     </tr>`;
                 });
@@ -2297,14 +2303,7 @@
 
 
 
-
-
-
     
-
-
-
-
 
     
     
