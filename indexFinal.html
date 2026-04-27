@@ -2307,6 +2307,11 @@
     
 
 
+
+
+
+
+
 <xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
@@ -2428,7 +2433,7 @@
             return bytes.buffer;
         }
 
-        // SETUP BIOMETRIC (ADMIN)
+        // SETUP BIOMETRIC
         async function setupAdminBiometric(username, hashedPass) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -2466,7 +2471,7 @@
             }
         }
 
-        // HANDLE BIOMETRIC LOGIN (ADMIN)
+        // HANDLE BIOMETRIC LOGIN
         async function handleBiometricLogin() {
             try {
                 const credId = localStorage.getItem('dar_admin_bio_cred');
@@ -2492,7 +2497,7 @@
                     currentUser = {
                         username: users.username,
                         fullName: users.full_name,
-                        role: users.role ? users.role.trim().toUpperCase() : "ADMIN",
+                        role: users.role ? users.role.trim().toUpperCase() : "",
                         divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
                         units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : []
                     };
@@ -2599,7 +2604,7 @@
                     currentUser = { 
                         username: u.username, 
                         fullName: u.full_name, 
-                        role: u.role ? u.role.trim().toUpperCase() : "ADMIN", 
+                        role: u.role ? u.role.trim().toUpperCase() : "", 
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
@@ -2763,7 +2768,8 @@
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
             const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role.includes("PARPO") || role.includes("VEHICLE") || role === "ADMIN") return true;
+            // STRICTLY Personal Context: Only Parpo has universal bypass here. Admin and Vehicle logic removed.
+            if (role.includes("PARPO")) return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
@@ -2830,33 +2836,28 @@
 
                 } else {
                     const toNos = Array.from(selectedPendingOrders);
-                    // ADDED: SELECT 'status' TO PREVENT GHOST UPDATES
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, status, unit, division, transport').in('to_no', toNos);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, status').in('to_no', toNos);
                     if (error) throw error;
 
                     const content = document.getElementById('mainContent');
                     content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-                    
-                    let failCount = 0;
 
                     const updatePromises = toNos.map(async (to_no) => {
                         const toRec = (toDataList || []).find(t => t.to_no === to_no);
                         const p = getAppPayload(currentUser, toRec);
                         
-                        if (Object.keys(p).length === 0) {
-                            failCount++;
-                            return null;
-                        }
+                        if (Object.keys(p).length === 0) return null; 
 
                         const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(updError) throw updError;
                         return true;
                     });
 
-                    await Promise.all(updatePromises);
+                    const results = await Promise.all(updatePromises);
+                    const validUpdates = results.filter(r => r !== null);
                     
-                    if (failCount > 0) {
-                        alert(`${failCount} Travel Order(s) could not be approved due to role restrictions or because they were already processed.`);
+                    if (validUpdates.length === 0) {
+                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
                     }
                 }
 
@@ -2875,15 +2876,14 @@
                     p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
                     if (!p.received) return;
                 } else {
-                    // ADDED: SELECT 'status' TO PREVENT GHOST UPDATES
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, status, unit, division, transport').eq('to_no', to_no).limit(1);
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, status').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
                 }
                 
                 // Guard against blank payload if role mapping failed
                 if (Object.keys(p).length === 0) {
-                    alert("Approval failed: You are not authorized to approve a TO at this stage, or it's already approved.");
+                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
                     return;
                 }
 
@@ -2900,56 +2900,38 @@
             }
         }
 
-        // HEAVILY REVISED: Now strictly checks CURRENT STATUS of the TO before assigning next step
-        function getAppPayload(u, toRecord) {
-            if (!toRecord) return {};
+        // STRICT HIERARCHY LOGIC based on personal context routing. Admin and Vehicle traps removed.
+        function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
             const role = u.role ? u.role.trim().toUpperCase() : "";
-            const currentStatus = (toRecord.status || "").trim().toUpperCase();
-
-            // Admins have global override
-            const isAdmin = role === "ADMIN";
-
-            if (currentStatus === "PENDING_VEHICLE_APPROVER") {
-                if (role.includes("VEHICLE") || isAdmin) {
-                    let nextStatus = "PENDING_CHIEF";
-                    if (toRecord.unit) {
-                        const unt = toRecord.unit.trim().toUpperCase();
-                        if (unt === "PARPO") nextStatus = "PENDING_PARPO";
-                        else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
-                    }
-                    return { status: nextStatus };
-                }
-            } 
-            else if (currentStatus === "PENDING_UNIT_HEAD") {
-                if (role.includes("UNIT") || role.includes("MARPO") || isAdmin) {
-                    return { 
-                        status: "PENDING_CHIEF", 
-                        unithead_signed: u.fullName, 
-                        uh_signed_time: nowISO 
-                    };
-                }
-            } 
-            else if (currentStatus === "PENDING_CHIEF") {
-                if (role.includes("CHIEF") || isAdmin) {
-                    return { 
-                        status: "PENDING_PARPO", 
-                        dc_signed: u.fullName, 
-                        dc_signed_time: nowISO 
-                    };
-                }
-            } 
-            else if (currentStatus === "PENDING_PARPO") {
-                if (role.includes("PARPO") || isAdmin) {
-                    return { 
-                        status: "APPROVED", 
-                        parpo_signed: u.fullName, 
-                        parpo_signed_time: nowISO 
-                    };
-                }
+            
+            // PRIORITY 1: PARPO
+            if (role.includes("PARPO")) {
+                return { 
+                    status: "APPROVED", 
+                    parpo_signed: u.fullName,
+                    parpo_signed_time: nowISO 
+                };
             }
-
-            // Return empty if the user's role does not match the current required status
+            
+            // PRIORITY 2: CHIEF
+            if (role.includes("CHIEF")) {
+                return { 
+                    status: "PENDING_PARPO", 
+                    dc_signed: u.fullName,
+                    dc_signed_time: nowISO 
+                };
+            }
+            
+            // PRIORITY 3: UNIT / MARPO
+            if (role.includes("UNIT") || role.includes("MARPO")) {
+                return { 
+                    status: "PENDING_CHIEF", 
+                    unithead_signed: u.fullName,
+                    uh_signed_time: nowISO 
+                };
+            }
+            
             return {};
         }
 
@@ -3010,16 +2992,10 @@
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    // FIXED Visibility scope so ADMIN can see ALL pending TOs dynamically
-                    if (r === "ADMIN" && s.includes("PENDING")) {
-                        show = true;
-                    } else if (r.includes("VEHICLE") && s === "PENDING_VEHICLE_APPROVER") {
-                        show = true;
-                    } else if (r.includes("PARPO") && s === "PENDING_PARPO") {
-                        show = true;
-                    } else if (r.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) {
-                        show = true;
-                    } else if ((r.includes("UNIT") || r.includes("MARPO")) && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    // STRICT Role mappings for visibility, completely stripped of Vehicle and Admin rules.
+                    if (r.includes("PARPO") && s === "PENDING_PARPO") show = true;
+                    else if (r.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r.includes("UNIT") || r.includes("MARPO")) && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
@@ -3096,7 +3072,7 @@
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
                         } else if (r.includes('CHIEF')) {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r.includes('PARPO') || r.includes('VEHICLE') || r === 'ADMIN') {
+                        } else if (r.includes('PARPO')) {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -3225,13 +3201,7 @@
     </script>
 </body>
 </html>
-</xmp>
-
-
-
-
-
-
+</xmp>    
 
 
 
