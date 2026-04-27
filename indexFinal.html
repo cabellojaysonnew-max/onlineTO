@@ -2010,8 +2010,7 @@
         window.renderCalendar = async function() {
             try {
                 // BUG FIX: The 'doc' variable (jsPDF instance) was missing in this function scope.
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF('p', 'mm', 'a4');
+                // However, since we are only rendering HTML here, we do NOT instantiate jsPDF until generateForm48() is called.
                 // END BUG FIX
 
                 const monthEl = document.getElementById('dtr-month');
@@ -2021,6 +2020,141 @@
                 
                 const tbody = document.getElementById('cal-table-body');
                 tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding: 20px;'>Crunching Logs...</td></tr>";
+
+                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const endDt = new Date(year, month + 1, 0);
+                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
+
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
+                const logsByDate = {};
+                (logs || []).forEach(l => {
+                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
+                    const dateObj = new Date(cleanTimeStr);
+                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                    logsByDate[isoStr].push(dateObj);
+                });
+
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                const validTos = tos?.map(t => t.to_no) || [];
+                
+                let itins = [];
+                if(validTos.length > 0) {
+                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                    itins = data || [];
+                }
+
+                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                ]);
+
+                // BUG FIX: The HTML table generation was missing from the original script.
+                // We need to render the UI calendar first, independently of the PDF generation.
+                
+                let html = '';
+                for (let d = 1; d <= endDt.getDate(); d++) {
+                    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                    
+                    const dateObj = new Date(year, month, d);
+                    const dayOfWeek = dateObj.getDay();
+                    let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                    let activeSchedule = null;
+                    let schedType = "Flexi";
+                    
+                    if (schedOverrides) {
+                        const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                        if (override) {
+                            activeSchedule = {
+                                start_time: override.start_time,
+                                end_time: override.end_time
+                            };
+                            schedType = override.schedule_type || "Fixed";
+                            
+                            if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
+                                isWeekend = true;
+                            }
+                        }
+                    }
+
+                    if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
+                        activeSchedule = {
+                            start_time: currentUser.flexi_range_start + ":00", 
+                            end_time: currentUser.flexi_range_end + ":00"
+                        };
+                        schedType = "Flexi";
+                    }
+
+                    let special = "";
+                    let sClass = "";
+                    const hol = (holidays || []).find(h => h.date === dateStr);
+                    if(hol) { special = (hol.description || "HOLIDAY").toUpperCase(); sClass = "entry-holiday"; }
+                    
+                    const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                    if(pso) { special = `PSO ${pso.pso_no || ''}`.toUpperCase(); sClass = "entry-pso"; }
+                    
+                    const to = (itins || []).find(i => i.travel_date === dateStr);
+                    if(to) { special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase(); sClass = "entry-to"; }
+                    
+                    const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                    if(leave) { special = String(leave.type).toUpperCase(); sClass = "entry-leave"; }
+
+                    if (isWeekend && !special) {
+                        special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        sClass = "text-muted";
+                        if (dayOfWeek === 5) { special = "NO FRIDAY WORK"; sClass = "text-muted"; }
+                    }
+                    
+                    let amIn="--", amOut="--", pmIn="--", pmOut="--";
+                    dayLogs.forEach(time => {
+                        const hr = time.getHours();
+                        const fmt = formatTime12(time);
+                        if(hr < 12 && amIn === "--") amIn = fmt;
+                        else if(hr <= 12 && time.getMinutes() <= 30 && amOut === "--") amOut = fmt;
+                        else if(hr <= 14 && pmIn === "--") pmIn = fmt;
+                        else pmOut = fmt;
+                    });
+
+                    if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special === "NO FRIDAY WORK" || special.includes("HOLIDAY"))) {
+                        special = ""; 
+                    }
+
+                    if (special && special !== "SATURDAY" && special !== "SUNDAY" && special !== "NO FRIDAY WORK") {
+                        special = `<span class="cal-entry ${sClass}">${special}</span>`;
+                    } else if (special) {
+                        special = `<span style="color:gray; font-size:10px;">${special}</span>`;
+                    }
+
+                    html += `<tr>
+                        <td class="day-num">${d}</td>
+                        <td>${special ? '' : amIn}</td>
+                        <td>${special ? '' : amOut}</td>
+                        <td>${special ? '' : pmIn}</td>
+                        <td>${special ? '' : pmOut}</td>
+                        <td>${special}</td>
+                    </tr>`;
+                }
+                tbody.innerHTML = html;
+                
+            } catch (err) {
+                alert("Calendar Render Error: " + err.message);
+                document.getElementById('cal-table-body').innerHTML = "<tr><td colspan='6' style='color:red;'>Failed to load DTR</td></tr>";
+            }
+        };
+
+        window.generateForm48 = async function() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+
+                const monthEl = document.getElementById('dtr-month');
+                const yearEl = document.getElementById('dtr-year');
+                const month = parseInt(monthEl.value) - 1;
+                const year = parseInt(yearEl.value);
 
                 const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
                 const endDt = new Date(year, month + 1, 0);
@@ -2310,6 +2444,11 @@
 </body>
 </html>
 </xmp>
+
+
+
+
+    
     
 
     
