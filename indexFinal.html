@@ -2342,7 +2342,7 @@
     </xmp>
 
 
-<xmp id="admin_console" style="display: none;">
+    <xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2366,7 +2366,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
-        /* No revision should be made unless explicitly instructed */
         .dar-green { background-color: #003811; }
         .text-dar-green { color: #003811; }
         .dar-gold { background-color: #D4AF37; }
@@ -2748,14 +2747,14 @@
 
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
-            const role = currentUser.role;
-            if (role === "PARPO" || role === "VEHICLE_APPROVER") return true;
+            const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
             
             if (role === "CHIEF") return dMatch;
-            if (role === "UNIT_HEAD" && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
             
             const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
             const uMatch = oUnits.some(u => currentUser.units.includes(u));
@@ -2797,65 +2796,125 @@
         }
 
         async function processBatch(action) {
-            if (selectedPendingOrders.size === 0) return;
+            try {
+                if (selectedPendingOrders.size === 0) return;
 
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-            hideBatchActionBar();
+                hideBatchActionBar();
 
-            if (action === 'DISAPPROVED') {
-                let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
-                if (!p.received) { loadPendingTab(); return; }
-                const updates = Array.from(selectedPendingOrders).map(to_no => 
-                    supabaseClient.from('travel_orders').update(p).eq('to_no', to_no)
-                );
-                await Promise.all(updates);
-            } else {
-                const toNos = Array.from(selectedPendingOrders);
-                const { data: toDataList } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').in('to_no', toNos);
+                if (action === 'DISAPPROVED') {
+                    let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
+                    if (!p.received) { loadPendingTab(); return; }
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+                    
+                    const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
+                        const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(error) throw error;
+                    });
+                    await Promise.all(updatePromises);
 
-                const updates = toNos.map(to_no => {
-                    const toRec = (toDataList || []).find(t => t.to_no === to_no);
-                    const p = getAppPayload(currentUser, toRec);
-                    return supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                });
-                await Promise.all(updates);
+                } else {
+                    const toNos = Array.from(selectedPendingOrders);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').in('to_no', toNos);
+                    if (error) throw error;
+
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+
+                    const updatePromises = toNos.map(async (to_no) => {
+                        const toRec = (toDataList || []).find(t => t.to_no === to_no);
+                        const p = getAppPayload(currentUser, toRec);
+                        
+                        if (Object.keys(p).length === 0) return null; 
+
+                        const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(updError) throw updError;
+                        return true;
+                    });
+
+                    const results = await Promise.all(updatePromises);
+                    const validUpdates = results.filter(r => r !== null);
+                    
+                    if (validUpdates.length === 0) {
+                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
+                    }
+                }
+
+                selectedPendingOrders.clear();
+                loadPendingTab();
+            } catch (err) {
+                alert("Batch processing error: " + err.message);
+                loadPendingTab();
             }
-
-            selectedPendingOrders.clear();
-            loadPendingTab();
         }
 
         async function processDirectTO(to_no, action) {
-            let p;
-            if (action === 'DISAPPROVED') {
-                p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
-                if (!p.received) return;
-            } else {
-                const { data: toData } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').eq('to_no', to_no).limit(1);
-                p = getAppPayload(currentUser, toData ? toData[0] : null);
+            try {
+                let p;
+                if (action === 'DISAPPROVED') {
+                    p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
+                    if (!p.received) return;
+                } else {
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').eq('to_no', to_no).limit(1);
+                    if (error) throw error;
+                    p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
+                }
+                
+                // Guard against blank payload if role mapping failed
+                if (Object.keys(p).length === 0) {
+                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
+                    return;
+                }
+
+                const content = document.getElementById('mainContent');
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
+                
+                const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                if (updErr) throw updErr;
+                
+                loadPendingTab();
+            } catch (err) {
+                alert("Error processing TO: " + err.message);
+                loadPendingTab();
             }
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
-            await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-            loadPendingTab();
         }
 
         function getAppPayload(u, toRecord = null) {
-            const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+            const nowISO = new Date().toISOString(); 
+            const role = u.role ? u.role.trim().toUpperCase() : "";
             
-            if (u.role === "VEHICLE_APPROVER") {
+            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
                 let nextStatus = "PENDING_CHIEF";
-                if (toRecord) {
-                    if (toRecord.unit === "PARPO") nextStatus = "PENDING_PARPO";
-                    else if (toRecord.unit && toRecord.unit.trim() !== "") nextStatus = "PENDING_UNIT_HEAD";
+                if (toRecord && toRecord.unit) {
+                    const unt = toRecord.unit.trim().toUpperCase();
+                    if (unt === "PARPO") nextStatus = "PENDING_PARPO";
+                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
                 }
                 return { status: nextStatus };
             }
 
-            if (u.role === "UNIT_HEAD" || u.role === "MARPO") return { status: "PENDING_CHIEF", unithead_signed: u.fullName, unithead_date: now };
-            if (u.role === "CHIEF") return { status: "PENDING_PARPO", dc_signed: u.fullName, dc_date: now };
-            if (u.role === "PARPO") return { status: "APPROVED", parpo_signed: "RICARDO C. GARCIA", parpo_date: now };
+            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+                return { 
+                    status: "PENDING_CHIEF", 
+                    unithead_signed: u.fullName, 
+                    uh_signed_time: nowISO 
+                };
+            }
+            if (role === "CHIEF") {
+                return { 
+                    status: "PENDING_PARPO", 
+                    dc_signed: u.fullName, 
+                    dc_signed_time: nowISO 
+                };
+            }
+            if (role === "PARPO") {
+                return { 
+                    status: "APPROVED", 
+                    parpo_signed: u.fullName, 
+                    parpo_signed_time: nowISO 
+                };
+            }
+            
             return {};
         }
 
@@ -2909,16 +2968,17 @@
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
                 for (let o of list) {
-                    const s = (o.status || "").toUpperCase();
+                    const s = (o.status || "").trim().toUpperCase();
                     const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
                     const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
                     const oUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()) : [];
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    if (currentUser.role === "VEHICLE_APPROVER" && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (currentUser.role === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (currentUser.role === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((currentUser.role === "UNIT_HEAD" || currentUser.role === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
+                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
@@ -2988,13 +3048,14 @@
                     let displayStatus = o.status;
                     let borderColor = tabStatus === 'APPROVED' ? 'border-dar-green' : 'border-red-500';
                     let textColor = 'text-gray-400';
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
                     if (tabStatus === 'APPROVED') {
-                        if (currentUser.role === 'UNIT_HEAD' || currentUser.role === 'MARPO') {
+                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (currentUser.role === 'CHIEF') {
+                        } else if (r === 'CHIEF') {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (currentUser.role === 'PARPO' || currentUser.role === 'VEHICLE_APPROVER') {
+                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -3124,3 +3185,52 @@
 </body>
 </html>
 </xmp>
+
+... (katapusan ng code na binigay ko) ...
+        window.onload = () => { checkSession(); render(); };
+    </script>
+</body>
+</html>
+</xmp>
+
+    <script>
+        // LAUNCHER SCRIPT
+        function bootSystem(sysId) {
+            // Hide the menu, show the application container
+            document.getElementById('landing-menu').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+            
+            // Fetch the exact, completely unedited code from the <xmp> tag
+            const rawCode = document.getElementById(sysId).textContent;
+            let iframe = document.getElementById('app-iframe');
+            
+            // Recreating the iframe avoids 'dead lock' state cache and unbinds all previous memory safely
+            const newIframe = document.createElement('iframe');
+            newIframe.id = 'app-iframe';
+            iframe.parentNode.replaceChild(newIframe, iframe);
+            iframe = newIframe;
+            
+            // Push the code directly into the isolated iframe document
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(rawCode);
+            doc.close();
+        }
+
+        function returnToMenu() {
+            // Confirm exit to prevent accidental loss of data
+            if(confirm("Are you sure you want to switch portals? Any unsaved data or current session will be cleared.")) {
+                document.getElementById('landing-menu').style.display = 'flex';
+                document.getElementById('app-container').style.display = 'none';
+                
+                // Clear the iframe entirely to prevent background execution or deadlock on reopening
+                const iframe = document.getElementById('app-iframe');
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'app-iframe';
+                iframe.parentNode.replaceChild(newIframe, iframe);
+            }
+        }
+    </script>
+</body>
+</html>
+    
