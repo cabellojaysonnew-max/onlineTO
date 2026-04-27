@@ -2342,7 +2342,12 @@
     </xmp>
 
 
-    <xmp id="admin_console" style="display: none;">
+
+
+
+
+
+<xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2446,12 +2451,19 @@
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
 
-        // PASSWORD HASHING UTILITY
+        // SAFE PASSWORD HASHING UTILITY (With Plaintext Fallback)
         async function hashPassword(msg) {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            if (!msg) return "";
+            try {
+                // Babagsak ito dito kung naka HTTP lang ang connection imbes na HTTPS/localhost
+                const msgUint8 = new TextEncoder().encode(msg);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                console.warn("Crypto API blocked by insecure context. Falling back to plaintext.");
+                return msg;
+            }
         }
 
         // WEBAUTHN UTILS
@@ -2523,12 +2535,12 @@
                 });
 
                 // Authenticated
-                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
+                const { data: users } = await supabaseClient.from('users').select('*').ilike('username', username).maybeSingle();
                 if (users && (users.password === token)) {
                     currentUser = {
                         username: users.username,
                         fullName: users.full_name,
-                        role: users.role.toUpperCase(),
+                        role: users.role ? users.role.trim().toUpperCase() : "ADMIN",
                         divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
                         units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : []
                     };
@@ -2591,26 +2603,66 @@
 
         async function handleLogin() {
             const uBox = document.getElementById('username').value.trim();
-            const pBox = document.getElementById('password').value.trim();
+            const pBox = document.getElementById('password').value.trim(); // Trim restored!
             const err = document.getElementById('loginError');
+            
+            if(!uBox || !pBox) {
+                err.innerText = "Please enter username and password."; 
+                err.classList.remove("hidden");
+                return;
+            }
+
+            err.innerText = "Authenticating...";
+            err.classList.remove("hidden");
+            err.classList.replace("text-red-600", "text-blue-600");
+
             try {
                 const hashedPBox = await hashPassword(pBox);
-                const { data: users } = await supabaseClient.from('users').select('*');
-                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+                
+                const { data: users, error } = await supabaseClient
+                    .from('users')
+                    .select('*')
+                    .ilike('username', uBox);
+                
+                if (error) {
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Database Error: " + error.message; 
+                    return;
+                }
+
+                if (!users || users.length === 0) {
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Username not found."; 
+                    return;
+                }
+                
+                // Matches exact plaintext, hashed, and also auto-trims any saved spacing issues from DB
+                const u = users.find(x => 
+                    x.password === pBox || 
+                    x.password === hashedPBox || 
+                    x.password?.trim() === pBox || 
+                    x.password?.trim() === hashedPBox
+                );
                 
                 if (u) {
                     currentUser = { 
                         username: u.username, 
                         fullName: u.full_name, 
-                        role: u.role.toUpperCase(), 
+                        role: u.role ? u.role.trim().toUpperCase() : "ADMIN", 
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
                     localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
                     setupAdminBiometric(u.username, u.password);
                     render();
-                } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
-            } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
+                } else { 
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Incorrect password."; 
+                }
+            } catch (e) { 
+                err.classList.replace("text-blue-600", "text-red-600");
+                err.innerText = "Login failed: " + e.message; 
+            }
         }
 
         function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
@@ -2665,16 +2717,28 @@
         async function updatePassword() {
             const o = document.getElementById('oldPwd').value.trim();
             const n = document.getElementById('newPwd').value.trim();
-            const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
-            const hashedOld = await hashPassword(o);
             
-            if (data.password !== o && data.password !== hashedOld) {
-                return alert("Incorrect.");
+            if(!o || !n) return alert("Please fill out both password fields.");
+
+            try {
+                const { data, error } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
+                if(error) throw error;
+                
+                const hashedOld = await hashPassword(o);
+                
+                if (data.password !== o && data.password !== hashedOld && data.password?.trim() !== o && data.password?.trim() !== hashedOld) {
+                    return alert("Incorrect current password.");
+                }
+                
+                const hashedNew = await hashPassword(n);
+                const { error: updateErr } = await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
+                if(updateErr) throw updateErr;
+                
+                alert("Password successfully updated!"); 
+                hideChangePassword();
+            } catch (err) {
+                alert("Error updating password: " + err.message);
             }
-            
-            const hashedNew = await hashPassword(n);
-            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
-            alert("Updated!"); hideChangePassword();
         }
 
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
@@ -2748,13 +2812,13 @@
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
             const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
+            if (role.includes("PARPO") || role.includes("VEHICLE") || role === "ADMIN") return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
             
-            if (role === "CHIEF") return dMatch;
-            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            if (role.includes("CHIEF")) return dMatch;
+            if ((role.includes("UNIT") || role.includes("MARPO")) && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
             
             const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
             const uMatch = oUnits.some(u => currentUser.units.includes(u));
@@ -2883,7 +2947,7 @@
             const nowISO = new Date().toISOString(); 
             const role = u.role ? u.role.trim().toUpperCase() : "";
             
-            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
+            if (role.includes("VEHICLE") || role === "ADMIN") {
                 let nextStatus = "PENDING_CHIEF";
                 if (toRecord && toRecord.unit) {
                     const unt = toRecord.unit.trim().toUpperCase();
@@ -2893,21 +2957,21 @@
                 return { status: nextStatus };
             }
 
-            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+            if (role.includes("UNIT") || role.includes("MARPO")) {
                 return { 
                     status: "PENDING_CHIEF", 
                     unithead_signed: u.fullName, 
                     uh_signed_time: nowISO 
                 };
             }
-            if (role === "CHIEF") {
+            if (role.includes("CHIEF")) {
                 return { 
                     status: "PENDING_PARPO", 
                     dc_signed: u.fullName, 
                     dc_signed_time: nowISO 
                 };
             }
-            if (role === "PARPO") {
+            if (role.includes("PARPO")) {
                 return { 
                     status: "APPROVED", 
                     parpo_signed: u.fullName, 
@@ -2975,10 +3039,10 @@
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    if ((r.includes("VEHICLE") || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (r.includes("PARPO") && s === "PENDING_PARPO") show = true;
+                    else if (r.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r.includes("UNIT") || r.includes("MARPO")) && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
@@ -3051,11 +3115,11 @@
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
                     if (tabStatus === 'APPROVED') {
-                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
+                        if (r.includes('UNIT') || r.includes('MARPO')) {
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'CHIEF') {
+                        } else if (r.includes('CHIEF')) {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
+                        } else if (r.includes('PARPO') || r.includes('VEHICLE') || r === 'ADMIN') {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -3186,13 +3250,13 @@
 </html>
 </xmp>
 
-... (katapusan ng code na binigay ko) ...
-        window.onload = () => { checkSession(); render(); };
-    </script>
-</body>
-</html>
-</xmp>
+    
 
+
+
+
+
+    
     <script>
         // LAUNCHER SCRIPT
         function bootSystem(sysId) {
