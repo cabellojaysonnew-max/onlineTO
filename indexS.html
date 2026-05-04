@@ -1379,12 +1379,25 @@
                         try { 
                             doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
                             if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+
+// AUDIT TRAIL TIMESTAMPS
+doc.setFont("helvetica", "normal");
+doc.setFontSize(4);
+
+// Convert the single string into an array of 3 separate strings
+let auditText = [
+    `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+    `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+    `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+];
+
+// jsPDF automatically renders arrays as multiline text
+doc.text(auditText, 190, 36, {align: 'center'});
+
+
+
+
                             
-                            // AUDIT TRAIL TIMESTAMPS
-                            doc.setFont("helvetica", "normal");
-                            doc.setFontSize(4);
-                            let auditText = `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'} | DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'} | PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`;
-                            doc.text(auditText, 190, 36, {align: 'center'});
                         } catch(e){} 
                     }
 
