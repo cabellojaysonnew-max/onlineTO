@@ -41,22 +41,6 @@
         <iframe id="app-iframe"></iframe>
     </div>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     <xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
@@ -688,8 +672,14 @@
                 .gte('log_time', todayStr + 'T00:00:00')
                 .lte('log_time', todayStr + 'T23:59:59')
                 .order('log_time', { ascending: true });
+
+            // OFFLINE SYNC LOGIC Check
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
                 
-            let logCount = logs ? logs.length : 0;
+            let allLogs = [...(logs || []), ...todayOfflineLogs].sort((a,b) => new Date(a.log_time) - new Date(b.log_time));
+            let logCount = allLogs.length;
+
             const btn = document.getElementById('btn-clock');
             const btnText = document.getElementById('btn-clock-text');
             const statusBadge = document.getElementById('att-status-badge');
@@ -718,17 +708,18 @@
                 btnText.innerText = (logCount % 2 === 0) ? `→] Clock In` : `[← Clock Out`;
             }
             
-            if (logs) {
-                logs.forEach((l, i) => {
+            if (allLogs.length > 0) {
+                allLogs.forEach((l, i) => {
                     const timeObj = new Date(l.log_time);
                     const fmtTime = formatTime12(timeObj);
                     const icon = (i % 2 === 0) ? `→]` : `[←`;
-                    const currentStatus = l.status || labels[i]; // Fallback to index mapping
+                    const currentStatus = l.status || labels[i]; 
+                    const offlineTag = l.device_id === 'MOBILE_WEB_OFFLINE' ? `<span style="color:red; font-size:9px; font-weight:bold;"> [OFFLINE]</span>` : '';
                     
                     container.innerHTML += `
                         <div style="display:flex; flex-direction:column; border-left: 2px solid var(--dar-green); padding-left: 10px; margin-bottom: 5px;">
                             <div style="font-size: 12px; color: var(--dar-green); font-weight: bold; margin-bottom: 2px;">
-                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')}
+                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')} ${offlineTag}
                             </div>
                             <div style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-bottom: 2px;">${fmtTime}</div>
                             <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${l.place_name || l.address || 'Unknown Location'}</div>
@@ -740,36 +731,73 @@
 
         window.recordAttendance = async function() {
             if (isSubmitting) return;
-            isSubmitting = true;
-            document.getElementById('btn-clock-text').innerText = "Checking logs...";
             
-            // First check log on the table for the day, then retrieve and display to avoid double logs
-            await window.loadAttendance();
-
-            const { data: checkLogs } = await supabase
+            let { data: checkLogs } = await supabase
                 .from('attendance_logs')
-                .select('*')
+                .select('id')
                 .eq('emp_id', currentUser.emp_id)
                 .gte('log_time', todayStr + 'T00:00:00')
-                .lte('log_time', todayStr + 'T23:59:59')
-                .order('log_time', { ascending: true });
+                .lte('log_time', todayStr + 'T23:59:59');
                 
-            if (checkLogs && checkLogs.length >= 4) {
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+
+            if ((checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length >= 4) {
                 alert("Maximum of 4 logs per day reached.");
-                isSubmitting = false;
+                return window.loadAttendance();
+            }
+            
+            isSubmitting = true;
+            
+            if (!navigator.onLine) {
+                document.getElementById('btn-clock-text').innerText = "📍 Saving Offline...";
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const nextIndex = (checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length;
+                    const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
+                    
+                    offlineLogs.push({
+                        emp_id: currentUser.emp_id,
+                        log_time: new Date().toISOString(),
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        place_name: "Offline (Pending Sync)",
+                        status: labels[nextIndex],
+                        device_id: 'MOBILE_WEB_OFFLINE'
+                    });
+                    localStorage.setItem('dar_offline_logs_' + currentUser.emp_id, JSON.stringify(offlineLogs));
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, (error) => {
+                    alert("Please enable GPS/Location to clock in offline. " + error.message);
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
                 return;
             }
-            
-            // Prevent rapid double logs (within 1 minute)
-            if (checkLogs && checkLogs.length > 0) {
-                const lastLogTime = new Date(checkLogs[checkLogs.length - 1].log_time).getTime();
-                if (new Date().getTime() - lastLogTime < 60000) {
-                    alert("Double log prevented. Please wait a minute before logging again.");
-                    isSubmitting = false;
-                    return;
+
+            // Sync offline logs if we are online before creating new log
+            if (offlineLogs.length > 0) {
+                document.getElementById('btn-clock-text').innerText = "Syncing Offline...";
+                for (let ol of offlineLogs) {
+                    try {
+                        let placeName = "Unknown Location";
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ol.latitude}&lon=${ol.longitude}&zoom=18&addressdetails=1`);
+                        const data = await res.json();
+                        if (data && data.display_name) {
+                            placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
+                            if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
+                        }
+                        ol.place_name = placeName;
+                        ol.device_id = 'MOBILE_WEB';
+                        await supabase.from('attendance_logs').insert(ol);
+                    } catch (e) { console.log("Geocoding/Sync failed", e); }
                 }
+                localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
+                // Re-fetch accurate count after sync
+                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00').lte('log_time', todayStr + 'T23:59:59');
+                checkLogs = newCheck;
             }
-            
+
             document.getElementById('btn-clock-text').innerText = "📍 Getting Location...";
             
             if (!navigator.geolocation) {
@@ -1433,7 +1461,10 @@
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
+                    
+                    // Intelligent unique purposes combination
+                    const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
                     doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
                     curY += Math.max(5, purpLines.length * 4);
 
@@ -1769,7 +1800,7 @@
                 if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
-                    if ("VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME".some(x => l_type.includes(x))) {
+                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
                         vl_deduct += debit_val;
                     } else if (l_type.includes("SICK")) {
                         sl_deduct += debit_val;
@@ -1887,7 +1918,7 @@
             doc.setFontSize(7);
             doc.text("Others:", 16, tY_left + 2.5);
             let remks = app.remarks || "";
-            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
+            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : (remks.split("|")[0]?.trim() || "")) : "";
             doc.setFont("helvetica", "bold"); doc.text(oth_val, 30, tY_left + 2.5); doc.line(30, tY_left + 3, 90, tY_left + 3);
 
             let tY_right = section6Y + 4;
@@ -1898,22 +1929,22 @@
             doc.setFont("helvetica", "italic"); doc.text("In case of Vacation/Special Privilege Leave:", 107, tY_right);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5); doc.line(143, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Abroad")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Abroad (Specify)", 115, tY_right + 2.5);
-            let abr_val = remks.includes("Abroad") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let abr_val = remks.includes("Abroad") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(abr_val, 138, tY_right + 2); doc.line(138, tY_right + 2.5, 195, tY_right + 2.5);
 
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Sick Leave:", 107, tY_right);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("In Hospital")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("In Hospital (Specify Illness)", 115, tY_right + 2.5);
-            let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Out Patient")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Out Patient (Specify Illness)", 115, tY_right + 2.5);
-            let out_val = remks.includes("Out Patient") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let out_val = remks.includes("Out Patient") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
 
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Special Leave Benefits for Women:", 107, tY_right);
             tY_right += 4; doc.setFont("helvetica", "normal"); doc.text("(Specify Illness)", 110, tY_right + 2.5);
-            let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(wom_val, 132, tY_right + 2); doc.line(132, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.line(110, tY_right + 2.5, 195, tY_right + 2.5);
 
@@ -2460,21 +2491,6 @@
 </body>
 </html>
 </xmp>
-
-
-
-
-    
-    
-
-    
-    
-
-
-
-
-
-
 
 <xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
@@ -3365,9 +3381,8 @@
     </script>
 </body>
 </html>
-</xmp>  
-    
-    
+</xmp>
+
     <script>
         // LAUNCHER SCRIPT
         function bootSystem(sysId) {
@@ -3385,18 +3400,25 @@
             iframe.parentNode.replaceChild(newIframe, iframe);
             iframe = newIframe;
             
-            iframe.contentWindow.document.open();
-            iframe.contentWindow.document.write(rawCode);
-            iframe.contentWindow.document.close();
+            // Push the code directly into the isolated iframe document
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(rawCode);
+            doc.close();
         }
 
         function returnToMenu() {
-            document.getElementById('landing-menu').style.display = 'flex';
-            document.getElementById('app-container').style.display = 'none';
-            let iframe = document.getElementById('app-iframe');
-            const newIframe = document.createElement('iframe');
-            newIframe.id = 'app-iframe';
-            iframe.parentNode.replaceChild(newIframe, iframe);
+            // Confirm exit to prevent accidental loss of data
+            if(confirm("Are you sure you want to switch portals? Any unsaved data or current session will be cleared.")) {
+                document.getElementById('landing-menu').style.display = 'flex';
+                document.getElementById('app-container').style.display = 'none';
+                
+                // Clear the iframe entirely to prevent background execution or deadlock on reopening
+                const iframe = document.getElementById('app-iframe');
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'app-iframe';
+                iframe.parentNode.replaceChild(newIframe, iframe);
+            }
         }
     </script>
 </body>
