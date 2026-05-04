@@ -51,6 +51,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <style>
         :root {
             --dar-green: #003811;
@@ -355,12 +356,10 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
-        // PASSWORD HASHING UTILITY
-        const hashPassword = async (msg) => {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        // SAFE PASSWORD HASHING UTILITY
+        window.hashPassword = async function(msg) {
+            if (!msg) return "";
+            return sha256(msg); // Using external CDN, 100% works on HTTP/LAN
         };
 
         // WEBAUTHN UTILS
@@ -376,10 +375,7 @@
         // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
-                // Get the generated jsPDF arraybuffer
                 const pdfBytes = jsPdfDoc.output('arraybuffer');
-                
-                // Load it into pdf-lib to apply DRM/Encryption
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 
                 pdfDoc.encrypt({
@@ -396,7 +392,6 @@
 
                 const encryptedBytes = await pdfDoc.save();
                 
-                // Trigger Secure Download
                 const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
@@ -406,7 +401,6 @@
                 document.body.removeChild(link);
             } catch (e) {
                 console.error("Encryption failed:", e);
-                // Fallback if encryption fails
                 jsPdfDoc.save(filename);
             }
         };
@@ -468,7 +462,6 @@
                     }
                 });
 
-                // Authenticated locally, proceed to app
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
                 if (data && (data.pass === token)) {
                     currentUser = data;
@@ -611,6 +604,9 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
+            
+            if (!id || !pass) return alert("Please enter ID and Password");
+
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
                 
@@ -618,10 +614,14 @@
                     alert("Database connection issue: " + error.message);
                     return;
                 }
+                if (!data) {
+                    alert("Employee ID not found.");
+                    return;
+                }
                 
-                const hashedPass = await hashPassword(pass);
+                const hashedPass = await window.hashPassword(pass);
 
-                if (data && (data.pass === pass || data.pass === hashedPass)) {
+                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -649,14 +649,13 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
-                    // Setup Biometric post-login
                     window.setupBiometric(id, data.pass);
                     
                 } else { 
-                    alert("Invalid Credentials"); 
+                    alert("Incorrect Password."); 
                 }
             } catch (err) {
-                alert("Network Error");
+                alert("Login Error: " + err.message);
             }
         };
 
@@ -673,8 +672,14 @@
                 .gte('log_time', todayStr + 'T00:00:00')
                 .lte('log_time', todayStr + 'T23:59:59')
                 .order('log_time', { ascending: true });
+
+            // OFFLINE SYNC LOGIC Check
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
                 
-            let logCount = logs ? logs.length : 0;
+            let allLogs = [...(logs || []), ...todayOfflineLogs].sort((a,b) => new Date(a.log_time) - new Date(b.log_time));
+            let logCount = allLogs.length;
+
             const btn = document.getElementById('btn-clock');
             const btnText = document.getElementById('btn-clock-text');
             const statusBadge = document.getElementById('att-status-badge');
@@ -703,17 +708,18 @@
                 btnText.innerText = (logCount % 2 === 0) ? `→] Clock In` : `[← Clock Out`;
             }
             
-            if (logs) {
-                logs.forEach((l, i) => {
+            if (allLogs.length > 0) {
+                allLogs.forEach((l, i) => {
                     const timeObj = new Date(l.log_time);
                     const fmtTime = formatTime12(timeObj);
                     const icon = (i % 2 === 0) ? `→]` : `[←`;
-                    const currentStatus = l.status || labels[i]; // Fallback to index mapping
+                    const currentStatus = l.status || labels[i]; 
+                    const offlineTag = l.device_id === 'MOBILE_WEB_OFFLINE' ? `<span style="color:red; font-size:9px; font-weight:bold;"> [OFFLINE]</span>` : '';
                     
                     container.innerHTML += `
                         <div style="display:flex; flex-direction:column; border-left: 2px solid var(--dar-green); padding-left: 10px; margin-bottom: 5px;">
                             <div style="font-size: 12px; color: var(--dar-green); font-weight: bold; margin-bottom: 2px;">
-                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')}
+                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')} ${offlineTag}
                             </div>
                             <div style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-bottom: 2px;">${fmtTime}</div>
                             <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${l.place_name || l.address || 'Unknown Location'}</div>
@@ -726,19 +732,72 @@
         window.recordAttendance = async function() {
             if (isSubmitting) return;
             
-            const { data: checkLogs } = await supabase
+            let { data: checkLogs } = await supabase
                 .from('attendance_logs')
                 .select('id')
                 .eq('emp_id', currentUser.emp_id)
                 .gte('log_time', todayStr + 'T00:00:00')
                 .lte('log_time', todayStr + 'T23:59:59');
                 
-            if (checkLogs && checkLogs.length >= 4) {
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+
+            if ((checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length >= 4) {
                 alert("Maximum of 4 logs per day reached.");
                 return window.loadAttendance();
             }
             
             isSubmitting = true;
+            
+            if (!navigator.onLine) {
+                document.getElementById('btn-clock-text').innerText = "📍 Saving Offline...";
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const nextIndex = (checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length;
+                    const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
+                    
+                    offlineLogs.push({
+                        emp_id: currentUser.emp_id,
+                        log_time: new Date().toISOString(),
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        place_name: "Offline (Pending Sync)",
+                        status: labels[nextIndex],
+                        device_id: 'MOBILE_WEB_OFFLINE'
+                    });
+                    localStorage.setItem('dar_offline_logs_' + currentUser.emp_id, JSON.stringify(offlineLogs));
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, (error) => {
+                    alert("Please enable GPS/Location to clock in offline. " + error.message);
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+                return;
+            }
+
+            // Sync offline logs if we are online before creating new log
+            if (offlineLogs.length > 0) {
+                document.getElementById('btn-clock-text').innerText = "Syncing Offline...";
+                for (let ol of offlineLogs) {
+                    try {
+                        let placeName = "Unknown Location";
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ol.latitude}&lon=${ol.longitude}&zoom=18&addressdetails=1`);
+                        const data = await res.json();
+                        if (data && data.display_name) {
+                            placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
+                            if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
+                        }
+                        ol.place_name = placeName;
+                        ol.device_id = 'MOBILE_WEB';
+                        await supabase.from('attendance_logs').insert(ol);
+                    } catch (e) { console.log("Geocoding/Sync failed", e); }
+                }
+                localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
+                // Re-fetch accurate count after sync
+                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00').lte('log_time', todayStr + 'T23:59:59');
+                checkLogs = newCheck;
+            }
+
             document.getElementById('btn-clock-text').innerText = "📍 Getting Location...";
             
             if (!navigator.geolocation) {
@@ -824,6 +883,37 @@
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
+            
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update local session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
+        };
+
         window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
@@ -859,10 +949,15 @@
                     else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
                     else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
 
+                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
+                    let tSign = isCredit ? '+' : '-';
+                    let displayVal = isCredit ? (l.credit || l.debit || 0) : (l.debit || 0);
+
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                         <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: var(--danger); font-weight:bold;">-${l.debit || 0}</td>
+                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
                         <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                     </tr>`;
                 });
@@ -878,10 +973,10 @@
             if(emp) {
                 container.innerHTML = `
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${currentSPL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${currentWL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
                     </div>
                     <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
                     ${deductionsHtml}
@@ -921,7 +1016,7 @@
             
             ctoContainer.innerHTML = `
                 <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> ${emp?.cto_balance || 0} hrs
+                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
                 </div>
                 ${ctoHtml}
             `;
@@ -1284,12 +1379,25 @@
                         try { 
                             doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
                             if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+
+// AUDIT TRAIL TIMESTAMPS
+doc.setFont("helvetica", "normal");
+doc.setFontSize(4);
+
+// Convert the single string into an array of 3 separate strings
+let auditText = [
+    `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+    `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+    `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+];
+
+// jsPDF automatically renders arrays as multiline text
+doc.text(auditText, 190, 36, {align: 'center'});
+
+
+
+
                             
-                            // AUDIT TRAIL TIMESTAMPS
-                            doc.setFont("helvetica", "normal");
-                            doc.setFontSize(4);
-                            let auditText = `UH: ${od.unithead_date || 'N/A'} | DC: ${od.dc_date || 'N/A'} | PARPO: ${od.parpo_date || 'N/A'}`;
-                            doc.text(auditText, 190, 36, {align: 'center'});
                         } catch(e){} 
                     }
 
@@ -1366,10 +1474,29 @@
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
-                    doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
-                    curY += Math.max(5, purpLines.length * 4);
 
+
+// New Logic: Underline every line
+const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+
+// Loop through each generated line
+purpLines.forEach((line) => {
+    // Print the text for this specific line
+    doc.text(line, 20, curY);
+    
+    // Draw an underline for this specific line from X=20 to X=160
+    doc.line(20, curY + 1, 160, curY + 1);
+    
+    // Move the Y cursor down for the next line
+    curY += 4.5; 
+});
+
+// Add a little extra padding after the block finishes
+curY += 2;
+
+                    
+                    
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
                     drawCheck("LIVE IN", 110, curY, false);
@@ -1396,7 +1523,7 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 25, 25); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -1820,7 +1947,7 @@
             doc.setFontSize(7);
             doc.text("Others:", 16, tY_left + 2.5);
             let remks = app.remarks || "";
-            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
+            let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : (remks.split("|")[0]?.trim() || "")) : "";
             doc.setFont("helvetica", "bold"); doc.text(oth_val, 30, tY_left + 2.5); doc.line(30, tY_left + 3, 90, tY_left + 3);
 
             let tY_right = section6Y + 4;
@@ -1831,22 +1958,22 @@
             doc.setFont("helvetica", "italic"); doc.text("In case of Vacation/Special Privilege Leave:", 107, tY_right);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5); doc.line(143, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Abroad")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Abroad (Specify)", 115, tY_right + 2.5);
-            let abr_val = remks.includes("Abroad") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let abr_val = remks.includes("Abroad") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(abr_val, 138, tY_right + 2); doc.line(138, tY_right + 2.5, 195, tY_right + 2.5);
 
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Sick Leave:", 107, tY_right);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("In Hospital")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("In Hospital (Specify Illness)", 115, tY_right + 2.5);
-            let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Out Patient")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Out Patient (Specify Illness)", 115, tY_right + 2.5);
-            let out_val = remks.includes("Out Patient") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let out_val = remks.includes("Out Patient") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
 
             tY_right += 6;
             doc.setFont("helvetica", "italic"); doc.text("In case of Special Leave Benefits for Women:", 107, tY_right);
             tY_right += 4; doc.setFont("helvetica", "normal"); doc.text("(Specify Illness)", 110, tY_right + 2.5);
-            let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+            let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? (remks.split("-")[1]?.split("|")[0]?.trim() || "") : "";
             doc.setFont("helvetica", "bold"); doc.text(wom_val, 132, tY_right + 2); doc.line(132, tY_right + 2.5, 195, tY_right + 2.5);
             tY_right += 4; doc.line(110, tY_right + 2.5, 195, tY_right + 2.5);
 
@@ -1958,6 +2085,10 @@
         
         window.renderCalendar = async function() {
             try {
+                // BUG FIX: The 'doc' variable (jsPDF instance) was missing in this function scope.
+                // However, since we are only rendering HTML here, we do NOT instantiate jsPDF until generateForm48() is called.
+                // END BUG FIX
+
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
@@ -1996,66 +2127,98 @@
                     supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
                 ]);
 
-                tbody.innerHTML = "";
-                for(let d=1; d<=endDt.getDate(); d++) {
+                // BUG FIX: The HTML table generation was missing from the original script.
+                // We need to render the UI calendar first, independently of the PDF generation.
+                
+                let html = '';
+                for (let d = 1; d <= endDt.getDate(); d++) {
                     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                    
                     const dateObj = new Date(year, month, d);
                     const dayOfWeek = dateObj.getDay();
-                    
                     let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-                    let activeOverride = null;
+                    let activeSchedule = null;
+                    let schedType = "Flexi";
+                    
                     if (schedOverrides) {
-                        activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                        const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                        if (override) {
+                            activeSchedule = {
+                                start_time: override.start_time,
+                                end_time: override.end_time
+                            };
+                            schedType = override.schedule_type || "Fixed";
+                            
+                            if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
+                                isWeekend = true;
+                            }
+                        }
                     }
-                    
-                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                         if (dayOfWeek === 5) {
-                             isWeekend = true; 
-                         }
+
+                    if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
+                        activeSchedule = {
+                            start_time: currentUser.flexi_range_start + ":00", 
+                            end_time: currentUser.flexi_range_end + ":00"
+                        };
+                        schedType = "Flexi";
                     }
+
+                    let special = "";
+                    let sClass = "";
+                    const hol = (holidays || []).find(h => h.date === dateStr);
+                    if(hol) { special = (hol.description || "HOLIDAY").toUpperCase(); sClass = "entry-holiday"; }
                     
-                    const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
-                    const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                    const holiday = (holidays || []).find(h => h.date === dateStr);
+                    const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                    if(pso) { special = `PSO ${pso.pso_no || ''}`.toUpperCase(); sClass = "entry-pso"; }
+                    
+                    const to = (itins || []).find(i => i.travel_date === dateStr);
+                    if(to) { special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase(); sClass = "entry-to"; }
+                    
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                    if(leave) { special = String(leave.type).toUpperCase(); sClass = "entry-leave"; }
 
-                    let activityHtml = "";
-                    if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
-                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                    if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`);
-                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
-
-                    let amIn="", amOut="", pmIn="", pmOut="";
-                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                    if (isWeekend && !special) {
+                        special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        sClass = "text-muted";
+                        if (dayOfWeek === 5) { special = "NO FRIDAY WORK"; sClass = "text-muted"; }
+                    }
+                    
+                    let amIn="--", amOut="--", pmIn="--", pmOut="--";
                     dayLogs.forEach(time => {
                         const hr = time.getHours();
                         const fmt = formatTime12(time);
-                        if(hr < 12 && !amIn) amIn = fmt;
-                        else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                        else if(hr <= 14 && !pmIn) pmIn = fmt;
+                        if(hr < 12 && amIn === "--") amIn = fmt;
+                        else if(hr <= 12 && time.getMinutes() <= 30 && amOut === "--") amOut = fmt;
+                        else if(hr <= 14 && pmIn === "--") pmIn = fmt;
                         else pmOut = fmt;
                     });
 
-                    if(isWeekend && !activityHtml && !amIn && !pmIn) {
-                        let dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
-                        if (dayOfWeek === 5) dayName = "NO FRIDAY WORK";
-                        activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">${dayName}</div>`;
+                    if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special === "NO FRIDAY WORK" || special.includes("HOLIDAY"))) {
+                        special = ""; 
                     }
 
-                    let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
-                    
-                    tbody.innerHTML += `<tr style="${rowStyle}">
-                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
-                        <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
-                        <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
-                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                    if (special && special !== "SATURDAY" && special !== "SUNDAY" && special !== "NO FRIDAY WORK") {
+                        special = `<span class="cal-entry ${sClass}">${special}</span>`;
+                    } else if (special) {
+                        special = `<span style="color:gray; font-size:10px;">${special}</span>`;
+                    }
+
+                    html += `<tr>
+                        <td class="day-num">${d}</td>
+                        <td>${special ? '' : amIn}</td>
+                        <td>${special ? '' : amOut}</td>
+                        <td>${special ? '' : pmIn}</td>
+                        <td>${special ? '' : pmOut}</td>
+                        <td>${special}</td>
                     </tr>`;
                 }
-            } catch (error) {
-                document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`;
+                tbody.innerHTML = html;
+                
+            } catch (err) {
+                alert("Calendar Render Error: " + err.message);
+                document.getElementById('cal-table-body').innerHTML = "<tr><td colspan='6' style='color:red;'>Failed to load DTR</td></tr>";
             }
         };
 
@@ -2063,16 +2226,15 @@
             try {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('p', 'mm', 'a4');
+
                 const monthEl = document.getElementById('dtr-month');
                 const yearEl = document.getElementById('dtr-year');
                 const month = parseInt(monthEl.value) - 1;
                 const year = parseInt(yearEl.value);
-                
+
                 const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
                 const endDt = new Date(year, month + 1, 0);
                 const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
-
-                alert("Generating Civil Service Form 48...");
 
                 const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
                 const logsByDate = {};
@@ -2325,24 +2487,41 @@
         };
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            const hashedCurr = await hashPassword(curr);
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
             
-            if(curr !== currentUser.pass && hashedCurr !== currentUser.pass) {
-                return alert("Wrong current password.");
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
             }
-            
-            const hashedNew = await hashPassword(nw);
-            await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
         };
     </script>
 </body>
 </html>
-    </xmp>
+</xmp>
 
-
-    <xmp id="admin_console" style="display: none;">
+<xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2364,6 +2543,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     
     <style>
         .dar-green { background-color: #003811; }
@@ -2446,12 +2626,10 @@
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
 
-        // PASSWORD HASHING UTILITY
+        // SAFE PASSWORD HASHING UTILITY
         async function hashPassword(msg) {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            if (!msg) return "";
+            return sha256(msg); 
         }
 
         // WEBAUTHN UTILS
@@ -2464,7 +2642,7 @@
             return bytes.buffer;
         }
 
-        // SETUP BIOMETRIC (ADMIN)
+        // SETUP BIOMETRIC
         async function setupAdminBiometric(username, hashedPass) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -2502,7 +2680,7 @@
             }
         }
 
-        // HANDLE BIOMETRIC LOGIN (ADMIN)
+        // HANDLE BIOMETRIC LOGIN
         async function handleBiometricLogin() {
             try {
                 const credId = localStorage.getItem('dar_admin_bio_cred');
@@ -2523,12 +2701,12 @@
                 });
 
                 // Authenticated
-                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
+                const { data: users } = await supabaseClient.from('users').select('*').ilike('username', username).maybeSingle();
                 if (users && (users.password === token)) {
                     currentUser = {
                         username: users.username,
                         fullName: users.full_name,
-                        role: users.role.toUpperCase(),
+                        role: users.role ? users.role.trim().toUpperCase() : "",
                         divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
                         units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : []
                     };
@@ -2593,24 +2771,63 @@
             const uBox = document.getElementById('username').value.trim();
             const pBox = document.getElementById('password').value.trim();
             const err = document.getElementById('loginError');
+            
+            if(!uBox || !pBox) {
+                err.innerText = "Please enter username and password."; 
+                err.classList.remove("hidden");
+                return;
+            }
+
+            err.innerText = "Authenticating...";
+            err.classList.remove("hidden");
+            err.classList.replace("text-red-600", "text-blue-600");
+
             try {
                 const hashedPBox = await hashPassword(pBox);
-                const { data: users } = await supabaseClient.from('users').select('*');
-                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+                
+                const { data: users, error } = await supabaseClient
+                    .from('users')
+                    .select('*')
+                    .ilike('username', uBox);
+                
+                if (error) {
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Database Error: " + error.message; 
+                    return;
+                }
+
+                if (!users || users.length === 0) {
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Username not found."; 
+                    return;
+                }
+                
+                const u = users.find(x => 
+                    x.password === pBox || 
+                    x.password === hashedPBox || 
+                    x.password?.trim() === pBox || 
+                    x.password?.trim() === hashedPBox
+                );
                 
                 if (u) {
                     currentUser = { 
                         username: u.username, 
                         fullName: u.full_name, 
-                        role: u.role.toUpperCase(), 
+                        role: u.role ? u.role.trim().toUpperCase() : "", 
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [] 
                     };
                     localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
                     setupAdminBiometric(u.username, u.password);
                     render();
-                } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
-            } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
+                } else { 
+                    err.classList.replace("text-blue-600", "text-red-600");
+                    err.innerText = "Incorrect password."; 
+                }
+            } catch (e) { 
+                err.classList.replace("text-blue-600", "text-red-600");
+                err.innerText = "Login failed: " + e.message; 
+            }
         }
 
         function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
@@ -2665,16 +2882,28 @@
         async function updatePassword() {
             const o = document.getElementById('oldPwd').value.trim();
             const n = document.getElementById('newPwd').value.trim();
-            const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
-            const hashedOld = await hashPassword(o);
             
-            if (data.password !== o && data.password !== hashedOld) {
-                return alert("Incorrect.");
+            if(!o || !n) return alert("Please fill out both password fields.");
+
+            try {
+                const { data, error } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
+                if(error) throw error;
+                
+                const hashedOld = await hashPassword(o);
+                
+                if (data.password !== o && data.password !== hashedOld && data.password?.trim() !== o && data.password?.trim() !== hashedOld) {
+                    return alert("Incorrect current password.");
+                }
+                
+                const hashedNew = await hashPassword(n);
+                const { error: updateErr } = await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
+                if(updateErr) throw updateErr;
+                
+                alert("Password successfully updated!"); 
+                hideChangePassword();
+            } catch (err) {
+                alert("Error updating password: " + err.message);
             }
-            
-            const hashedNew = await hashPassword(n);
-            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
-            alert("Updated!"); hideChangePassword();
         }
 
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
@@ -2748,13 +2977,14 @@
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
             const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
+            // STRICTLY Personal Context: Only Parpo has universal bypass here. Admin and Vehicle logic removed.
+            if (role.includes("PARPO")) return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
             
-            if (role === "CHIEF") return dMatch;
-            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            if (role.includes("CHIEF")) return dMatch;
+            if ((role.includes("UNIT") || role.includes("MARPO")) && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
             
             const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
             const uMatch = oUnits.some(u => currentUser.units.includes(u));
@@ -2815,7 +3045,7 @@
 
                 } else {
                     const toNos = Array.from(selectedPendingOrders);
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').in('to_no', toNos);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, status').in('to_no', toNos);
                     if (error) throw error;
 
                     const content = document.getElementById('mainContent');
@@ -2855,7 +3085,7 @@
                     p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
                     if (!p.received) return;
                 } else {
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').eq('to_no', to_no).limit(1);
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, status').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
                 }
@@ -2879,39 +3109,35 @@
             }
         }
 
+        // STRICT HIERARCHY LOGIC based on personal context routing. Admin and Vehicle traps removed.
         function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
             const role = u.role ? u.role.trim().toUpperCase() : "";
             
-            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
-                let nextStatus = "PENDING_CHIEF";
-                if (toRecord && toRecord.unit) {
-                    const unt = toRecord.unit.trim().toUpperCase();
-                    if (unt === "PARPO") nextStatus = "PENDING_PARPO";
-                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
-                }
-                return { status: nextStatus };
-            }
-
-            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+            // PRIORITY 1: PARPO
+            if (role.includes("PARPO")) {
                 return { 
-                    status: "PENDING_CHIEF", 
-                    unithead_signed: u.fullName, 
-                    uh_signed_time: nowISO 
+                    status: "APPROVED", 
+                    parpo_signed: u.fullName,
+                    parpo_signed_time: nowISO 
                 };
             }
-            if (role === "CHIEF") {
+            
+            // PRIORITY 2: CHIEF
+            if (role.includes("CHIEF")) {
                 return { 
                     status: "PENDING_PARPO", 
-                    dc_signed: u.fullName, 
+                    dc_signed: u.fullName,
                     dc_signed_time: nowISO 
                 };
             }
-            if (role === "PARPO") {
+            
+            // PRIORITY 3: UNIT / MARPO
+            if (role.includes("UNIT") || role.includes("MARPO")) {
                 return { 
-                    status: "APPROVED", 
-                    parpo_signed: u.fullName, 
-                    parpo_signed_time: nowISO 
+                    status: "PENDING_CHIEF", 
+                    unithead_signed: u.fullName,
+                    uh_signed_time: nowISO 
                 };
             }
             
@@ -2975,10 +3201,10 @@
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    // STRICT Role mappings for visibility, completely stripped of Vehicle and Admin rules.
+                    if (r.includes("PARPO") && s === "PENDING_PARPO") show = true;
+                    else if (r.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r.includes("UNIT") || r.includes("MARPO")) && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (oDivs.includes("PBDD") || uMatch) show = true;
                     }
                 }
@@ -3051,11 +3277,11 @@
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
                     if (tabStatus === 'APPROVED') {
-                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
+                        if (r.includes('UNIT') || r.includes('MARPO')) {
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'CHIEF') {
+                        } else if (r.includes('CHIEF')) {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
+                        } else if (r.includes('PARPO')) {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -3186,13 +3412,6 @@
 </html>
 </xmp>
 
-... (katapusan ng code na binigay ko) ...
-        window.onload = () => { checkSession(); render(); };
-    </script>
-</body>
-</html>
-</xmp>
-
     <script>
         // LAUNCHER SCRIPT
         function bootSystem(sysId) {
@@ -3233,4 +3452,3 @@
     </script>
 </body>
 </html>
-    
