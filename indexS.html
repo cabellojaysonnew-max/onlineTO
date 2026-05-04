@@ -1461,13 +1461,29 @@
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    
-                    // Intelligent unique purposes combination
-                    const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
-                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
-                    doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
-                    curY += Math.max(5, purpLines.length * 4);
 
+
+// New Logic: Underline every line
+const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+
+// Loop through each generated line
+purpLines.forEach((line) => {
+    // Print the text for this specific line
+    doc.text(line, 20, curY);
+    
+    // Draw an underline for this specific line from X=20 to X=160
+    doc.line(20, curY + 1, 160, curY + 1);
+    
+    // Move the Y cursor down for the next line
+    curY += 4.5; 
+});
+
+// Add a little extra padding after the block finishes
+curY += 2;
+
+                    
+                    
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
                     drawCheck("LIVE IN", 110, curY, false);
