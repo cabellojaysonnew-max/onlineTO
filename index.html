@@ -1201,6 +1201,8 @@
 
                 const finalToNo = await window.generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
+                
+                // NO REVISION SHOULD BE MADE UNLESS EXPLICITLY INSTRUCTED
                 let routeStatus = "PENDING_CHIEF";
                 const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
 
