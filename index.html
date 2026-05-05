@@ -41,7 +41,33 @@
         <iframe id="app-iframe"></iframe>
     </div>
 
-    <xmp id="employee_portal" style="display: none;">
+    <script>
+        function bootSystem(id) {
+            const code = document.getElementById(id).innerText;
+            const iframe = document.getElementById('app-iframe');
+            iframe.srcdoc = code;
+            document.getElementById('landing-menu').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+        }
+        function returnToMenu() {
+            document.getElementById('app-iframe').srcdoc = '';
+            document.getElementById('app-container').style.display = 'none';
+            document.getElementById('landing-menu').style.display = 'flex';
+        }
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+<xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,6 +77,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <style>
         :root {
             --dar-green: #003811;
@@ -350,17 +377,24 @@
         let currentUser = null; 
         let itineraryDraft = []; 
         let personnelDraft = []; 
-        const todayStr = new Date().toISOString().split('T')[0]; 
         let isSubmitting = false; 
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
+        // Use absolute PST Time (Asia/Manila)
+        const getPSTDate = () => {
+            const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
+            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(new Date());
+            const map = {};
+            parts.forEach(p => map[p.type] = p.value);
+            return `${map.year}-${map.month}-${map.day}`;
+        };
+        const todayStr = getPSTDate();
+
         // PASSWORD HASHING UTILITY
-        const hashPassword = async (msg) => {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        window.hashPassword = async function(msg) {
+            if (!msg) return "";
+            return sha256(msg); 
         };
 
         // WEBAUTHN UTILS
@@ -376,10 +410,7 @@
         // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
-                // Get the generated jsPDF arraybuffer
                 const pdfBytes = jsPdfDoc.output('arraybuffer');
-                
-                // Load it into pdf-lib to apply DRM/Encryption
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 
                 pdfDoc.encrypt({
@@ -396,7 +427,6 @@
 
                 const encryptedBytes = await pdfDoc.save();
                 
-                // Trigger Secure Download
                 const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
@@ -406,7 +436,6 @@
                 document.body.removeChild(link);
             } catch (e) {
                 console.error("Encryption failed:", e);
-                // Fallback if encryption fails
                 jsPdfDoc.save(filename);
             }
         };
@@ -468,7 +497,6 @@
                     }
                 });
 
-                // Authenticated locally, proceed to app
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
                 if (data && (data.pass === token)) {
                     currentUser = data;
@@ -481,7 +509,7 @@
                     personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                     window.renderPersonnel();
 
-                    if (data.s_assignment === true) {
+                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
                         document.getElementById('special-div-card').style.display = 'block';
                         const sDivs = (data.division || "").split(',');
                         let sdHtml = '';
@@ -519,7 +547,7 @@
         dtrMonth.value = new Date().getMonth() + 1;
         dtrYear.value = currentYear;
 
-        // Show Bio Button on load if supported and registered - MANUAL CLICK ONLY
+        // Show Bio Button on load if supported and registered
         if (window.PublicKeyCredential) {
             PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
                 if (avail && localStorage.getItem('dar_emp_bio_cred')) {
@@ -541,9 +569,10 @@
             } catch (e) { return null; }
         };
 
-        const formatTime12 = (dateObj) => {
+        // CUSTOM PST TIME FORMATTER
+        const formatTime12PST = (dateObj) => {
             if(!dateObj) return "";
-            return dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            return dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true });
         };
         
         // UNDERTIME CALCULATION HELPER
@@ -551,13 +580,10 @@
             if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
             
             let amIn = null, amOut = null, pmIn = null, pmOut = null;
-            timeLogs.forEach(time => {
-                const hr = time.getHours();
-                if(hr < 12 && !amIn) amIn = time;
-                else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = time;
-                else if(hr <= 14 && !pmIn) pmIn = time;
-                else pmOut = time;
-            });
+            if(timeLogs.length > 0) amIn = timeLogs[0];
+            if(timeLogs.length > 1) amOut = timeLogs[1];
+            if(timeLogs.length > 2) pmIn = timeLogs[2];
+            if(timeLogs.length > 3) pmOut = timeLogs[3];
 
             if (!pmOut && timeLogs.length > 1) {
                 pmOut = timeLogs[timeLogs.length - 1]; 
@@ -574,25 +600,31 @@
                 const endMin = parseInt(schedEndParts[1]);
 
                 if (amIn) {
-                    const inHour = amIn.getHours();
-                    const inMin = amIn.getMinutes();
+                    const pstStr = amIn.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
+                    const inHour = parseInt(pstStr.split(' ')[1].split(':')[0]);
+                    const inMin = parseInt(pstStr.split(' ')[1].split(':')[1]);
                     if (inHour > startHour || (inHour === startHour && inMin > startMin)) {
                         totalUndertimeMinutes += ((inHour - startHour) * 60) + (inMin - startMin);
                     }
                 }
                 if (pmOut) {
-                    const outHour = pmOut.getHours();
-                    const outMin = pmOut.getMinutes();
+                    const pstStr = pmOut.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
+                    const outHour = parseInt(pstStr.split(' ')[1].split(':')[0]);
+                    const outMin = parseInt(pstStr.split(' ')[1].split(':')[1]);
                     if (outHour < endHour || (outHour === endHour && outMin < endMin)) {
                         totalUndertimeMinutes += ((endHour - outHour) * 60) + (endMin - outMin);
                     }
                 }
             } else {
-                // FLEXI SCHEDULE: check if completed 8 hours (480 mins)
                 let workMins = 0;
                 if (amIn && pmOut) {
                     let diffMins = (pmOut - amIn) / 60000;
-                    if (amIn.getHours() < 12 && pmOut.getHours() > 13) {
+                    const pstIn = amIn.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
+                    const pstOut = pmOut.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
+                    const inHour = parseInt(pstIn.split(' ')[1].split(':')[0]);
+                    const outHour = parseInt(pstOut.split(' ')[1].split(':')[0]);
+                    
+                    if (inHour < 12 && outHour > 13) {
                         diffMins -= 60; // deduct lunch break
                     }
                     workMins = diffMins;
@@ -611,6 +643,9 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
+            
+            if (!id || !pass) return alert("Please enter ID and Password");
+
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
                 
@@ -618,10 +653,14 @@
                     alert("Database connection issue: " + error.message);
                     return;
                 }
+                if (!data) {
+                    alert("Employee ID not found.");
+                    return;
+                }
                 
-                const hashedPass = await hashPassword(pass);
+                const hashedPass = await window.hashPassword(pass);
 
-                if (data && (data.pass === pass || data.pass === hashedPass)) {
+                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -632,7 +671,7 @@
                     personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
                     window.renderPersonnel();
 
-                    if (data.s_assignment === true) {
+                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
                         document.getElementById('special-div-card').style.display = 'block';
                         const sDivs = (data.division || "").split(',');
                         let sdHtml = '';
@@ -649,21 +688,20 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
-                    // Setup Biometric post-login
                     window.setupBiometric(id, data.pass);
                     
                 } else { 
-                    alert("Invalid Credentials"); 
+                    alert("Incorrect Password."); 
                 }
             } catch (err) {
-                alert("Network Error");
+                alert("Login Error: " + err.message);
             }
         };
 
         // --- ATTENDANCE LOGIC ---
         window.loadAttendance = async function() {
             document.getElementById('att-emp-name').innerText = currentUser.full_name;
-            const fDate = new Date(todayStr).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const fDate = new Date(todayStr).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' });
             document.getElementById('att-date-today').innerText = fDate.replace(/\//g, '-'); 
             
             const { data: logs, error } = await supabase
@@ -673,8 +711,14 @@
                 .gte('log_time', todayStr + 'T00:00:00')
                 .lte('log_time', todayStr + 'T23:59:59')
                 .order('log_time', { ascending: true });
+
+            // OFFLINE SYNC LOGIC Check
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
                 
-            let logCount = logs ? logs.length : 0;
+            let allLogs = [...(logs || []), ...todayOfflineLogs].sort((a,b) => new Date(a.log_time) - new Date(b.log_time));
+            let logCount = allLogs.length;
+
             const btn = document.getElementById('btn-clock');
             const btnText = document.getElementById('btn-clock-text');
             const statusBadge = document.getElementById('att-status-badge');
@@ -703,17 +747,18 @@
                 btnText.innerText = (logCount % 2 === 0) ? `→] Clock In` : `[← Clock Out`;
             }
             
-            if (logs) {
-                logs.forEach((l, i) => {
+            if (allLogs.length > 0) {
+                allLogs.forEach((l, i) => {
                     const timeObj = new Date(l.log_time);
-                    const fmtTime = formatTime12(timeObj);
+                    const fmtTime = formatTime12PST(timeObj);
                     const icon = (i % 2 === 0) ? `→]` : `[←`;
-                    const currentStatus = l.status || labels[i]; // Fallback to index mapping
+                    const currentStatus = l.status || labels[i]; 
+                    const offlineTag = l.device_id === 'MOBILE_WEB_OFFLINE' ? `<span style="color:red; font-size:9px; font-weight:bold;"> [OFFLINE]</span>` : '';
                     
                     container.innerHTML += `
                         <div style="display:flex; flex-direction:column; border-left: 2px solid var(--dar-green); padding-left: 10px; margin-bottom: 5px;">
                             <div style="font-size: 12px; color: var(--dar-green); font-weight: bold; margin-bottom: 2px;">
-                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')}
+                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')} ${offlineTag}
                             </div>
                             <div style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-bottom: 2px;">${fmtTime}</div>
                             <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${l.place_name || l.address || 'Unknown Location'}</div>
@@ -726,19 +771,81 @@
         window.recordAttendance = async function() {
             if (isSubmitting) return;
             
-            const { data: checkLogs } = await supabase
+            let { data: checkLogs } = await supabase
                 .from('attendance_logs')
                 .select('id')
                 .eq('emp_id', currentUser.emp_id)
                 .gte('log_time', todayStr + 'T00:00:00')
                 .lte('log_time', todayStr + 'T23:59:59');
                 
-            if (checkLogs && checkLogs.length >= 4) {
+            let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
+            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+
+            if ((checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length >= 4) {
                 alert("Maximum of 4 logs per day reached.");
                 return window.loadAttendance();
             }
+
+            // CHECK IF HAS TRAVEL ORDER TODAY
+            const { data: toData } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+            const validTos = toData?.map(t => t.to_no) || [];
+            let todayDestination = null;
+            if (validTos.length > 0) {
+                const { data: itin } = await supabase.from('itinerary').select('destination').in('to_no', validTos).eq('travel_date', todayStr).maybeSingle();
+                if (itin) todayDestination = itin.destination;
+            }
             
             isSubmitting = true;
+            
+            if (!navigator.onLine) {
+                document.getElementById('btn-clock-text').innerText = "📍 Saving Offline...";
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const nextIndex = (checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length;
+                    const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
+                    
+                    offlineLogs.push({
+                        emp_id: currentUser.emp_id,
+                        log_time: new Date().toISOString(),
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        place_name: "Offline (Pending Sync)",
+                        status: labels[nextIndex],
+                        device_id: 'MOBILE_WEB_OFFLINE'
+                    });
+                    localStorage.setItem('dar_offline_logs_' + currentUser.emp_id, JSON.stringify(offlineLogs));
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, (error) => {
+                    alert("Please enable GPS/Location to clock in offline. " + error.message);
+                    isSubmitting = false;
+                    window.loadAttendance();
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+                return;
+            }
+
+            // Sync offline logs if we are online before creating new log
+            if (offlineLogs.length > 0) {
+                document.getElementById('btn-clock-text').innerText = "Syncing Offline...";
+                for (let ol of offlineLogs) {
+                    try {
+                        let placeName = "Unknown Location";
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${ol.latitude}&lon=${ol.longitude}&zoom=18&addressdetails=1`);
+                        const data = await res.json();
+                        if (data && data.display_name) {
+                            placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
+                            if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
+                        }
+                        ol.place_name = placeName;
+                        ol.device_id = 'MOBILE_WEB';
+                        await supabase.from('attendance_logs').insert(ol);
+                    } catch (e) { console.log("Geocoding/Sync failed", e); }
+                }
+                localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
+                // Re-fetch accurate count after sync
+                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00').lte('log_time', todayStr + 'T23:59:59');
+                checkLogs = newCheck;
+            }
+
             document.getElementById('btn-clock-text').innerText = "📍 Getting Location...";
             
             if (!navigator.geolocation) {
@@ -768,12 +875,20 @@
                     }
                 } catch(e) { console.log("Geocoding failed", e); }
                 
+                let outOfBoundsStr = "";
+                if (todayDestination) {
+                    if (!addressStr.toLowerCase().includes(todayDestination.toLowerCase()) && !placeName.toLowerCase().includes(todayDestination.toLowerCase())) {
+                        outOfBoundsStr = " (Outside Destination)";
+                        placeName = placeName + outOfBoundsStr;
+                    }
+                }
+                
                 document.getElementById('btn-clock-text').innerText = "Saving Log...";
                 
                 try {
                     const nextIndex = checkLogs ? checkLogs.length : 0;
                     const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
-                    const statusVal = labels[nextIndex];
+                    const statusVal = labels[nextIndex]; // Sequential assignment only
                     
                     const { error } = await supabase.from('attendance_logs').insert({
                         emp_id: currentUser.emp_id,
@@ -824,6 +939,37 @@
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
+            
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update local session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
+        };
+
         window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
@@ -859,10 +1005,15 @@
                     else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
                     else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
 
+                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
+                    let tSign = isCredit ? '+' : '-';
+                    let displayVal = isCredit ? (l.credit || l.debit || 0) : (l.debit || 0);
+
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                         <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: var(--danger); font-weight:bold;">-${l.debit || 0}</td>
+                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
                         <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                     </tr>`;
                 });
@@ -878,10 +1029,10 @@
             if(emp) {
                 container.innerHTML = `
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> ${currentVL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> ${currentSL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> ${currentSPL}</div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> ${currentWL}</div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
+                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
                     </div>
                     <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
                     ${deductionsHtml}
@@ -921,7 +1072,7 @@
             
             ctoContainer.innerHTML = `
                 <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> ${emp?.cto_balance || 0} hrs
+                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
                 </div>
                 ${ctoHtml}
             `;
@@ -1060,7 +1211,7 @@
             }
 
             let finalDiv = currentUser.division;
-            if (currentUser.s_assignment === true) {
+            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
                 if(checkedBoxes.length > 0) {
                     finalDiv = Array.from(checkedBoxes).map(cb => cb.value).join(', ');
@@ -1107,12 +1258,23 @@
                 const finalToNo = await window.generateToNo(); 
                 const transport = document.getElementById('to-transport').value;
                 let routeStatus = "PENDING_CHIEF";
-                const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
+                
+                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+                const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
+                const isGovVeh = transport === "GOV'T VEHICLE";
 
-                if (transport === "GOV'T VEHICLE") routeStatus = "PENDING_VEHICLE_APPROVER"; 
-                else if (currentUser.unit === "PARPO") routeStatus = "PENDING_PARPO";
-                else if (isMARPO) routeStatus = "PENDING_CHIEF";
-                else if (currentUser.unit && currentUser.unit.trim() !== "") routeStatus = "PENDING_UNIT_HEAD";
+                // Strict Priority Routing
+                if (isGovVeh) {
+                    routeStatus = "PENDING_VEHICLE_APPROVER";
+                } else if (isPARPOUnit) {
+                    routeStatus = "PENDING_PARPO";
+                } else if (isMARPO) {
+                    routeStatus = "PENDING_CHIEF";
+                } else if (currentUser.unit && currentUser.unit.trim() !== "") {
+                    routeStatus = "PENDING_UNIT_HEAD";
+                } else {
+                    routeStatus = "PENDING_CHIEF";
+                }
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: finalDiv, 
@@ -1218,7 +1380,7 @@
             personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
             window.renderPersonnel();
 
-            if (currentUser.s_assignment === true) {
+            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const savedDivs = to.division.split(',').map(d => d.trim());
                 document.querySelectorAll('input[name="special_div"]').forEach(cb => {
                     cb.checked = savedDivs.includes(cb.value);
@@ -1230,7 +1392,7 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-        window.generateOfficialPDF = async function(toNo) {
+  window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -1240,6 +1402,9 @@
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
                 
+                // FETCH VEHICLE LOG SCHEDULE for red ink rendering
+                const { data: vLog } = await supabase.from('vehicle_logs').select('scheudle').eq('to_no', toNo).maybeSingle();
+                
                 const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
                 const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
@@ -1248,7 +1413,7 @@
                 const rawType = emp_details?.find(e => e.emp_id === group_orders[0].emp_id)?.type?.toUpperCase();
                 const typeLabel = rawType === 'SPLIT' ? 'SPLIT/COS' : (rawType === 'REGULAR' ? 'REGULAR' : '');
 
-                const isMARPO = currentUser.position && currentUser.position.toUpperCase().includes("MARPO");
+                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 // Get Unique Units and Divisions from the Personnel in this TO
                 const uniqueUnits = [...new Set(group_orders.map(o => o.unit).filter(u => u && u !== "PARPO"))];
@@ -1280,23 +1445,32 @@
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                    
+                    // TOP MOST RED INK REMARK FOR GOV'T VEHICLE (Y=8)
+                    if (od.transport === "GOV'T VEHICLE") {
+                        doc.setTextColor(255, 0, 0); // RED INK
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
+                        doc.setTextColor(0, 0, 0); // RESET TO BLACK
+                    }
+
                     if (img_qr) { 
                         try { 
                             doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
                             if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
-                            
+
                             // AUDIT TRAIL TIMESTAMPS
                             doc.setFont("helvetica", "normal");
                             doc.setFontSize(4);
-                            let auditText = `UH: ${od.unithead_date || 'N/A'} | DC: ${od.dc_date || 'N/A'} | PARPO: ${od.parpo_date || 'N/A'}`;
+                            let auditText = [
+                                `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+                            ];
                             doc.text(auditText, 190, 36, {align: 'center'});
                         } catch(e){} 
                     }
 
-                    if (od.transport === "GOV'T VEHICLE") {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-                        doc.text("NOT VALID FOR TRANSPORTATION REIMBURSEMENT CLAIM", 105, 48, { align: 'center' });
-                    }
                     if (od.remarks && od.remarks.includes("EXISTING PSO")) {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(9);
                         doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
@@ -1308,49 +1482,67 @@
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
 
-                    const renderFlexibleText = (text, x, y, maxWidth, defaultSize) => {
+                    const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
                         let currentSize = defaultSize;
                         doc.setFontSize(currentSize);
-                        while (doc.getTextWidth(text) > maxWidth && currentSize > 4) {
+                        let lines = doc.splitTextToSize(text || "", maxWidth);
+                        while (lines.length > maxLines && currentSize > 4.5) {
                             currentSize -= 0.5;
                             doc.setFontSize(currentSize);
+                            lines = doc.splitTextToSize(text || "", maxWidth);
                         }
-                        doc.text(text, x, y);
+                        let curY = y;
+                        lines.forEach((line) => {
+                            doc.text(line, x, curY);
+                            doc.line(x, curY + 1, lineEndX, curY + 1);
+                            curY += 4.5;
+                        });
                         doc.setFontSize(defaultSize);
+                        return lines.length;
                     };
 
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
-                    renderFlexibleText(names, 40, 48, 120, 10); doc.line(40, 49, 160, 49);
+                    doc.setFont("helvetica", "normal");
+                    let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
 
-                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, 54);
-                    doc.setFont("helvetica", "normal"); renderFlexibleText(positions, 40, 54, 45, 10); doc.line(40, 55, 85, 55);
-                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, 54);
-                    doc.setFont("helvetica", "normal"); renderFlexibleText(stations, 110, 54, 50, 10); doc.line(110, 55, 160, 55);
+                    let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
 
-                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, 61);
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let posLinesCount = renderFlexibleText(positions, 40, nextY, 45, 85, 10, 2);
+                    
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
+
+                    let maxSubLines = Math.max(posLinesCount, statLinesCount);
+                    let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
+
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, transY);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     const drawCheck = (label, x, y, isChecked) => {
                         doc.rect(x, y - 3, 3, 3);
                         if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
                         doc.text(label, x + 5, y);
                     };
-                    drawCheck("AIR", 20, 66, od.transport === "AIR");
-                    drawCheck("GOV'T VEHICLE", 70, 66, od.transport === "GOV'T VEHICLE");
-                    drawCheck("LAND", 20, 71, od.transport === "LAND");
-                    drawCheck("OTHERS, PLEASE SPECIFY", 70, 71, od.transport === "OTHERS");
+                    drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                    drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                    drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
+                    drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
 
                     doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                    doc.text("DESTINATION:", 20, 78);
+                    let destLabelY = transY + 17;
+                    doc.text("DESTINATION:", 20, destLabelY);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    let destY = 78;
+                    let destY = destLabelY;
                     itin_list.forEach(it => {
                         doc.text(`${formatDestDate(it.travel_date)} - ${it.destination}`, 50, destY);
                         destY += 4.5;
                     });
                     
-                    let curY = Math.max(destY, 83);
+                    let curY = Math.max(destY, destLabelY + 5);
 
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("DEPARTURE DATE:", 20, curY);
@@ -1366,10 +1558,16 @@
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const purpLines = doc.splitTextToSize(itin_list[0]?.purpose || "", 140);
-                    doc.text(purpLines, 20, curY); doc.line(20, curY+1, 160, curY+1);
-                    curY += Math.max(5, purpLines.length * 4);
 
+                    const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+                    purpLines.forEach((line) => {
+                        doc.text(line, 20, curY);
+                        doc.line(20, curY + 1, 160, curY + 1);
+                        curY += 4.5; 
+                    });
+                    curY += 2;
+                    
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
                     drawCheck("LIVE IN", 110, curY, false);
@@ -1396,16 +1594,25 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 25, 25); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
+
+                    // VEHICLE SCHEDULE RED INK
+                    if (vLog && vLog.scheudle) {
+                        doc.setTextColor(255, 0, 0); // RED
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(8);
+                        doc.text(`Vehicle Schedule: ${vLog.scheudle}`, 195, 285, { align: 'right' });
+                        doc.setTextColor(0, 0, 0); // Reset to black
+                    }
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
-
+        
         window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
@@ -2028,14 +2235,11 @@
 
                     let amIn="", amOut="", pmIn="", pmOut="";
                     const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
-                    dayLogs.forEach(time => {
-                        const hr = time.getHours();
-                        const fmt = formatTime12(time);
-                        if(hr < 12 && !amIn) amIn = fmt;
-                        else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                        else if(hr <= 14 && !pmIn) pmIn = fmt;
-                        else pmOut = fmt;
-                    });
+                    
+                    if(dayLogs.length > 0) amIn = formatTime12PST(dayLogs[0]);
+                    if(dayLogs.length > 1) amOut = formatTime12PST(dayLogs[1]);
+                    if(dayLogs.length > 2) pmIn = formatTime12PST(dayLogs[2]);
+                    if(dayLogs.length > 3) pmOut = formatTime12PST(dayLogs[3]);
 
                     if(isWeekend && !activityHtml && !amIn && !pmIn) {
                         let dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
@@ -2236,14 +2440,11 @@
                             }
                             
                             let amIn="", amOut="", pmIn="", pmOut="";
-                            dayLogs.forEach(time => {
-                                const hr = time.getHours();
-                                const fmt = formatTime12(time);
-                                if(hr < 12 && !amIn) amIn = fmt;
-                                else if(hr <= 12 && time.getMinutes() <= 30 && !amOut) amOut = fmt;
-                                else if(hr <= 14 && !pmIn) pmIn = fmt;
-                                else pmOut = fmt;
-                            });
+                            
+                            if(dayLogs.length > 0) amIn = formatTime12PST(dayLogs[0]);
+                            if(dayLogs.length > 1) amOut = formatTime12PST(dayLogs[1]);
+                            if(dayLogs.length > 2) pmIn = formatTime12PST(dayLogs[2]);
+                            if(dayLogs.length > 3) pmOut = formatTime12PST(dayLogs[3]);
 
                             let udH = "", udM = "";
                             if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
@@ -2325,24 +2526,52 @@
         };
 
         window.changePassword = async function() {
-            const curr = document.getElementById('pass-curr').value, nw = document.getElementById('pass-new').value;
-            const hashedCurr = await hashPassword(curr);
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
             
-            if(curr !== currentUser.pass && hashedCurr !== currentUser.pass) {
-                return alert("Wrong current password.");
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
             }
-            
-            const hashedNew = await hashPassword(nw);
-            await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-            alert("Updated."); location.reload();
         };
     </script>
 </body>
 </html>
-    </xmp>
+</xmp>
+    
 
 
-    <xmp id="admin_console" style="display: none;">
+
+
+
+
+
+
+    
+
+    
+<xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3105,7 +3334,7 @@
             content.innerHTML = h + `</div>`;
         }
 
-        // --- REPORTS (STRICT SCOPE + ACTUAL HOLIDAY NAMES + ASCENDING SORT) ---
+        // --- REPORTS (STRICT SCOPE + ACTUAL HOLIDAY NAMES + LATEST TO OLDEST SORT) ---
         async function loadReportsTab() {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-blue-500 font-bold animate-pulse">Building Activity Dashboard...</p>`;
@@ -3162,9 +3391,10 @@
                 if (reportFilter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                 return true;
             });
-            // 1st ONWARDS for Month View (Ascending)
-            if (reportFilter === 'month') f.sort((a, b) => a.date - b.date);
-            else f.sort((a, b) => b.date - a.date);
+            
+            // STRICTLY Latest to Oldest Sorting
+            f.sort((a, b) => b.date.getTime() - a.date.getTime());
+            
             if (f.length === 0) { container.innerHTML = `<p class="text-center py-20 text-gray-400 font-bold text-[10px] tracking-widest uppercase">No Records Found</p>`; return; }
             let h = '', last = '';
             f.forEach(r => {
@@ -3184,53 +3414,3 @@
     </script>
 </body>
 </html>
-</xmp>
-
-... (katapusan ng code na binigay ko) ...
-        window.onload = () => { checkSession(); render(); };
-    </script>
-</body>
-</html>
-</xmp>
-
-    <script>
-        // LAUNCHER SCRIPT
-        function bootSystem(sysId) {
-            // Hide the menu, show the application container
-            document.getElementById('landing-menu').style.display = 'none';
-            document.getElementById('app-container').style.display = 'block';
-            
-            // Fetch the exact, completely unedited code from the <xmp> tag
-            const rawCode = document.getElementById(sysId).textContent;
-            let iframe = document.getElementById('app-iframe');
-            
-            // Recreating the iframe avoids 'dead lock' state cache and unbinds all previous memory safely
-            const newIframe = document.createElement('iframe');
-            newIframe.id = 'app-iframe';
-            iframe.parentNode.replaceChild(newIframe, iframe);
-            iframe = newIframe;
-            
-            // Push the code directly into the isolated iframe document
-            const doc = iframe.contentWindow.document;
-            doc.open();
-            doc.write(rawCode);
-            doc.close();
-        }
-
-        function returnToMenu() {
-            // Confirm exit to prevent accidental loss of data
-            if(confirm("Are you sure you want to switch portals? Any unsaved data or current session will be cleared.")) {
-                document.getElementById('landing-menu').style.display = 'flex';
-                document.getElementById('app-container').style.display = 'none';
-                
-                // Clear the iframe entirely to prevent background execution or deadlock on reopening
-                const iframe = document.getElementById('app-iframe');
-                const newIframe = document.createElement('iframe');
-                newIframe.id = 'app-iframe';
-                iframe.parentNode.replaceChild(newIframe, iframe);
-            }
-        }
-    </script>
-</body>
-</html>
-    
