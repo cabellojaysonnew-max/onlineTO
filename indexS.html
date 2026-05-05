@@ -1392,7 +1392,7 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-        window.generateOfficialPDF = async function(toNo) {
+  window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -1445,6 +1445,15 @@
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
                     if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                    
+                    // TOP MOST RED INK REMARK FOR GOV'T VEHICLE (Y=8)
+                    if (od.transport === "GOV'T VEHICLE") {
+                        doc.setTextColor(255, 0, 0); // RED INK
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
+                        doc.setTextColor(0, 0, 0); // RESET TO BLACK
+                    }
+
                     if (img_qr) { 
                         try { 
                             doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
@@ -1462,10 +1471,6 @@
                         } catch(e){} 
                     }
 
-                    if (od.transport === "GOV'T VEHICLE") {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 48, { align: 'center' });
-                    }
                     if (od.remarks && od.remarks.includes("EXISTING PSO")) {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(9);
                         doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
@@ -1607,7 +1612,7 @@
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
-
+        
         window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
