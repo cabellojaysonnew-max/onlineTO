@@ -108,7 +108,7 @@
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; margin-bottom: 8px; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: gap: 8px; transition: 0.2s; margin-bottom: 8px; }
         .btn:active { transform: scale(0.98); opacity: 0.8; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
@@ -381,7 +381,7 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
-        // Use absolute PST Time (Asia/Manila)
+        // STRICT PHILIPPINE TIME (PST) FORMATTERS
         const getPSTDate = () => {
             const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
             const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(new Date());
@@ -389,6 +389,7 @@
             parts.forEach(p => map[p.type] = p.value);
             return `${map.year}-${map.month}-${map.day}`;
         };
+
         const todayStr = getPSTDate();
 
         // PASSWORD HASHING UTILITY
@@ -708,8 +709,8 @@
                 .from('attendance_logs')
                 .select('*')
                 .eq('emp_id', currentUser.emp_id)
-                .gte('log_time', todayStr + 'T00:00:00')
-                .lte('log_time', todayStr + 'T23:59:59')
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00')
                 .order('log_time', { ascending: true });
 
             // OFFLINE SYNC LOGIC Check
@@ -775,8 +776,8 @@
                 .from('attendance_logs')
                 .select('id')
                 .eq('emp_id', currentUser.emp_id)
-                .gte('log_time', todayStr + 'T00:00:00')
-                .lte('log_time', todayStr + 'T23:59:59');
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00');
                 
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
             let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
@@ -842,7 +843,7 @@
                 }
                 localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
                 // Re-fetch accurate count after sync
-                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00').lte('log_time', todayStr + 'T23:59:59');
+                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00+08:00').lte('log_time', todayStr + 'T23:59:59+08:00');
                 checkLogs = newCheck;
             }
 
@@ -858,7 +859,6 @@
             navigator.geolocation.getCurrentPosition(async (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                const acc = position.coords.accuracy;
                 
                 document.getElementById('btn-clock-text').innerText = "Identifying Place...";
                 let placeName = "Unknown Location";
@@ -869,7 +869,6 @@
                     const data = await res.json();
                     if (data && data.display_name) {
                         addressStr = data.display_name;
-                        // Extract a reasonable place name
                         placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
                         if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
                     }
@@ -1392,7 +1391,7 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-  window.generateOfficialPDF = async function(toNo) {
+        window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -1594,7 +1593,7 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 25, 25); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -1612,7 +1611,7 @@
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
-        
+
         window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
@@ -2177,7 +2176,7 @@
                 const endDt = new Date(year, month + 1, 0);
                 const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
                     const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
@@ -2278,7 +2277,7 @@
 
                 alert("Generating Civil Service Form 48...");
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
                     const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
@@ -2559,8 +2558,6 @@
 </body>
 </html>
 </xmp>
-    
-
 
 
 
