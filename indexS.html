@@ -108,7 +108,7 @@
         label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: gap: 8px; transition: 0.2s; margin-bottom: 8px; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; margin-bottom: 8px; }
         .btn:active { transform: scale(0.98); opacity: 0.8; }
         .btn-primary { background: var(--dar-green); }
         .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
@@ -382,13 +382,15 @@
         let cachedHolidays = [];
 
         // STRICT PHILIPPINE TIME (PST) FORMATTERS
-        const getPSTDate = () => {
+        const getPSTDateFromDateObj = (dateObj) => {
             const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
-            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(new Date());
+            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(dateObj);
             const map = {};
             parts.forEach(p => map[p.type] = p.value);
             return `${map.year}-${map.month}-${map.day}`;
         };
+
+        const getPSTDate = () => getPSTDateFromDateObj(new Date());
 
         const todayStr = getPSTDate();
 
@@ -715,7 +717,7 @@
 
             // OFFLINE SYNC LOGIC Check
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
-            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+            let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
                 
             let allLogs = [...(logs || []), ...todayOfflineLogs].sort((a,b) => new Date(a.log_time) - new Date(b.log_time));
             let logCount = allLogs.length;
@@ -780,7 +782,7 @@
                 .lte('log_time', todayStr + 'T23:59:59+08:00');
                 
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
-            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+            let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
 
             if ((checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length >= 4) {
                 alert("Maximum of 4 logs per day reached.");
@@ -1402,7 +1404,7 @@
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
                 
                 // FETCH VEHICLE LOG SCHEDULE for red ink rendering
-                const { data: vLog } = await supabase.from('vehicle_logs').select('scheudle').eq('to_no', toNo).maybeSingle();
+                const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
                 
                 const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
@@ -1526,7 +1528,14 @@
                         doc.text(label, x + 5, y);
                     };
                     drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                    
                     drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                    if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
+                        doc.text(`Sched: ${vLog.schedule}`, 98, transY + 5);
+                        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+                    }
+
                     drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
                     drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
 
@@ -1598,15 +1607,6 @@
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
-
-                    // VEHICLE SCHEDULE RED INK
-                    if (vLog && vLog.scheudle) {
-                        doc.setTextColor(255, 0, 0); // RED
-                        doc.setFont("helvetica", "bold");
-                        doc.setFontSize(8);
-                        doc.text(`Vehicle Schedule: ${vLog.scheudle}`, 195, 285, { align: 'right' });
-                        doc.setTextColor(0, 0, 0); // Reset to black
-                    }
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -2179,9 +2179,8 @@
                 const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
-                    const dateObj = new Date(cleanTimeStr);
-                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
                 });
@@ -2280,9 +2279,8 @@
                 const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
-                    const dateObj = new Date(cleanTimeStr);
-                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
                 });
@@ -2560,6 +2558,14 @@
 </xmp>
 
 
+
+
+
+
+
+
+
+    
 
 
 
