@@ -381,14 +381,17 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
 
-        // Use absolute PST Time (Asia/Manila)
-        const getPSTDate = () => {
+        // STRICT PHILIPPINE TIME (PST) FORMATTERS
+        const getPSTDateFromDateObj = (dateObj) => {
             const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
-            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(new Date());
+            const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(dateObj);
             const map = {};
             parts.forEach(p => map[p.type] = p.value);
             return `${map.year}-${map.month}-${map.day}`;
         };
+
+        const getPSTDate = () => getPSTDateFromDateObj(new Date());
+
         const todayStr = getPSTDate();
 
         // PASSWORD HASHING UTILITY
@@ -708,13 +711,13 @@
                 .from('attendance_logs')
                 .select('*')
                 .eq('emp_id', currentUser.emp_id)
-                .gte('log_time', todayStr + 'T00:00:00')
-                .lte('log_time', todayStr + 'T23:59:59')
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00')
                 .order('log_time', { ascending: true });
 
             // OFFLINE SYNC LOGIC Check
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
-            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+            let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
                 
             let allLogs = [...(logs || []), ...todayOfflineLogs].sort((a,b) => new Date(a.log_time) - new Date(b.log_time));
             let logCount = allLogs.length;
@@ -775,11 +778,11 @@
                 .from('attendance_logs')
                 .select('id')
                 .eq('emp_id', currentUser.emp_id)
-                .gte('log_time', todayStr + 'T00:00:00')
-                .lte('log_time', todayStr + 'T23:59:59');
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00');
                 
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
-            let todayOfflineLogs = offlineLogs.filter(l => l.log_time.startsWith(todayStr));
+            let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
 
             if ((checkLogs ? checkLogs.length : 0) + todayOfflineLogs.length >= 4) {
                 alert("Maximum of 4 logs per day reached.");
@@ -842,7 +845,7 @@
                 }
                 localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
                 // Re-fetch accurate count after sync
-                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00').lte('log_time', todayStr + 'T23:59:59');
+                const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00+08:00').lte('log_time', todayStr + 'T23:59:59+08:00');
                 checkLogs = newCheck;
             }
 
@@ -858,7 +861,6 @@
             navigator.geolocation.getCurrentPosition(async (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                const acc = position.coords.accuracy;
                 
                 document.getElementById('btn-clock-text').innerText = "Identifying Place...";
                 let placeName = "Unknown Location";
@@ -869,7 +871,6 @@
                     const data = await res.json();
                     if (data && data.display_name) {
                         addressStr = data.display_name;
-                        // Extract a reasonable place name
                         placeName = data.address.road || data.address.suburb || data.address.village || data.address.city || "Unnamed Location";
                         if(data.address.road && data.address.city) placeName = `${data.address.road}, ${data.address.city}`;
                     }
@@ -1392,7 +1393,7 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-  window.generateOfficialPDF = async function(toNo) {
+        window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -1403,7 +1404,7 @@
                 const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
                 
                 // FETCH VEHICLE LOG SCHEDULE for red ink rendering
-                const { data: vLog } = await supabase.from('vehicle_logs').select('scheudle').eq('to_no', toNo).maybeSingle();
+                const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
                 
                 const od = group_orders[0];
                 const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
@@ -1527,7 +1528,14 @@
                         doc.text(label, x + 5, y);
                     };
                     drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                    
                     drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                    if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
+                        doc.text(`Sched: ${vLog.schedule}`, 103, transY + 5);
+                        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+                    }
+
                     drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
                     drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
 
@@ -1594,25 +1602,16 @@
                     doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
                     doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 25, 25); } catch(e){} }
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("RICARDO C. GARCIA", 114, 202);
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("PARPO II", 128, 206);
-
-                    // VEHICLE SCHEDULE RED INK
-                    if (vLog && vLog.scheudle) {
-                        doc.setTextColor(255, 0, 0); // RED
-                        doc.setFont("helvetica", "bold");
-                        doc.setFontSize(8);
-                        doc.text(`Vehicle Schedule: ${vLog.scheudle}`, 195, 285, { align: 'right' });
-                        doc.setTextColor(0, 0, 0); // Reset to black
-                    }
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
-        
+
         window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
@@ -2177,12 +2176,11 @@
                 const endDt = new Date(year, month + 1, 0);
                 const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
-                    const dateObj = new Date(cleanTimeStr);
-                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
                 });
@@ -2278,12 +2276,11 @@
 
                 alert("Generating Civil Service Form 48...");
 
-                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00").lte('log_time', endDtStr + "T23:59:59");
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
                 const logsByDate = {};
                 (logs || []).forEach(l => {
-                    const cleanTimeStr = l.log_time.split('+')[0].trim().replace(' ', 'T');
-                    const dateObj = new Date(cleanTimeStr);
-                    const isoStr = dateObj.getFullYear() + "-" + String(dateObj.getMonth() + 1).padStart(2, '0') + "-" + String(dateObj.getDate()).padStart(2, '0');
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
                     if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
                     logsByDate[isoStr].push(dateObj);
                 });
@@ -2559,10 +2556,15 @@
 </body>
 </html>
 </xmp>
+
+
+
+
+
+
+
+
     
-
-
-
 
 
 
