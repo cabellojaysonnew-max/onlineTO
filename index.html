@@ -3081,7 +3081,7 @@
 
                 } else {
                     const toNos = Array.from(selectedPendingOrders);
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').in('to_no', toNos);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').in('to_no', toNos);
                     if (error) throw error;
 
                     const content = document.getElementById('mainContent');
@@ -3121,7 +3121,7 @@
                     p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
                     if (!p.received) return;
                 } else {
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport').eq('to_no', to_no).limit(1);
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
                 }
@@ -3160,12 +3160,31 @@
             }
 
             if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+                if (!toRecord) return {};
+                
+                // Partial Approval Logic
+                const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
+                const matchedUnit = u.units.find(userUnit => requiredUnits.includes(userUnit)) || u.units[0] || "UNIT";
+                
+                let currentSigs = toRecord.unithead_signed ? toRecord.unithead_signed : "";
+                const newSig = `${u.fullName} (${matchedUnit})`;
+                
+                if (!currentSigs.includes(u.fullName)) {
+                    currentSigs = currentSigs ? currentSigs + ", " + newSig : newSig;
+                }
+                
+                let allSigned = true;
+                if (requiredUnits.length > 0) {
+                    allSigned = requiredUnits.every(reqU => currentSigs.toUpperCase().includes(reqU));
+                }
+
                 return { 
-                    status: "PENDING_CHIEF", 
-                    unithead_signed: u.fullName, 
+                    status: allSigned ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD", 
+                    unithead_signed: currentSigs, 
                     uh_signed_time: nowISO 
                 };
             }
+
             if (role === "CHIEF") {
                 return { 
                     status: "PENDING_PARPO", 
@@ -3241,11 +3260,13 @@
                     const uMatch = oUnits.some(u => currentUser.units.includes(u));
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
+                    const alreadySigned = o.unithead_signed && o.unithead_signed.includes(currentUser.fullName);
+
                     if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
                     else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
                     else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
-                        if (oDivs.includes("PBDD") || uMatch) show = true;
+                        if (uMatch && !alreadySigned) show = true;
                     }
                 }
                 
@@ -3449,5 +3470,8 @@
 
         window.onload = () => { checkSession(); render(); };
     </script>
+</body>
+</html>
+</xmp>
 </body>
 </html>
