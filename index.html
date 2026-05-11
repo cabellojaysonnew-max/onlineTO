@@ -67,7 +67,6 @@
 
 
 
-<xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1227,6 +1226,9 @@
             let finalDiv = currentUser.division;
             let finalUnit = currentUser.unit;
             let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
+            
+            let isOtherDivision = false;
+            let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
 
             if (isPBDD) {
                 finalUnit = Array.from(pbddUnits).join(', ');
@@ -1235,7 +1237,17 @@
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
                 if(checkedBoxes.length > 0) {
-                    finalDiv = Array.from(checkedBoxes).map(cb => cb.value).join(', ');
+                    const selectedDivs = Array.from(checkedBoxes).map(cb => cb.value.trim());
+                    const primaryDiv = toNoDiv;
+                    
+                    if (!selectedDivs.includes(primaryDiv) && selectedDivs.length > 0) {
+                        isOtherDivision = true;
+                        toNoDiv = selectedDivs[0]; // Set the TO generation target to the OTHER division
+                        // Ensure BOTH the original division and other division are logged to trigger all approvals
+                        finalDiv = primaryDiv + ", " + selectedDivs.join(', ');
+                    } else {
+                        finalDiv = selectedDivs.join(', ');
+                    }
                 }
             }
 
@@ -1261,7 +1273,8 @@
                         });
 
                         if (remainingDays.length > 0) {
-                            const remainderToNo = await window.generateToNo();
+                            // Split TO should follow normal division generation
+                            const remainderToNo = await window.generateToNo(currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN");
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
                             
                             const batchRemainder = origTO.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo, status: 'APPROVED' }));
@@ -1276,7 +1289,7 @@
                     }
                 }
 
-                const finalToNo = await window.generateToNo(); 
+                const finalToNo = await window.generateToNo(toNoDiv); 
                 const transport = document.getElementById('to-transport').value;
                 let routeStatus = "PENDING_CHIEF";
                 
@@ -1284,7 +1297,7 @@
                 const isPARPOUnit = finalUnit && String(finalUnit).toUpperCase() === "PARPO";
                 const isGovVeh = transport === "GOV'T VEHICLE";
 
-                // Strict Priority Routing
+                // Strict Priority Routing. Saving both divisions in the DB automatically links it to both Chiefs for the Approver Side.
                 if (isGovVeh) {
                     routeStatus = "PENDING_VEHICLE_APPROVER";
                 } else if (isPARPOUnit) {
@@ -1333,9 +1346,9 @@
             }
         };
 
-        window.generateToNo = async function() {
+        window.generateToNo = async function(targetDiv) {
             const year = new Date().getFullYear();
-            const div = (currentUser.division || "GEN").trim().substring(0, 5).toUpperCase();
+            const div = (targetDiv || currentUser.division || "GEN").split(',')[0].trim().substring(0, 5).toUpperCase();
             const { data } = await supabase.from('travel_orders')
                 .select('to_no')
                 .like('to_no', `${year}-${div}-%`)
@@ -1452,7 +1465,7 @@
                 // Get Unique Units and Divisions from the Personnel in this TO
                 const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
                 const uniqueUnits = [...new Set(rawUnits)];
-                const uniqueDivs = [...new Set(group_orders.map(o => o.division ? o.division.split(',')[0].trim() : "").filter(d => d))];
+                const uniqueDivs = [...new Set(group_orders.flatMap(o => o.division ? o.division.split(',').map(d=>d.trim()) : []).filter(d => d))];
 
                 let uh_list = [];
                 if (!isMARPO && uniqueUnits.length > 0) {
@@ -1577,11 +1590,17 @@
                     let destLabelY = transY + 17;
                     doc.text("DESTINATION:", 20, destLabelY);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
                     let destY = destLabelY;
+                    const destMaxWidth = 110;
+
                     itin_list.forEach(it => {
-                        doc.text(`${formatDestDate(it.travel_date)} - ${it.destination}`, 50, destY);
-                        destY += 4.5;
+                        const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
+                        const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
+                        wrappedDestLines.forEach((line) => {
+                            doc.text(line, 50, destY);
+                            destY += 3.5;
+                        });
                     });
                     
                     let curY = Math.max(destY, destLabelY + 5);
