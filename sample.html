@@ -1521,7 +1521,7 @@
                     let destLabelY = transY + 17;
                     doc.text("DESTINATION:", 20, destLabelY);
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
                     let destY = destLabelY;
                     const destMaxWidth = 110;
 
@@ -1530,7 +1530,7 @@
                         const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
                         wrappedDestLines.forEach((line) => {
                             doc.text(line, 50, destY);
-                            destY += 4.5;
+                            destY += 3.5;
                         });
                     });
                     
