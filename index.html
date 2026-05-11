@@ -67,6 +67,7 @@
 
 
 <xmp id="employee_portal" style="display: none;">
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -795,6 +796,11 @@
             if (validTos.length > 0) {
                 const { data: itin } = await supabase.from('itinerary').select('destination').in('to_no', validTos).eq('travel_date', todayStr).maybeSingle();
                 if (itin) todayDestination = itin.destination;
+            }
+
+            if (String(currentUser.station).toUpperCase() === 'DARPO-CS1' && !todayDestination) {
+                alert("Attendance logging is restricted to field DARMO stations or DARPO-CS1 employees with an approved Travel Order for today.");
+                return window.loadAttendance();
             }
             
             isSubmitting = true;
@@ -2608,7 +2614,7 @@
     </script>
 </body>
 </html>
-
+    
 </xmp>
 
 
