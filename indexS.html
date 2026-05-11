@@ -102,7 +102,6 @@
         let analyticsData = {};
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
-        let chartInstance = null;
 
         // PASSWORD HASHING UTILITY
         async function hashPassword(msg) {
@@ -647,7 +646,6 @@
             let pendingOrders = [];
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
-                let showOnlyDatesForUnits = null;
                 
                 for (let o of list) {
                     const s = (o.status || "").trim().toUpperCase();
@@ -666,8 +664,6 @@
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
-                            // Set flag to filter itinerary
-                            showOnlyDatesForUnits = unitsCanSign; 
                         }
                     }
                 }
@@ -675,34 +671,20 @@
                 if (show) {
                     let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                     
-                    // Filter down the itinerary if the user is a Unit Head
-                    let displayItinerary = fullItinerary;
-                    if (showOnlyDatesForUnits && list[0].division && list[0].division.toUpperCase().includes('PBDD')) {
-                        // Assuming the destination or purpose hints at the unit, or they just see the whole TO
-                        // However, per requirements: "only the DATE dedicated to specific unit can be viewed"
-                        // Currently, the unit is stored on the travel_orders table, not per-day in the itinerary table in Supabase. 
-                        // If 'unit' is comma separated on travel_orders, we cannot perfectly map Date -> Unit without schema changes. 
-                        // For this UI update, we will show all dates but add a disclaimer, OR we assume the unit string is mapped sequentially.
-                        // I will show the full itinerary but add a tag indicating they are approving for their specific unit.
-                    }
-
                     let dt = "N/A";
-                    if(displayItinerary.length > 0) {
-                        const start = new Date(displayItinerary[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const end = new Date(displayItinerary[displayItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        dt = displayItinerary.length === 1 ? end : `${start} - ${end}`;
+                    if(fullItinerary.length > 0) {
+                        const start = new Date(fullItinerary[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const end = new Date(fullItinerary[fullItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
                     }
-                    
-                    const unitTag = showOnlyDatesForUnits ? `(Approving for: ${showOnlyDatesForUnits.join(', ')})` : '';
 
                     pendingOrders.push({ 
                         to_no, 
                         names: list.map(g => g.emp_name), 
-                        destinations: [...new Set(displayItinerary.map(i => i.destination))].join(', ') || 'N/A', 
-                        purpose: [...new Set(displayItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
+                        destinations: [...new Set(fullItinerary.map(i => i.destination))].join(', ') || 'N/A', 
+                        purpose: [...new Set(fullItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
                         report_to: list[0].report_to || 'N/A', 
-                        dateStr: dt,
-                        unitTag: unitTag
+                        dateStr: dt
                     });
                 }
             }
@@ -727,7 +709,6 @@
                         <div class="flex-grow overflow-hidden">
                             <div class="flex justify-between items-start">
                                 <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
-                                ${o.unitTag ? `<span class="text-[9px] font-bold text-dar-gold bg-yellow-50 px-1 rounded">${o.unitTag}</span>` : ''}
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
@@ -925,103 +906,199 @@
             content.innerHTML = `<p class="flex items-center justify-center h-full text-purple-500 font-bold animate-pulse">Generating AI Analytics...</p>`;
             
             try {
-                // Fetch basic data for analytics
-                const [toRes, logRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, created_at, division'),
-                    supabaseClient.from('attendance_logs').select('log_time, status')
+                // Determine scoped employees safely
+                const { data: allEmps } = await supabaseClient.from('employees').select('*');
+                const validEmps = (allEmps || []).filter(e => checkScope(e.division, e.unit));
+                const validEmpIds = validEmps.map(e => e.emp_id);
+                
+                if (validEmpIds.length === 0) {
+                    content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><p class="font-bold text-xs uppercase text-gray-500">No personnel under your scope</p></div>`;
+                    return;
+                }
+
+                // Format Time to PST manually for queries
+                const nowPST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+                const todayStr = nowPST.getFullYear() + "-" + String(nowPST.getMonth() + 1).padStart(2, '0') + "-" + String(nowPST.getDate()).padStart(2, '0');
+                const currentMonth = nowPST.getMonth() + 1;
+                const isMonday = nowPST.getDay() === 1;
+
+                // Fetch comprehensive data scoped by valid empirical IDs
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no').in('emp_id', validEmpIds),
+                    supabaseClient.from('attendance_logs').select('emp_id, log_time').in('emp_id', validEmpIds).gte('log_time', todayStr + 'T00:00:00'),
+                    supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('itinerary').select('to_no').eq('travel_date', todayStr),
+                    supabaseClient.from('pso_records').select('emp_id').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
+                    isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []})
                 ]);
 
                 const tos = toRes.data || [];
-                const logs = logRes.data || [];
+                const activeTOs = tos.filter(t => t.status === 'APPROVED');
+                const activeToNos = activeTOs.map(t => t.to_no);
+                const itinsToday = (itRes.data || []).filter(i => activeToNos.includes(i.to_no));
+                const empIdsOnTO = activeTOs.filter(t => itinsToday.some(i => i.to_no === t.to_no)).map(t => t.emp_id);
+                
+                const empIdsOnPSO = (psoRes.data || []).map(p => p.emp_id);
+                const empIdsOnSO = (soRes.data || []).map(s => s.emp_id);
 
-                // 1. Process TO Status Distribution
-                const statusCounts = { Approved: 0, Pending: 0, Denied: 0, Cancelled: 0 };
-                tos.forEach(to => {
-                    if (to.status === 'APPROVED') statusCounts.Approved++;
-                    else if (to.status === 'DISAPPROVED') statusCounts.Denied++;
-                    else if (to.status === 'CANCELLED') statusCounts.Cancelled++;
-                    else statusCounts.Pending++;
+                const leavesMap = new Map();
+                (leaveRes.data || []).forEach(l => leavesMap.set(l.emp_id, l.type));
+
+                const logsMap = new Map();
+                (logRes.data || []).forEach(l => {
+                    if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
+                        logsMap.set(l.emp_id, l.log_time);
+                    }
                 });
 
-                // 2. Process Division Workload (Active TOs)
-                const divisionCounts = {};
-                tos.forEach(to => {
-                    if (to.status === 'APPROVED' && to.division) {
-                        const div = to.division.split(',')[0].trim();
-                        if (div) {
-                            divisionCounts[div] = (divisionCounts[div] || 0) + 1;
+                const flagsMap = new Map();
+                (flagRes.data || []).forEach(f => flagsMap.set(f.emp_id, f));
+
+                let listLate = [];
+                let listAbsent = [];
+                let listLeave = [];
+                let listBirthday = [];
+
+                validEmps.forEach(emp => {
+                    // Birthday Processing
+                    if (emp.dob) {
+                        try {
+                            const dobDate = new Date(emp.dob);
+                            if (dobDate.getMonth() + 1 === currentMonth) {
+                                listBirthday.push({ name: emp.full_name, date: dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+                            }
+                        } catch(e){}
+                    }
+
+                    // Leave Processing
+                    if (leavesMap.has(emp.emp_id)) {
+                        listLeave.push({ name: emp.full_name, type: leavesMap.get(emp.emp_id) });
+                        return; 
+                    }
+
+                    // Active Field Work
+                    if (empIdsOnTO.includes(emp.emp_id) || empIdsOnPSO.includes(emp.emp_id) || empIdsOnSO.includes(emp.emp_id)) {
+                        return; // Counted as present/field
+                    }
+
+                    // Attendance Processing
+                    if (logsMap.has(emp.emp_id)) {
+                        const timeIn = new Date(logsMap.get(emp.emp_id));
+                        let flexiEnd = emp.flexi_range_end || "08:00"; 
+                        let [h, m] = flexiEnd.split(':').map(Number);
+                        
+                        let lateThreshold = new Date(timeIn);
+                        lateThreshold.setHours(h, m, 0, 0);
+
+                        if (timeIn > lateThreshold) {
+                            listLate.push({ name: emp.full_name, time: timeIn.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) });
+                        } else if (isMonday) {
+                            // Flag ceremony logic
+                            if (flagsMap.has(emp.emp_id)) {
+                                const fLog = flagsMap.get(emp.emp_id);
+                                if (fLog.status === 'LATE' || fLog.status === 'ABSENT') {
+                                    listLate.push({ name: emp.full_name, time: `Flag: ${fLog.time_in || fLog.status}` });
+                                }
+                            } else {
+                                 listLate.push({ name: emp.full_name, time: `No Flag Record` });
+                            }
+                        }
+                    } else {
+                        const dayOfWeek = nowPST.getDay();
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                            listAbsent.push(emp.full_name);
                         }
                     }
                 });
 
-                analyticsData = { statusCounts, divisionCounts };
+                // Stats for charts
+                const toStats = { Approved: 0, Pending: 0, Denied: 0 };
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED') toStats.Approved++;
+                    else if (t.status.includes('DISAPPROVED') || t.status === 'CANCELLED') toStats.Denied++;
+                    else toStats.Pending++;
+                });
+
+                const totalStaff = validEmps.length;
+                const presentToday = logsMap.size + empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length; 
+
+                analyticsData = { 
+                    toStats, 
+                    workforce: { total: totalStaff, present: presentToday, onLeave: listLeave.length },
+                    lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday }
+                };
+                
                 renderAnalyticsView();
 
             } catch(e) {
-                content.innerHTML = `<p class="p-10 text-red-500">Failed to load analytics data.</p>`;
+                content.innerHTML = `<p class="p-10 text-red-500 text-center">Analytics Error: ${e.message}</p>`;
             }
         }
 
         function renderAnalyticsView() {
+            let aiText = `<strong>AI Insight:</strong> Today's operational capacity is at ${Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.lists.leave.length) / Math.max(1, analyticsData.workforce.total)) * 100)}%. `;
+            if (analyticsData.lists.late.length > 0) aiText += `Monitor the ${analyticsData.lists.late.length} employees who arrived past their flexi-schedule. `;
+            if (analyticsData.lists.absent.length > 0) aiText += `Verify the status of the ${analyticsData.lists.absent.length} unaccounted personnel. `;
+            if (analyticsData.lists.birthday.length > 0) aiText += `Boost team morale by greeting the ${analyticsData.lists.birthday.length} celebrants this month!`;
+
+            let lateHTML = analyticsData.lists.late.map(l => `<span class="inline-block bg-yellow-100 text-yellow-800 text-[10px] px-2 py-1 rounded border border-yellow-200 m-0.5">${l.name} (${l.time})</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
+            let absentHTML = analyticsData.lists.absent.map(a => `<span class="inline-block bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded border border-red-200 m-0.5">${a}</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
+            let leaveHTML = analyticsData.lists.leave.map(l => `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded border border-blue-200 m-0.5">${l.name} <i class="text-blue-500">(${l.type})</i></span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
+            let bdayHTML = analyticsData.lists.birthday.map(b => `<span class="inline-block bg-purple-100 text-purple-800 text-[10px] px-2 py-1 rounded border border-purple-200 m-0.5">🎉 ${b.name} (${b.date})</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
+
             document.getElementById('mainContent').innerHTML = `
                 <div class="p-5 pb-32">
                     <h2 class="font-bold text-xl text-purple-900 mb-6 tracking-tight">AI Executive Summary</h2>
                     
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 mb-6">
-                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Travel Order Processing</h3>
-                        <div class="relative h-48 w-full"><canvas id="statusChart"></canvas></div>
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Daily Roster Intelligence</h3>
+                        
+                        <div class="mb-4">
+                            <p class="text-[11px] font-bold text-red-600 mb-1">Absent / Unaccounted (${analyticsData.lists.absent.length})</p>
+                            <div>${absentHTML}</div>
+                        </div>
+
+                        <div class="mb-4 border-t border-gray-100 pt-3">
+                            <p class="text-[11px] font-bold text-yellow-600 mb-1">Arrived Late (${analyticsData.lists.late.length})</p>
+                            <div>${lateHTML}</div>
+                        </div>
+
+                        <div class="mb-4 border-t border-gray-100 pt-3">
+                            <p class="text-[11px] font-bold text-blue-600 mb-1">On Leave (${analyticsData.lists.leave.length})</p>
+                            <div>${leaveHTML}</div>
+                        </div>
+
+                        <div class="mb-4 border-t border-gray-100 pt-3">
+                            <p class="text-[11px] font-bold text-purple-600 mb-1">Birthdays This Month (${analyticsData.lists.birthday.length})</p>
+                            <div>${bdayHTML}</div>
+                        </div>
+
                         <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
-                            <strong>AI Insight:</strong> Based on the current queue, <span class="text-purple-700 font-bold">${analyticsData.statusCounts.Pending}</span> Travel Orders are pending. Ensure Unit Heads check their portals to prevent bottlenecks.
+                            ${aiText}
                         </p>
                     </div>
 
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100">
-                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Division Mobility (Approved)</h3>
-                        <div class="relative h-64 w-full"><canvas id="divisionChart"></canvas></div>
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Document Queue Health</h3>
+                        <div class="relative h-48 w-full"><canvas id="toQueueChart"></canvas></div>
                         <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
-                            <strong>AI Insight:</strong> This chart identifies the most mobile divisions. Utilize this data for budget allocation regarding field transportation and logistical support.
+                            <strong>AI Insight:</strong> There are <span class="text-purple-700 font-bold">${analyticsData.toStats.Pending}</span> pending Travel Orders requiring action within your division.
                         </p>
                     </div>
                 </div>
             `;
 
-            // Draw Status Chart (Doughnut)
-            const ctxStatus = document.getElementById('statusChart').getContext('2d');
-            new Chart(ctxStatus, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Approved', 'Pending', 'Denied', 'Cancelled'],
-                    datasets: [{
-                        data: [
-                            analyticsData.statusCounts.Approved, 
-                            analyticsData.statusCounts.Pending, 
-                            analyticsData.statusCounts.Denied,
-                            analyticsData.statusCounts.Cancelled
-                        ],
-                        backgroundColor: ['#16a34a', '#f59e0b', '#dc2626', '#9ca3af'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } },
-                    cutout: '70%'
-                }
-            });
-
-            // Draw Division Chart (Bar)
-            const divs = Object.keys(analyticsData.divisionCounts);
-            const counts = Object.values(analyticsData.divisionCounts);
-            const ctxDiv = document.getElementById('divisionChart').getContext('2d');
-            
-            new Chart(ctxDiv, {
+            // Draw TO Queue Chart (Bar)
+            const ctxQueue = document.getElementById('toQueueChart').getContext('2d');
+            new Chart(ctxQueue, {
                 type: 'bar',
                 data: {
-                    labels: divs,
+                    labels: ['Approved', 'Pending', 'Denied'],
                     datasets: [{
-                        label: 'Approved TOs',
-                        data: counts,
-                        backgroundColor: '#8b5cf6',
+                        label: 'Travel Orders',
+                        data: [analyticsData.toStats.Approved, analyticsData.toStats.Pending, analyticsData.toStats.Denied],
+                        backgroundColor: ['#16a34a', '#eab308', '#ef4444'],
                         borderRadius: 4
                     }]
                 },
@@ -1030,7 +1107,7 @@
                     plugins: { legend: { display: false } },
                     scales: {
                         y: { beginAtZero: true, ticks: { precision: 0, font: {size: 10} } },
-                        x: { ticks: { font: {size: 9}, maxRotation: 45, minRotation: 45 } }
+                        x: { ticks: { font: {size: 10} } }
                     }
                 }
             });
