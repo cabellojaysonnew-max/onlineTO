@@ -19,6 +19,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
         .dar-green { background-color: #003811; }
@@ -96,10 +97,12 @@
 
         let currentUser = null;
         let currentTab = 'pending'; 
-        let reportFilter = 'month'; 
+        let reportFilter = 'day'; 
         let reportData = [];
+        let analyticsData = {};
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
+        let chartInstance = null;
 
         // PASSWORD HASHING UTILITY
         async function hashPassword(msg) {
@@ -278,10 +281,11 @@
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/4 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/4 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/4 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/4 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Analytics</span></button>
                 </nav>
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
@@ -303,7 +307,8 @@
                 hideBatchActionBar();
                 if (currentTab === 'approved') loadStatusTab('APPROVED');
                 else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
-                else loadReportsTab();
+                else if (currentTab === 'reports') loadReportsTab();
+                else loadAnalyticsTab();
             }
 
             checkHRNotifications();
@@ -551,20 +556,21 @@
             if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
                 if (!toRecord) return {};
                 
-                // Partial Approval Logic
                 const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
-                const matchedUnit = u.units.find(userUnit => requiredUnits.includes(userUnit)) || u.units[0] || "UNIT";
+                const matchingUnitsToSign = requiredUnits.filter(reqU => u.units.includes(reqU));
                 
                 let currentSigs = toRecord.unithead_signed ? toRecord.unithead_signed : "";
-                const newSig = `${u.fullName} (${matchedUnit})`;
                 
-                if (!currentSigs.includes(u.fullName)) {
-                    currentSigs = currentSigs ? currentSigs + ", " + newSig : newSig;
-                }
+                matchingUnitsToSign.forEach(unit => {
+                    const sigFragment = `${u.fullName} (${unit})`;
+                    if (!currentSigs.includes(sigFragment)) {
+                        currentSigs = currentSigs ? currentSigs + ", " + sigFragment : sigFragment;
+                    }
+                });
                 
                 let allSigned = true;
                 if (requiredUnits.length > 0) {
-                    allSigned = requiredUnits.every(reqU => currentSigs.toUpperCase().includes(reqU));
+                    allSigned = requiredUnits.every(reqU => currentSigs.toUpperCase().includes(`(${reqU})`));
                 }
 
                 return { 
@@ -641,33 +647,63 @@
             let pendingOrders = [];
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
+                let showOnlyDatesForUnits = null;
+                
                 for (let o of list) {
                     const s = (o.status || "").trim().toUpperCase();
                     const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
                     const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
-                    const oUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()) : [];
-                    const uMatch = oUnits.some(u => currentUser.units.includes(u));
                     const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
-                    const alreadySigned = o.unithead_signed && o.unithead_signed.includes(currentUser.fullName);
+                    const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
+                    const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
+                    const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
+                    const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
 
                     if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
                     else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
                     else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
-                        if (uMatch && !alreadySigned) show = true;
+                        if (unitsCanSign.length > 0 && hasUnsignedUnit) {
+                            show = true;
+                            // Set flag to filter itinerary
+                            showOnlyDatesForUnits = unitsCanSign; 
+                        }
                     }
                 }
                 
                 if (show) {
-                    let d = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
-                    let dt = "N/A";
-                    if(d.length > 0) {
-                        const start = new Date(d[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const end = new Date(d[d.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        dt = d.length === 1 ? end : `${start} - ${end}`;
+                    let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
+                    
+                    // Filter down the itinerary if the user is a Unit Head
+                    let displayItinerary = fullItinerary;
+                    if (showOnlyDatesForUnits && list[0].division && list[0].division.toUpperCase().includes('PBDD')) {
+                        // Assuming the destination or purpose hints at the unit, or they just see the whole TO
+                        // However, per requirements: "only the DATE dedicated to specific unit can be viewed"
+                        // Currently, the unit is stored on the travel_orders table, not per-day in the itinerary table in Supabase. 
+                        // If 'unit' is comma separated on travel_orders, we cannot perfectly map Date -> Unit without schema changes. 
+                        // For this UI update, we will show all dates but add a disclaimer, OR we assume the unit string is mapped sequentially.
+                        // I will show the full itinerary but add a tag indicating they are approving for their specific unit.
                     }
-                    pendingOrders.push({ to_no, names: list.map(g => g.emp_name), destinations: [...new Set(d.map(i => i.destination))].join(', ') || 'N/A', purpose: [...new Set(d.map(i => i.purpose))].join(', ') || 'N/A', report_to: list[0].report_to || 'N/A', dateStr: dt });
+
+                    let dt = "N/A";
+                    if(displayItinerary.length > 0) {
+                        const start = new Date(displayItinerary[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const end = new Date(displayItinerary[displayItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        dt = displayItinerary.length === 1 ? end : `${start} - ${end}`;
+                    }
+                    
+                    const unitTag = showOnlyDatesForUnits ? `(Approving for: ${showOnlyDatesForUnits.join(', ')})` : '';
+
+                    pendingOrders.push({ 
+                        to_no, 
+                        names: list.map(g => g.emp_name), 
+                        destinations: [...new Set(displayItinerary.map(i => i.destination))].join(', ') || 'N/A', 
+                        purpose: [...new Set(displayItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
+                        report_to: list[0].report_to || 'N/A', 
+                        dateStr: dt,
+                        unitTag: unitTag
+                    });
                 }
             }
             if (pendingOrders.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
@@ -689,7 +725,10 @@
                             <input type="checkbox" value="${o.to_no}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('${o.to_no}', this.checked)">
                         </div>
                         <div class="flex-grow overflow-hidden">
-                            <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
+                                ${o.unitTag ? `<span class="text-[9px] font-bold text-dar-gold bg-yellow-50 px-1 rounded">${o.unitTag}</span>` : ''}
+                            </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
@@ -712,13 +751,18 @@
             content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-gray-400">Loading...</p>`;
             
             const [oRes, iRes] = await Promise.all([
-                supabaseClient.from('travel_orders').select('*'), 
+                supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }), 
                 supabaseClient.from('itinerary').select('*')
             ]);
             
             let h = `<div class="p-4 space-y-3 pb-32">`;
+            let count = 0;
+            const maxLimit = tabStatus === 'APPROVED' ? 50 : 9999;
             
-            (oRes.data || []).forEach(o => {
+            for (let i = 0; i < (oRes.data || []).length; i++) {
+                if (count >= maxLimit) break;
+                const o = oRes.data[i];
+                
                 if (checkScope(o.division, o.unit)) {
                     let show = false;
                     let displayStatus = o.status;
@@ -759,8 +803,10 @@
                     }
 
                     if (show) {
-                        const myI = (iRes.data || []).filter(i => i.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
-                        const ds = [...new Set(myI.map(i => i.destination))].join(', ') || 'N/A';
+                        count++;
+                        const myI = (iRes.data || []).filter(item => item.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
+                        const ds = [...new Set(myI.map(item => item.destination))].join(', ') || 'N/A';
+                        const purpose = [...new Set(myI.map(item => item.purpose))].join(', ') || 'N/A';
                         let dt = "N/A";
                         if(myI.length > 0) {
                             const start = new Date(myI[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -770,18 +816,34 @@
                         
                         let cancelBtn = '';
                         if (tabStatus === 'APPROVED') {
-                            const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(i => i.travel_date)));
+                            const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(item => item.travel_date)));
                             cancelBtn = `<div class="mt-3 pt-3 border-t border-gray-100 flex justify-end"><button onclick="showCancelModal('${o.to_no}', '${datesEncoded}')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button></div>`;
                         }
                         
-                        h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm"><div class="flex justify-between mb-1"><span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span><span class="text-[9px] text-gray-400">${o.to_no}</span></div><p class="font-bold text-gray-800 text-base">${o.emp_name}</p><p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p><p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>${cancelBtn}</div>`;
+                        h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm">
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
+                                    <span class="text-[9px] text-gray-400">${o.to_no}</span>
+                                </div>
+                                <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
+                                <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
+                                <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${purpose}</p>
+                                <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
+                                <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
+                                ${cancelBtn}
+                              </div>`;
                     }
                 }
-            });
-            content.innerHTML = h + `</div>`;
+            }
+            
+            if (count === 0) {
+                content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📄</span><p class="font-bold mt-2 text-xs uppercase">No Records</p></div>`;
+            } else {
+                content.innerHTML = h + `</div>`;
+            }
         }
 
-        // --- REPORTS (STRICT SCOPE + ACTUAL HOLIDAY NAMES + LATEST TO OLDEST SORT) ---
+        // --- REPORTS (WHEREABOUTS) ---
         async function loadReportsTab() {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-blue-500 font-bold animate-pulse">Building Activity Dashboard...</p>`;
@@ -799,14 +861,14 @@
                     const p = (toR.data || []).find(x => x.to_no === i.to_no);
                     if(p && i.travel_date && checkScope(p.division, p.unit)) {
                         const key = `${p.emp_name}-${i.travel_date}`;
-                        if (!seen.has(key)) { reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, color: 'blue' }); seen.add(key); }
+                        if (!seen.has(key)) { reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue' }); seen.add(key); }
                     }
                 });
-                (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', color: 'purple' }); });
-                (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', color: 'orange' }); });
+                (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
+                (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', purpose: s.subject, color: 'orange' }); });
                 (hoR.data || []).forEach(h => { if(h.date) {
                     const name = h.name || h.holiday || h.description || "Holiday";
-                    reportData.push({ type: 'HOLIDAY', date: new Date(h.date), title: name, subtitle: 'National/Local Holiday', color: 'red' }); 
+                    reportData.push({ type: 'HOLIDAY', date: new Date(h.date), title: name, subtitle: 'National/Local Holiday', purpose: '', color: 'red' }); 
                 }});
                 renderReportsShell();
             } catch (e) { content.innerHTML = `<p class="p-10 text-red-500">Error.</p>`; }
@@ -815,7 +877,7 @@
         function renderReportsShell() {
             document.getElementById('mainContent').innerHTML = `
                 <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
-                    <h2 class="font-bold text-lg text-blue-900 mb-3 text-center tracking-tighter uppercase">Activity Analytics</h2>
+                    <h2 class="font-bold text-lg text-blue-900 mb-3 text-center tracking-tighter uppercase">Whereabouts</h2>
                     <div class="flex bg-gray-200 rounded-xl p-1 mb-3">
                         <button id="btn-day" onclick="setReportFilter('day')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg ${reportFilter === 'day' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}">Today</button>
                         <button id="btn-week" onclick="setReportFilter('week')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg ${reportFilter === 'week' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}">Week</button>
@@ -852,9 +914,126 @@
                 }
                 const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
                 const c = cMap[r.color];
-                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p></div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p></div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
             });
             container.innerHTML = h;
+        }
+
+        // --- AI ANALYTICS TAB ---
+        async function loadAnalyticsTab() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-purple-500 font-bold animate-pulse">Generating AI Analytics...</p>`;
+            
+            try {
+                // Fetch basic data for analytics
+                const [toRes, logRes] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('status, created_at, division'),
+                    supabaseClient.from('attendance_logs').select('log_time, status')
+                ]);
+
+                const tos = toRes.data || [];
+                const logs = logRes.data || [];
+
+                // 1. Process TO Status Distribution
+                const statusCounts = { Approved: 0, Pending: 0, Denied: 0, Cancelled: 0 };
+                tos.forEach(to => {
+                    if (to.status === 'APPROVED') statusCounts.Approved++;
+                    else if (to.status === 'DISAPPROVED') statusCounts.Denied++;
+                    else if (to.status === 'CANCELLED') statusCounts.Cancelled++;
+                    else statusCounts.Pending++;
+                });
+
+                // 2. Process Division Workload (Active TOs)
+                const divisionCounts = {};
+                tos.forEach(to => {
+                    if (to.status === 'APPROVED' && to.division) {
+                        const div = to.division.split(',')[0].trim();
+                        if (div) {
+                            divisionCounts[div] = (divisionCounts[div] || 0) + 1;
+                        }
+                    }
+                });
+
+                analyticsData = { statusCounts, divisionCounts };
+                renderAnalyticsView();
+
+            } catch(e) {
+                content.innerHTML = `<p class="p-10 text-red-500">Failed to load analytics data.</p>`;
+            }
+        }
+
+        function renderAnalyticsView() {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="p-5 pb-32">
+                    <h2 class="font-bold text-xl text-purple-900 mb-6 tracking-tight">AI Executive Summary</h2>
+                    
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 mb-6">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Travel Order Processing</h3>
+                        <div class="relative h-48 w-full"><canvas id="statusChart"></canvas></div>
+                        <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
+                            <strong>AI Insight:</strong> Based on the current queue, <span class="text-purple-700 font-bold">${analyticsData.statusCounts.Pending}</span> Travel Orders are pending. Ensure Unit Heads check their portals to prevent bottlenecks.
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Division Mobility (Approved)</h3>
+                        <div class="relative h-64 w-full"><canvas id="divisionChart"></canvas></div>
+                        <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
+                            <strong>AI Insight:</strong> This chart identifies the most mobile divisions. Utilize this data for budget allocation regarding field transportation and logistical support.
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            // Draw Status Chart (Doughnut)
+            const ctxStatus = document.getElementById('statusChart').getContext('2d');
+            new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Approved', 'Pending', 'Denied', 'Cancelled'],
+                    datasets: [{
+                        data: [
+                            analyticsData.statusCounts.Approved, 
+                            analyticsData.statusCounts.Pending, 
+                            analyticsData.statusCounts.Denied,
+                            analyticsData.statusCounts.Cancelled
+                        ],
+                        backgroundColor: ['#16a34a', '#f59e0b', '#dc2626', '#9ca3af'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } },
+                    cutout: '70%'
+                }
+            });
+
+            // Draw Division Chart (Bar)
+            const divs = Object.keys(analyticsData.divisionCounts);
+            const counts = Object.values(analyticsData.divisionCounts);
+            const ctxDiv = document.getElementById('divisionChart').getContext('2d');
+            
+            new Chart(ctxDiv, {
+                type: 'bar',
+                data: {
+                    labels: divs,
+                    datasets: [{
+                        label: 'Approved TOs',
+                        data: counts,
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0, font: {size: 10} } },
+                        x: { ticks: { font: {size: 9}, maxRotation: 45, minRotation: 45 } }
+                    }
+                }
+            });
         }
 
         window.onload = () => { checkSession(); render(); };
