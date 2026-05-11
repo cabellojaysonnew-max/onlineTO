@@ -1147,6 +1147,8 @@
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let hasPSO = false;
 
+            const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
+
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
@@ -1175,6 +1177,15 @@
                 }
 
                 const cardId = `card-${i}`;
+                const pbddSelect = isPBDD ? `
+                    <select id="unit-${i}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <option value="SIB/SMEDSS">SIB/SMEDSS</option>
+                        <option value="EDES">EDES</option>
+                        <option value="CRFPS">CRFPS</option>
+                        <option value="NA">NA (Direct to Chief)</option>
+                    </select>
+                ` : '';
+
                 container.innerHTML += `
                     <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1184,9 +1195,10 @@
                         <input type="text" id="dest-${i}" placeholder="Destination">
                         ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
+                        ${pbddSelect}
                         <input type="text" id="rep-${i}" placeholder="Report To">
                     </div>`;
-                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, cardId, hasPSO });
+                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, unitId: isPBDD ? `unit-${i}` : null, cardId, hasPSO });
                 currentDt.setDate(currentDt.getDate() + 1);
             }
         };
@@ -1201,7 +1213,7 @@
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             
-            const batchItin = []; const reportTos = new Set();
+            const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set();
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
                 const purp = document.getElementById(it.purpId).value.trim();
@@ -1209,9 +1221,17 @@
                 if (!dest || !purp || !rep) return alert(`Fill all fields for ${it.date}.`);
                 batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
                 reportTos.add(rep);
+                if (it.unitId) pbddUnits.add(document.getElementById(it.unitId).value);
             }
 
             let finalDiv = currentUser.division;
+            let finalUnit = currentUser.unit;
+            let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
+
+            if (isPBDD) {
+                finalUnit = Array.from(pbddUnits).join(', ');
+            }
+
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
                 if(checkedBoxes.length > 0) {
@@ -1261,7 +1281,7 @@
                 let routeStatus = "PENDING_CHIEF";
                 
                 const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
-                const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
+                const isPARPOUnit = finalUnit && String(finalUnit).toUpperCase() === "PARPO";
                 const isGovVeh = transport === "GOV'T VEHICLE";
 
                 // Strict Priority Routing
@@ -1269,16 +1289,18 @@
                     routeStatus = "PENDING_VEHICLE_APPROVER";
                 } else if (isPARPOUnit) {
                     routeStatus = "PENDING_PARPO";
+                } else if (isPBDD && finalUnit === "NA") {
+                    routeStatus = "PENDING_CHIEF";
                 } else if (isMARPO) {
                     routeStatus = "PENDING_CHIEF";
-                } else if (currentUser.unit && currentUser.unit.trim() !== "") {
+                } else if (finalUnit && finalUnit.trim() !== "" && finalUnit !== "NA") {
                     routeStatus = "PENDING_UNIT_HEAD";
                 } else {
                     routeStatus = "PENDING_CHIEF";
                 }
 
                 const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: p.unit, division: finalDiv, 
+                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
                     status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
                     remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
@@ -1360,9 +1382,19 @@
 
             const container = document.getElementById('dynamic-itin-fields');
             container.innerHTML = ''; itineraryDraft = [];
+            const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
+                const pbddSelect = isPBDD ? `
+                    <select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <option value="SIB/SMEDSS">SIB/SMEDSS</option>
+                        <option value="EDES">EDES</option>
+                        <option value="CRFPS">CRFPS</option>
+                        <option value="NA">NA (Direct to Chief)</option>
+                    </select>
+                ` : '';
+
                 container.innerHTML += `
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1372,10 +1404,11 @@
                         <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
+                        ${pbddSelect}
                         <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
                     </div>
                 `;
-                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, cardId: cardId });
+                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
             });
             
             personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
@@ -1417,7 +1450,8 @@
                 const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 // Get Unique Units and Divisions from the Personnel in this TO
-                const uniqueUnits = [...new Set(group_orders.map(o => o.unit).filter(u => u && u !== "PARPO"))];
+                const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
+                const uniqueUnits = [...new Set(rawUnits)];
                 const uniqueDivs = [...new Set(group_orders.map(o => o.division ? o.division.split(',')[0].trim() : "").filter(d => d))];
 
                 let uh_list = [];
@@ -2555,6 +2589,7 @@
     </script>
 </body>
 </html>
+
 </xmp>
 
 
