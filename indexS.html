@@ -34,14 +34,16 @@
             overscroll-behavior-y: none; 
         }
         
-        ::-webkit-scrollbar { display: none; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
         .modal-fade { animation: fadeIn 0.2s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .batch-bar-position { bottom: calc(4rem + env(safe-area-inset-bottom)); }
         
-        /* Custom Checkbox Styling */
         .batch-checkbox {
             appearance: none;
             width: 1.25rem;
@@ -68,6 +70,37 @@
             left: 50%;
             transform: translate(-50%, -50%);
         }
+
+        .analytics-card {
+            background: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #f3f4f6;
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+        }
+        .analytics-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #f3f4f6;
+            background: #f8fafc;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #475569;
+        }
+        .analytics-list {
+            max-height: 14rem;
+            overflow-y: auto;
+        }
+        .list-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .list-row:last-child { border-bottom: none; }
     </style>
 </head>
 <body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800 bg-gray-100 text-left">
@@ -111,7 +144,6 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        // WEBAUTHN UTILS
         function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
         function base64ToBuffer(b64) {
             const binary_string = atob(b64);
@@ -121,7 +153,6 @@
             return bytes.buffer;
         }
 
-        // SETUP BIOMETRIC (ADMIN)
         async function setupAdminBiometric(username, hashedPass) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -152,14 +183,11 @@
                         alert("Biometric login enabled!");
                         const bioBtn = document.getElementById('bioLoginBtn');
                         if(bioBtn) bioBtn.classList.remove('hidden');
-                    } catch(e) {
-                        console.log("Biometric setup failed or cancelled", e);
-                    }
+                    } catch(e) { console.log("Biometric setup failed or cancelled", e); }
                 }
             }
         }
 
-        // HANDLE BIOMETRIC LOGIN (ADMIN)
         async function handleBiometricLogin() {
             try {
                 const credId = localStorage.getItem('dar_admin_bio_cred');
@@ -179,7 +207,6 @@
                     }
                 });
 
-                // Authenticated
                 const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
                 if (users && (users.password === token)) {
                     currentUser = {
@@ -191,19 +218,14 @@
                     };
                     localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
                     render();
-                } else {
-                    alert("Authentication failed. Please use password.");
-                }
-            } catch(e) {
-                console.log("Biometric auth failed", e);
-            }
+                } else { alert("Authentication failed. Please use password."); }
+            } catch(e) { console.log("Biometric auth failed", e); }
         }
 
         function checkSession() {
             const stored = localStorage.getItem('dar_admin_session');
             if (stored) {
                 const session = JSON.parse(stored);
-                // Valid for 30 days
                 if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
                     currentUser = session.user;
                 } else {
@@ -597,44 +619,6 @@
             return {};
         }
 
-        // --- HR NOTIFICATIONS ---
-        async function checkHRNotifications() {
-            if (!currentUser) return;
-            const sessionKey = 'hr_notif_shown_' + currentUser.username;
-            if (sessionStorage.getItem(sessionKey)) return;
-
-            try {
-                const { data, error } = await supabaseClient
-                    .from('hr_notifications')
-                    .select('*')
-                    .eq('emp_id', currentUser.username)
-                    .eq('is_read', false);
-
-                if (data && data.length > 0) {
-                    const content = document.getElementById('hrNotifContent');
-                    if (content) {
-                        content.innerHTML = data.map(n => `
-                            <div class="p-3 bg-gray-50 border rounded-xl">
-                                <p class="font-bold text-xs text-dar-green mb-1">${n.sender_name || 'HR Office'}</p>
-                                <p class="leading-relaxed">${n.message}</p>
-                                <p class="text-[9px] text-gray-400 mt-2 text-right">${new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true })}</p>
-                            </div>
-                        `).join('');
-                        
-                        document.getElementById('hrNotifModal').classList.remove('hidden');
-                        
-                        const ids = data.map(n => n.id);
-                        await supabaseClient.from('hr_notifications').update({ is_read: true }).in('id', ids);
-                    }
-                    sessionStorage.setItem(sessionKey, 'true');
-                }
-            } catch (e) {
-                console.log("HR Notifications error", e);
-            }
-        }
-
-        function closeHRNotifModal() { document.getElementById('hrNotifModal').classList.add('hidden'); }
-
         // --- PENDING TAB ---
         async function loadPendingTab() {
             selectedPendingOrders.clear();
@@ -646,6 +630,7 @@
             let pendingOrders = [];
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
+                let showOnlyDatesForUnits = null;
                 
                 for (let o of list) {
                     const s = (o.status || "").trim().toUpperCase();
@@ -664,6 +649,8 @@
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
+                            // Set flag to filter itinerary tags
+                            showOnlyDatesForUnits = unitsCanSign; 
                         }
                     }
                 }
@@ -903,7 +890,7 @@
         // --- AI ANALYTICS TAB ---
         async function loadAnalyticsTab() {
             const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-purple-500 font-bold animate-pulse">Generating AI Analytics...</p>`;
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-purple-500 font-bold animate-pulse">Processing AI Analytics...</p>`;
             
             try {
                 // Determine scoped employees safely
@@ -923,14 +910,16 @@
                 const isMonday = nowPST.getDay() === 1;
 
                 // Fetch comprehensive data scoped by valid empirical IDs
-                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes] = await Promise.all([
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes] = await Promise.all([
                     supabaseClient.from('travel_orders').select('status, emp_id, to_no').in('emp_id', validEmpIds),
-                    supabaseClient.from('attendance_logs').select('emp_id, log_time').in('emp_id', validEmpIds).gte('log_time', todayStr + 'T00:00:00'),
+                    supabaseClient.from('attendance_logs').select('emp_id, log_time, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayStr + 'T00:00:00'),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no').eq('travel_date', todayStr),
                     supabaseClient.from('pso_records').select('emp_id').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
-                    isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []})
+                    isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
+                    supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
+                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr)
                 ]);
 
                 const tos = toRes.data || [];
@@ -945,8 +934,13 @@
                 const leavesMap = new Map();
                 (leaveRes.data || []).forEach(l => leavesMap.set(l.emp_id, l.type));
 
+                const schedMap = new Map();
+                (schedRes.data || []).forEach(s => schedMap.set(s.emp_id, s.start_time));
+
+                let anomalyCount = 0;
                 const logsMap = new Map();
                 (logRes.data || []).forEach(l => {
+                    if (l.spoof_flag === true) anomalyCount++;
                     if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
                         logsMap.set(l.emp_id, l.log_time);
                     }
@@ -959,6 +953,15 @@
                 let listAbsent = [];
                 let listLeave = [];
                 let listBirthday = [];
+                let listGatePass = [];
+
+                // Process Gate Pass (Currently Out)
+                (gateRes.data || []).forEach(gp => {
+                    if (gp.time_out && !gp.time_in) {
+                        const empName = validEmps.find(e => e.emp_id === gp.emp_id)?.full_name || 'Unknown';
+                        listGatePass.push({ name: empName, purpose: gp.purpose });
+                    }
+                });
 
                 validEmps.forEach(emp => {
                     // Birthday Processing
@@ -985,7 +988,9 @@
                     // Attendance Processing
                     if (logsMap.has(emp.emp_id)) {
                         const timeIn = new Date(logsMap.get(emp.emp_id));
-                        let flexiEnd = emp.flexi_range_end || "08:00"; 
+                        
+                        // Use Schedule Override if exists, else use flexi_range_end, else 08:00
+                        let flexiEnd = schedMap.has(emp.emp_id) ? schedMap.get(emp.emp_id) : (emp.flexi_range_end || "08:00"); 
                         let [h, m] = flexiEnd.split(':').map(Number);
                         
                         let lateThreshold = new Date(timeIn);
@@ -1007,7 +1012,7 @@
                     } else {
                         const dayOfWeek = nowPST.getDay();
                         if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                            listAbsent.push(emp.full_name);
+                            listAbsent.push({ name: emp.full_name });
                         }
                     }
                 });
@@ -1021,12 +1026,14 @@
                 });
 
                 const totalStaff = validEmps.length;
-                const presentToday = logsMap.size + empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length; 
+                const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
+                const deskStaff = logsMap.size - fieldStaff; 
 
                 analyticsData = { 
                     toStats, 
-                    workforce: { total: totalStaff, present: presentToday, onLeave: listLeave.length },
-                    lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday }
+                    workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
+                    lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass },
+                    anomalies: anomalyCount
                 };
                 
                 renderAnalyticsView();
@@ -1037,66 +1044,104 @@
         }
 
         function renderAnalyticsView() {
-            let aiText = `<strong>AI Insight:</strong> Today's operational capacity is at ${Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.lists.leave.length) / Math.max(1, analyticsData.workforce.total)) * 100)}%. `;
-            if (analyticsData.lists.late.length > 0) aiText += `Monitor the ${analyticsData.lists.late.length} employees who arrived past their flexi-schedule. `;
-            if (analyticsData.lists.absent.length > 0) aiText += `Verify the status of the ${analyticsData.lists.absent.length} unaccounted personnel. `;
-            if (analyticsData.lists.birthday.length > 0) aiText += `Boost team morale by greeting the ${analyticsData.lists.birthday.length} celebrants this month!`;
+            let activeForce = analyticsData.workforce.field + analyticsData.workforce.desk;
+            let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
+            
+            let aiText = `<strong>AI Insight:</strong> Operational capacity is currently at ${capacity}%. `;
+            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `A high volume of your team is deployed in the field today. `;
+            if (analyticsData.anomalies > 0) aiText += `<span class="text-red-600">Warning: ${analyticsData.anomalies} attendance log(s) flagged for potential location spoofing.</span> `;
+            if (analyticsData.lists.absent.length > 0) aiText += `Verify the status of ${analyticsData.lists.absent.length} unaccounted personnel. `;
+            if (analyticsData.lists.birthday.length > 0) aiText += `There are ${analyticsData.lists.birthday.length} birthdays this month to celebrate!`;
 
-            let lateHTML = analyticsData.lists.late.map(l => `<span class="inline-block bg-yellow-100 text-yellow-800 text-[10px] px-2 py-1 rounded border border-yellow-200 m-0.5">${l.name} (${l.time})</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
-            let absentHTML = analyticsData.lists.absent.map(a => `<span class="inline-block bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded border border-red-200 m-0.5">${a}</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
-            let leaveHTML = analyticsData.lists.leave.map(l => `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded border border-blue-200 m-0.5">${l.name} <i class="text-blue-500">(${l.type})</i></span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
-            let bdayHTML = analyticsData.lists.birthday.map(b => `<span class="inline-block bg-purple-100 text-purple-800 text-[10px] px-2 py-1 rounded border border-purple-200 m-0.5">🎉 ${b.name} (${b.date})</span>`).join('') || '<span class="text-xs text-gray-400">None</span>';
+            const renderListRows = (arr, detailKey, icon) => {
+                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-gray-400 font-medium tracking-widest uppercase">No Records</div>`;
+                return arr.map(item => `
+                    <div class="list-row">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-lg">${icon}</span>
+                            <span class="text-xs font-bold text-gray-700">${item.name}</span>
+                        </div>
+                        ${item[detailKey] ? `<span class="text-[10px] font-medium px-2 py-1 rounded bg-gray-100 text-gray-600">${item[detailKey]}</span>` : ''}
+                    </div>
+                `).join('');
+            };
 
             document.getElementById('mainContent').innerHTML = `
-                <div class="p-5 pb-32">
-                    <h2 class="font-bold text-xl text-purple-900 mb-6 tracking-tight">AI Executive Summary</h2>
-                    
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100 mb-6">
-                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Daily Roster Intelligence</h3>
-                        
-                        <div class="mb-4">
-                            <p class="text-[11px] font-bold text-red-600 mb-1">Absent / Unaccounted (${analyticsData.lists.absent.length})</p>
-                            <div>${absentHTML}</div>
-                        </div>
+                <div class="p-4 pb-32 space-y-4">
+                    <p class="text-xs text-gray-600 leading-relaxed bg-white shadow-sm p-4 rounded-2xl border border-purple-100">
+                        ${aiText}
+                    </p>
 
-                        <div class="mb-4 border-t border-gray-100 pt-3">
-                            <p class="text-[11px] font-bold text-yellow-600 mb-1">Arrived Late (${analyticsData.lists.late.length})</p>
-                            <div>${lateHTML}</div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="analytics-card mb-0">
+                            <div class="analytics-header">Workforce Distribution</div>
+                            <div class="p-4 relative h-40"><canvas id="workforceChart"></canvas></div>
                         </div>
-
-                        <div class="mb-4 border-t border-gray-100 pt-3">
-                            <p class="text-[11px] font-bold text-blue-600 mb-1">On Leave (${analyticsData.lists.leave.length})</p>
-                            <div>${leaveHTML}</div>
+                        <div class="analytics-card mb-0">
+                            <div class="analytics-header">Queue Health</div>
+                            <div class="p-4 relative h-40"><canvas id="toQueueChart"></canvas></div>
                         </div>
-
-                        <div class="mb-4 border-t border-gray-100 pt-3">
-                            <p class="text-[11px] font-bold text-purple-600 mb-1">Birthdays This Month (${analyticsData.lists.birthday.length})</p>
-                            <div>${bdayHTML}</div>
-                        </div>
-
-                        <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
-                            ${aiText}
-                        </p>
                     </div>
 
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-purple-100">
-                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Document Queue Health</h3>
-                        <div class="relative h-48 w-full"><canvas id="toQueueChart"></canvas></div>
-                        <p class="text-xs text-gray-600 mt-4 leading-relaxed bg-purple-50 p-3 rounded-lg border border-purple-100">
-                            <strong>AI Insight:</strong> There are <span class="text-purple-700 font-bold">${analyticsData.toStats.Pending}</span> pending Travel Orders requiring action within your division.
-                        </p>
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>🔴 Absent / Unaccounted</span><span>${analyticsData.lists.absent.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.absent, null, '👤')}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>🟡 Arrived Late</span><span>${analyticsData.lists.late.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.late, 'time', '⏰')}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>🚪 Currently Out (Gate Pass)</span><span>${analyticsData.lists.gatepass.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.gatepass, 'purpose', '🚶')}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>🔵 On Leave</span><span>${analyticsData.lists.leave.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.leave, 'type', '🌴')}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>🎉 Birthdays This Month</span><span>${analyticsData.lists.birthday.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', '🎂')}</div>
                     </div>
                 </div>
             `;
+
+            // Draw Workforce Chart (Doughnut)
+            const ctxWork = document.getElementById('workforceChart').getContext('2d');
+            const absentEstimate = Math.max(0, analyticsData.workforce.total - analyticsData.workforce.desk - analyticsData.workforce.field - analyticsData.workforce.onLeave);
+            new Chart(ctxWork, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Desk', 'Field', 'Leave', 'Absent'],
+                    datasets: [{
+                        data: [
+                            analyticsData.workforce.desk, 
+                            analyticsData.workforce.field,
+                            analyticsData.workforce.onLeave, 
+                            absentEstimate
+                        ],
+                        backgroundColor: ['#16a34a', '#3b82f6', '#f59e0b', '#dc2626'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '65%'
+                }
+            });
 
             // Draw TO Queue Chart (Bar)
             const ctxQueue = document.getElementById('toQueueChart').getContext('2d');
             new Chart(ctxQueue, {
                 type: 'bar',
                 data: {
-                    labels: ['Approved', 'Pending', 'Denied'],
+                    labels: ['Apprv', 'Pend', 'Deny'],
                     datasets: [{
-                        label: 'Travel Orders',
                         data: [analyticsData.toStats.Approved, analyticsData.toStats.Pending, analyticsData.toStats.Denied],
                         backgroundColor: ['#16a34a', '#eab308', '#ef4444'],
                         borderRadius: 4
@@ -1106,8 +1151,8 @@
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0, font: {size: 10} } },
-                        x: { ticks: { font: {size: 10} } }
+                        y: { display: false, beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: {size: 9} } }
                     }
                 }
             });
