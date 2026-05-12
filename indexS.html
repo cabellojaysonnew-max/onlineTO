@@ -75,19 +75,19 @@
             background: #ffffff;
             border-radius: 1rem;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #f3f4f6;
+            border: 1px solid #e2e8f0;
             margin-bottom: 1.25rem;
             overflow: hidden;
         }
         .analytics-header {
             padding: 1rem 1.25rem;
-            border-bottom: 1px solid #f3f4f6;
+            border-bottom: 1px solid #f1f5f9;
             background: #f8fafc;
-            font-weight: 700;
-            font-size: 0.75rem;
+            font-weight: 800;
+            font-size: 0.70rem;
             letter-spacing: 0.05em;
             text-transform: uppercase;
-            color: #475569;
+            color: #334155;
         }
         .analytics-list {
             max-height: 14rem;
@@ -97,10 +97,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.75rem 1.25rem;
+            padding: 0.875rem 1.25rem;
             border-bottom: 1px solid #f1f5f9;
         }
         .list-row:last-child { border-bottom: none; }
+        
+        .kpi-value { font-size: 1.5rem; font-weight: 900; color: #0f172a; line-height: 1; margin-top: 0.25rem; }
+        .kpi-label { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
     </style>
 </head>
 <body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800 bg-gray-100 text-left">
@@ -822,14 +825,14 @@
                     supabaseClient.from('holidays').select('*')
                 ]);
 
-                // Fetch attendance logs for personnel on Approved TOs to check mobile logs against TO destinations
                 const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
                 let attData = [];
                 if (validTOEmps.length > 0) {
-                    // Update: Query place_name instead of location
                     const { data } = await supabaseClient.from('attendance_logs')
                         .select('emp_id, log_time, device_id, place_name')
-                        .in('emp_id', validTOEmps);
+                        .in('emp_id', validTOEmps)
+                        .order('log_time', { ascending: false })
+                        .limit(2000);
                     attData = data || [];
                 }
 
@@ -840,25 +843,33 @@
                     if(p && i.travel_date && checkScope(p.division, p.unit)) {
                         const key = `${p.emp_name}-${i.travel_date}`;
                         if (!seen.has(key)) {
-                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-gray-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
+                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
                             const dStr = i.travel_date.split('T')[0];
                             
-                            // Find mobile log for this employee on this specific travel date
-                            const logsToday = attData.filter(l => l.emp_id === p.emp_id && l.log_time && l.log_time.includes(dStr));
+                            // Check for logs converted to PST exactly matching the travel date
+                            const logsToday = attData.filter(l => {
+                                if(!l.log_time) return false;
+                                const logPST = new Date(new Date(l.log_time).toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+                                const logDateStr = logPST.getFullYear() + "-" + String(logPST.getMonth() + 1).padStart(2, '0') + "-" + String(logPST.getDate()).padStart(2, '0');
+                                return l.emp_id === p.emp_id && logDateStr === dStr;
+                            });
+                            
                             const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
 
                             if (mobileLog) {
-                                const loc = mobileLog.place_name || 'Unknown Location';
+                                const loc = (mobileLog.place_name || '').toLowerCase();
                                 const dest = (i.destination || '').toLowerCase();
                                 
                                 // Enhanced Check: Town or Barangay matching instead of strict inclusion
-                                const destParts = dest.split(',').map(x => x.trim().replace(' city', ''));
-                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.toLowerCase().includes(part) || part.includes(loc.toLowerCase()));
+                                const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
+                                const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                
+                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
                                 
                                 if (isMatch) {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-dar-green font-bold truncate">📱 Employee Reported to the Destination</span> <span class="text-[10px] shrink-0">✅</span></div>`;
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-emerald-600 font-bold truncate">📱 Employee Reported to the Destination</span></div>`;
                                 } else {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span> <span class="text-[10px] shrink-0">❌</span></div>`;
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span></div>`;
                                 }
                             }
 
@@ -880,11 +891,11 @@
         function renderReportsShell() {
             document.getElementById('mainContent').innerHTML = `
                 <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
-                    <h2 class="font-bold text-lg text-blue-900 mb-3 text-center tracking-tighter uppercase">Whereabouts</h2>
-                    <div class="flex bg-gray-200 rounded-xl p-1 mb-3">
-                        <button id="btn-day" onclick="setReportFilter('day')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg ${reportFilter === 'day' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}">Today</button>
-                        <button id="btn-week" onclick="setReportFilter('week')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg ${reportFilter === 'week' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}">Week</button>
-                        <button id="btn-month" onclick="setReportFilter('month')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg ${reportFilter === 'month' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}">Month</button>
+                    <h2 class="font-extrabold text-lg text-slate-800 mb-3 text-center tracking-tighter uppercase">Whereabouts Log</h2>
+                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
+                        <button id="btn-day" onclick="setReportFilter('day')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'day' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Today</button>
+                        <button id="btn-week" onclick="setReportFilter('week')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Week</button>
+                        <button id="btn-month" onclick="setReportFilter('month')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'month' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Month</button>
                     </div>
                 </div>
                 <div id="reportListContainer" class="p-4 space-y-4 pb-20"></div>`;
@@ -907,18 +918,18 @@
             // STRICTLY Latest to Oldest Sorting
             f.sort((a, b) => b.date.getTime() - a.date.getTime());
             
-            if (f.length === 0) { container.innerHTML = `<p class="text-center py-20 text-gray-400 font-bold text-[10px] tracking-widest uppercase">No Records Found</p>`; return; }
+            if (f.length === 0) { container.innerHTML = `<p class="text-center py-20 text-slate-400 font-bold text-[10px] tracking-widest uppercase">No Records Found</p>`; return; }
             let h = '', last = '';
             f.forEach(r => {
                 const cur = r.date.toDateString();
                 if (cur !== last) {
                     last = cur;
-                    h += `<h3 class="text-[10px] font-black text-gray-400 mt-6 mb-2 tracking-widest text-left border-b pb-1 uppercase">${r.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h3>`;
+                    h += `<h3 class="text-[10px] font-black text-slate-400 mt-6 mb-2 tracking-widest text-left border-b pb-1 uppercase">${r.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h3>`;
                 }
                 const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
                 const c = cMap[r.color];
                 const extra = r.extraHTML ? r.extraHTML : '';
-                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+                h += `<div class="bg-white p-4 rounded-xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-slate-800 truncate">${r.title}</p><p class="text-[10px] text-slate-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-slate-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded bg-white border opacity-80 uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
             });
             container.innerHTML = h;
         }
@@ -926,7 +937,7 @@
         // --- AI ANALYTICS TAB ---
         async function loadAnalyticsTab() {
             const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-purple-500 font-bold animate-pulse">Processing AI Analytics...</p>`;
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
             
             try {
                 // Determine scoped employees safely
@@ -935,7 +946,7 @@
                 const validEmpIds = validEmps.map(e => e.emp_id);
                 
                 if (validEmpIds.length === 0) {
-                    content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><p class="font-bold text-xs uppercase text-gray-500">No personnel under your scope</p></div>`;
+                    content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><p class="font-bold text-xs uppercase text-slate-500">No personnel under your scope</p></div>`;
                     return;
                 }
 
@@ -945,13 +956,18 @@
                 const currentMonth = nowPST.getMonth() + 1;
                 const isMonday = nowPST.getDay() === 1;
 
+                // Grab from yesterday 16:00 UTC to catch today's 00:00 PST safely
+                const yesterdayPST = new Date(nowPST);
+                yesterdayPST.setDate(yesterdayPST.getDate() - 1);
+                const yesterdayStr = yesterdayPST.getFullYear() + "-" + String(yesterdayPST.getMonth() + 1).padStart(2, '0') + "-" + String(yesterdayPST.getDate()).padStart(2, '0');
+
                 const firstDayOfMonth = new Date(nowPST.getFullYear(), nowPST.getMonth(), 1).toISOString().split('T')[0];
                 const lastDayOfMonth = new Date(nowPST.getFullYear(), nowPST.getMonth() + 1, 0).toISOString().split('T')[0];
 
                 // Fetch comprehensive data scoped by valid empirical IDs
                 const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes] = await Promise.all([
                     supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
-                    supabaseClient.from('attendance_logs').select('emp_id, log_time, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayStr + 'T00:00:00'),
+                    supabaseClient.from('attendance_logs').select('emp_id, log_time, spoof_flag').in('emp_id', validEmpIds).gte('log_time', yesterdayStr + 'T16:00:00+00:00'),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no').eq('travel_date', todayStr),
                     supabaseClient.from('pso_records').select('emp_id').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
@@ -980,9 +996,15 @@
                 let anomalyCount = 0;
                 const logsMap = new Map();
                 (logRes.data || []).forEach(l => {
-                    if (l.spoof_flag === true) anomalyCount++;
-                    if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
-                        logsMap.set(l.emp_id, l.log_time);
+                    // Force log time to local PST string to ensure we only count TODAY'S logs
+                    const logPST = new Date(new Date(l.log_time).toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+                    const logDateStr = logPST.getFullYear() + "-" + String(logPST.getMonth() + 1).padStart(2, '0') + "-" + String(logPST.getDate()).padStart(2, '0');
+                    
+                    if (logDateStr === todayStr) {
+                        if (l.spoof_flag === true) anomalyCount++;
+                        if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
+                            logsMap.set(l.emp_id, l.log_time);
+                        }
                     }
                 });
 
@@ -1028,16 +1050,17 @@
                     // Attendance Processing
                     if (logsMap.has(emp.emp_id)) {
                         const timeIn = new Date(logsMap.get(emp.emp_id));
+                        const timeInPST = new Date(timeIn.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
                         
                         // Use Schedule Override if exists, else use flexi_range_end, else 08:00
                         let flexiEnd = schedMap.has(emp.emp_id) ? schedMap.get(emp.emp_id) : (emp.flexi_range_end || "08:00"); 
                         let [h, m] = flexiEnd.split(':').map(Number);
                         
-                        let lateThreshold = new Date(timeIn);
+                        let lateThreshold = new Date(timeInPST);
                         lateThreshold.setHours(h, m, 0, 0);
 
-                        if (timeIn > lateThreshold) {
-                            listLate.push({ name: emp.full_name, time: timeIn.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) });
+                        if (timeInPST > lateThreshold) {
+                            listLate.push({ name: emp.full_name, time: timeInPST.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) });
                         } else if (isMonday) {
                             // Flag ceremony logic
                             if (flagsMap.has(emp.emp_id)) {
@@ -1114,79 +1137,96 @@
         function renderAnalyticsView() {
             let activeForce = analyticsData.workforce.field + analyticsData.workforce.desk;
             let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
+            let availabilityRate = Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.workforce.onLeave) / Math.max(1, analyticsData.workforce.total)) * 100);
             
-            let aiText = `<strong>Executive Summary:</strong> Operational capacity stands at ${capacity}%. `;
-            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently field-heavy. `;
-            if (analyticsData.anomalies > 0) aiText += `<span class="text-red-600 font-bold">Alert: ${analyticsData.anomalies} attendance log(s) flagged for potential location anomalies.</span> `;
-            if (analyticsData.lists.absent.length > 0) aiText += `Please verify the status of ${analyticsData.lists.absent.length} unaccounted personnel. `;
-            if (analyticsData.lists.birthday.length > 0) aiText += `Note: ${analyticsData.lists.birthday.length} employee birthdays recognized this month. `;
+            let aiText = `<strong>MANAGEMENT BRIEF:</strong> Daily operational capacity stands at ${capacity}%. `;
+            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. `;
+            if (analyticsData.anomalies > 0) aiText += `<span class="text-rose-600 font-bold">Action Required: ${analyticsData.anomalies} attendance log(s) flagged for potential compliance review.</span> `;
+            if (analyticsData.lists.absent.length > 0) aiText += `Unaccounted personnel stands at ${analyticsData.lists.absent.length}. `;
 
-            const renderListRows = (arr, detailKey, icon) => {
-                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-gray-400 font-medium tracking-widest uppercase">No Records</div>`;
+            const renderListRows = (arr, detailKey, iconPath) => {
+                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
                 return arr.map(item => `
                     <div class="list-row">
                         <div class="flex items-center space-x-3">
-                            <span class="text-lg">${icon}</span>
-                            <span class="text-xs font-bold text-gray-700">${item.name}</span>
+                            <span class="text-slate-400 w-4 h-4">${iconPath}</span>
+                            <span class="text-xs font-bold text-slate-700">${item.name}</span>
                         </div>
-                        ${item[detailKey] ? `<span class="text-[10px] font-medium px-2 py-1 rounded bg-gray-100 text-gray-600">${item[detailKey]}</span>` : ''}
+                        ${item[detailKey] ? `<span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">${item[detailKey]}</span>` : ''}
                     </div>
                 `).join('');
             };
 
+            const iconUser = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>`;
+            const iconClock = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
+            const iconDoor = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>`;
+            const iconSun = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
+            const iconCake = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 1 0 9.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1 1 14.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`;
+
             document.getElementById('mainContent').innerHTML = `
                 <div class="p-4 pb-32 space-y-4">
-                    <p class="text-xs text-gray-600 leading-relaxed bg-white shadow-sm p-4 rounded-2xl border border-purple-100">
+                    <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
                         ${aiText}
                     </p>
 
                     <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">Most Visited (Month)</span>
-                            <span class="text-sm font-black text-gray-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
-                            <span class="text-[10px] text-dar-green font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label mb-1">Most Visited</span>
+                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
+                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
                         </div>
-                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">Top Traveler (Month)</span>
-                            <span class="text-sm font-black text-gray-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
-                            <span class="text-[10px] text-dar-green font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label mb-1">Top Traveler</span>
+                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
+                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label">Availability</span>
+                            <span class="kpi-value">${availabilityRate}%</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label">Compliance Flags</span>
+                            <span class="kpi-value ${analyticsData.anomalies > 0 ? 'text-rose-600' : 'text-emerald-600'}">${analyticsData.anomalies}</span>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="analytics-card mb-0">
-                            <div class="analytics-header">Workforce Distribution</div>
+                            <div class="analytics-header">Workforce Dist.</div>
                             <div class="p-4 relative h-40"><canvas id="workforceChart"></canvas></div>
                         </div>
                         <div class="analytics-card mb-0">
-                            <div class="analytics-header">Queue Health</div>
+                            <div class="analytics-header">Approval Queue</div>
                             <div class="p-4 relative h-40"><canvas id="toQueueChart"></canvas></div>
                         </div>
                     </div>
 
                     <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>🔴 Absent / Unaccounted</span><span>${analyticsData.lists.absent.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.absent, null, '👤')}</div>
+                        <div class="analytics-header flex justify-between"><span>Absent / Unaccounted</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.absent.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.absent, null, iconUser)}</div>
                     </div>
 
                     <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>🟡 Arrived Late</span><span>${analyticsData.lists.late.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.late, 'time', '⏰')}</div>
+                        <div class="analytics-header flex justify-between"><span>Late Arrivals</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.late.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.late, 'time', iconClock)}</div>
                     </div>
 
                     <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>🚪 Currently Out (Gate Pass)</span><span>${analyticsData.lists.gatepass.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.gatepass, 'purpose', '🚶')}</div>
+                        <div class="analytics-header flex justify-between"><span>Currently Out (Gate Pass)</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.gatepass.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.gatepass, 'purpose', iconDoor)}</div>
                     </div>
 
                     <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>🔵 On Leave</span><span>${analyticsData.lists.leave.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.leave, 'type', '🌴')}</div>
+                        <div class="analytics-header flex justify-between"><span>On Leave</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.leave.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.leave, 'type', iconSun)}</div>
                     </div>
 
                     <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>🎉 Birthdays This Month</span><span>${analyticsData.lists.birthday.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', '🎂')}</div>
+                        <div class="analytics-header flex justify-between"><span>Birthdays This Month</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.birthday.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', iconCake)}</div>
                     </div>
                 </div>
             `;
@@ -1205,14 +1245,14 @@
                             analyticsData.workforce.onLeave, 
                             absentEstimate
                         ],
-                        backgroundColor: ['#16a34a', '#3b82f6', '#f59e0b', '#dc2626'],
+                        backgroundColor: ['#059669', '#2563eb', '#d97706', '#e11d48'],
                         borderWidth: 0
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
-                    cutout: '65%'
+                    cutout: '70%'
                 }
             });
 
@@ -1224,7 +1264,7 @@
                     labels: ['Apprv', 'Pend', 'Deny'],
                     datasets: [{
                         data: [analyticsData.toStats.Approved, analyticsData.toStats.Pending, analyticsData.toStats.Denied],
-                        backgroundColor: ['#16a34a', '#eab308', '#ef4444'],
+                        backgroundColor: ['#059669', '#d97706', '#e11d48'],
                         borderRadius: 4
                     }]
                 },
@@ -1233,7 +1273,7 @@
                     plugins: { legend: { display: false } },
                     scales: {
                         y: { display: false, beginAtZero: true },
-                        x: { grid: { display: false }, ticks: { font: {size: 9} } }
+                        x: { grid: { display: false }, ticks: { font: {size: 9, family: "-apple-system, sans-serif"}, color: '#64748b' } }
                     }
                 }
             });
