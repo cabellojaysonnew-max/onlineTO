@@ -1645,13 +1645,27 @@
                     
                     const renderSigs = (list, imgs, startX, width) => {
                         if (list.length === 0) return;
-                        const count = Math.min(list.length, 2);
+                        const count = list.length;
                         const step = width / count;
-                        doc.setFontSize(count > 1 ? 6 : 8);
+                        const imgSize = count > 2 ? 18 : 25;
+                        
                         for (let j = 0; j < count; j++) {
-                            let cx = startX + (step * j) + (step / 2) - 10; 
-                            if (i > 0 && imgs[j]) { try { doc.addImage(imgs[j], 'PNG', cx, 150, 25, 25); } catch(e){} }
-                            doc.text(list[j].full_name.toUpperCase(), cx, 166);
+                            let cx = startX + (step * j) + (step / 2); 
+                            let imgX = cx - (imgSize / 2);
+                            
+                            if (i > 0 && imgs[j]) { 
+                                try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
+                            }
+                            
+                            let name = list[j].full_name.toUpperCase();
+                            let fontSize = 8;
+                            doc.setFontSize(fontSize);
+                            while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                                fontSize -= 0.5;
+                                doc.setFontSize(fontSize);
+                            }
+                            
+                            doc.text(name, cx, 166, { align: 'center' });
                         }
                     };
 
