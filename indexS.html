@@ -826,8 +826,9 @@
                 const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
                 let attData = [];
                 if (validTOEmps.length > 0) {
+                    // Update: Query place_name instead of location
                     const { data } = await supabaseClient.from('attendance_logs')
-                        .select('emp_id, log_time, device_id, location')
+                        .select('emp_id, log_time, device_id, place_name')
                         .in('emp_id', validTOEmps);
                     attData = data || [];
                 }
@@ -844,12 +845,15 @@
                             
                             // Find mobile log for this employee on this specific travel date
                             const logsToday = attData.filter(l => l.emp_id === p.emp_id && l.log_time && l.log_time.includes(dStr));
-                            const mobileLog = logsToday.find(l => l.location || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
+                            const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
 
                             if (mobileLog) {
-                                const loc = mobileLog.location || 'Unknown Location';
+                                const loc = mobileLog.place_name || 'Unknown Location';
                                 const dest = (i.destination || '').toLowerCase();
-                                const isMatch = dest && dest !== 'n/a' && loc.toLowerCase().includes(dest);
+                                
+                                // Enhanced Check: Town or Barangay matching instead of strict inclusion
+                                const destParts = dest.split(',').map(x => x.trim().replace(' city', ''));
+                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.toLowerCase().includes(part) || part.includes(loc.toLowerCase()));
                                 
                                 if (isMatch) {
                                     mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-dar-green font-bold truncate">📱 Employee Reported to the Destination</span> <span class="text-[10px] shrink-0">✅</span></div>`;
