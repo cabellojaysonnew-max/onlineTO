@@ -839,7 +839,7 @@
                     if(p && i.travel_date && checkScope(p.division, p.unit)) {
                         const key = `${p.emp_name}-${i.travel_date}`;
                         if (!seen.has(key)) {
-                            let mobileLogInfo = null;
+                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-gray-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
                             const dStr = i.travel_date.split('T')[0];
                             
                             // Find mobile log for this employee on this specific travel date
@@ -851,7 +851,11 @@
                                 const dest = (i.destination || '').toLowerCase();
                                 const isMatch = dest && dest !== 'n/a' && loc.toLowerCase().includes(dest);
                                 
-                                mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] ${isMatch ? 'text-dar-green' : 'text-red-500'} font-bold truncate">📱 Log: ${loc}</span> ${isMatch ? '<span class="text-[10px] shrink-0">✅</span>' : '<span class="text-[10px] shrink-0">❌</span>'}</div>`;
+                                if (isMatch) {
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-dar-green font-bold truncate">📱 Employee Reported to the Destination</span> <span class="text-[10px] shrink-0">✅</span></div>`;
+                                } else {
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span> <span class="text-[10px] shrink-0">❌</span></div>`;
+                                }
                             }
 
                             reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
@@ -910,7 +914,7 @@
                 const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
                 const c = cMap[r.color];
                 const extra = r.extraHTML ? r.extraHTML : '';
-                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
             });
             container.innerHTML = h;
         }
@@ -1107,13 +1111,11 @@
             let activeForce = analyticsData.workforce.field + analyticsData.workforce.desk;
             let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
             
-            let aiText = `<strong>AI Insight:</strong> Operational capacity is currently at ${capacity}%. `;
-            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `A high volume of your team is deployed in the field today. `;
-            if (analyticsData.anomalies > 0) aiText += `<span class="text-red-600">Warning: ${analyticsData.anomalies} attendance log(s) flagged for potential location spoofing.</span> `;
-            if (analyticsData.lists.absent.length > 0) aiText += `Verify the status of ${analyticsData.lists.absent.length} unaccounted personnel. `;
-            if (analyticsData.lists.birthday.length > 0) aiText += `There are ${analyticsData.lists.birthday.length} birthdays this month to celebrate! `;
-            if (analyticsData.insights.topDest.count > 0) aiText += `<br><br>📍 The most visited destination this month is <strong>${analyticsData.insights.topDest.name}</strong> (${analyticsData.insights.topDest.count} visits). `;
-            if (analyticsData.insights.topTrav.count > 0) aiText += `👤 <strong>${analyticsData.insights.topTrav.name}</strong> has the most travel orders this month (${analyticsData.insights.topTrav.count} TOs). `;
+            let aiText = `<strong>Executive Summary:</strong> Operational capacity stands at ${capacity}%. `;
+            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently field-heavy. `;
+            if (analyticsData.anomalies > 0) aiText += `<span class="text-red-600 font-bold">Alert: ${analyticsData.anomalies} attendance log(s) flagged for potential location anomalies.</span> `;
+            if (analyticsData.lists.absent.length > 0) aiText += `Please verify the status of ${analyticsData.lists.absent.length} unaccounted personnel. `;
+            if (analyticsData.lists.birthday.length > 0) aiText += `Note: ${analyticsData.lists.birthday.length} employee birthdays recognized this month. `;
 
             const renderListRows = (arr, detailKey, icon) => {
                 if (arr.length === 0) return `<div class="p-4 text-center text-xs text-gray-400 font-medium tracking-widest uppercase">No Records</div>`;
@@ -1133,6 +1135,19 @@
                     <p class="text-xs text-gray-600 leading-relaxed bg-white shadow-sm p-4 rounded-2xl border border-purple-100">
                         ${aiText}
                     </p>
+
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">Most Visited (Month)</span>
+                            <span class="text-sm font-black text-gray-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
+                            <span class="text-[10px] text-dar-green font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="text-[9px] text-gray-400 uppercase font-bold tracking-widest mb-1">Top Traveler (Month)</span>
+                            <span class="text-sm font-black text-gray-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
+                            <span class="text-[10px] text-dar-green font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
+                        </div>
+                    </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="analytics-card mb-0">
