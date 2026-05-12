@@ -331,8 +331,6 @@
                 else if (currentTab === 'reports') loadReportsTab();
                 else loadAnalyticsTab();
             }
-
-            checkHRNotifications();
         }
 
         function switchTab(tab) { 
@@ -823,13 +821,42 @@
                     supabaseClient.from('so_records').select('*'),
                     supabaseClient.from('holidays').select('*')
                 ]);
+
+                // Fetch attendance logs for personnel on Approved TOs to check mobile logs against TO destinations
+                const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
+                let attData = [];
+                if (validTOEmps.length > 0) {
+                    const { data } = await supabaseClient.from('attendance_logs')
+                        .select('emp_id, log_time, device_id, location')
+                        .in('emp_id', validTOEmps);
+                    attData = data || [];
+                }
+
                 reportData = [];
                 let seen = new Set();
                 (itR.data || []).forEach(i => {
                     const p = (toR.data || []).find(x => x.to_no === i.to_no);
                     if(p && i.travel_date && checkScope(p.division, p.unit)) {
                         const key = `${p.emp_name}-${i.travel_date}`;
-                        if (!seen.has(key)) { reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue' }); seen.add(key); }
+                        if (!seen.has(key)) {
+                            let mobileLogInfo = null;
+                            const dStr = i.travel_date.split('T')[0];
+                            
+                            // Find mobile log for this employee on this specific travel date
+                            const logsToday = attData.filter(l => l.emp_id === p.emp_id && l.log_time && l.log_time.includes(dStr));
+                            const mobileLog = logsToday.find(l => l.location || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
+
+                            if (mobileLog) {
+                                const loc = mobileLog.location || 'Unknown Location';
+                                const dest = (i.destination || '').toLowerCase();
+                                const isMatch = dest && dest !== 'n/a' && loc.toLowerCase().includes(dest);
+                                
+                                mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] ${isMatch ? 'text-dar-green' : 'text-red-500'} font-bold truncate">📱 Log: ${loc}</span> ${isMatch ? '<span class="text-[10px] shrink-0">✅</span>' : '<span class="text-[10px] shrink-0">❌</span>'}</div>`;
+                            }
+
+                            reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
+                            seen.add(key);
+                        }
                     }
                 });
                 (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
@@ -882,7 +909,8 @@
                 }
                 const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
                 const c = cMap[r.color];
-                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p></div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+                const extra = r.extraHTML ? r.extraHTML : '';
+                h += `<div class="bg-white p-4 rounded-2xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden"><p class="font-bold text-sm text-gray-800 truncate">${r.title}</p><p class="text-[10px] text-gray-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-gray-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded-md uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
             });
             container.innerHTML = h;
         }
@@ -909,9 +937,12 @@
                 const currentMonth = nowPST.getMonth() + 1;
                 const isMonday = nowPST.getDay() === 1;
 
+                const firstDayOfMonth = new Date(nowPST.getFullYear(), nowPST.getMonth(), 1).toISOString().split('T')[0];
+                const lastDayOfMonth = new Date(nowPST.getFullYear(), nowPST.getMonth() + 1, 0).toISOString().split('T')[0];
+
                 // Fetch comprehensive data scoped by valid empirical IDs
-                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, emp_id, to_no').in('emp_id', validEmpIds),
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
                     supabaseClient.from('attendance_logs').select('emp_id, log_time, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayStr + 'T00:00:00'),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no').eq('travel_date', todayStr),
@@ -919,7 +950,8 @@
                     supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
                     isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
                     supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
-                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr)
+                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
                 ]);
 
                 const tos = toRes.data || [];
@@ -1025,6 +1057,33 @@
                     else toStats.Pending++;
                 });
 
+                // Month's Top Visited & Top Traveler
+                const monthItineraries = monthItRes.data || [];
+                const destCounts = {};
+                monthItineraries.forEach(i => {
+                    if (i.destination && i.destination.toUpperCase() !== 'N/A') {
+                        const d = i.destination.trim();
+                        destCounts[d] = (destCounts[d] || 0) + 1;
+                    }
+                });
+                let topDest = { name: 'None', count: 0 };
+                for (const [dest, count] of Object.entries(destCounts)) {
+                    if (count > topDest.count) topDest = { name: dest, count };
+                }
+
+                const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
+                const travCounts = {};
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.emp_name) {
+                        const n = t.emp_name.trim();
+                        travCounts[n] = (travCounts[n] || 0) + 1;
+                    }
+                });
+                let topTrav = { name: 'None', count: 0 };
+                for (const [name, count] of Object.entries(travCounts)) {
+                    if (count > topTrav.count) topTrav = { name, count };
+                }
+
                 const totalStaff = validEmps.length;
                 const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
                 const deskStaff = logsMap.size - fieldStaff; 
@@ -1033,7 +1092,8 @@
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass },
-                    anomalies: anomalyCount
+                    anomalies: anomalyCount,
+                    insights: { topDest, topTrav }
                 };
                 
                 renderAnalyticsView();
@@ -1051,7 +1111,9 @@
             if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `A high volume of your team is deployed in the field today. `;
             if (analyticsData.anomalies > 0) aiText += `<span class="text-red-600">Warning: ${analyticsData.anomalies} attendance log(s) flagged for potential location spoofing.</span> `;
             if (analyticsData.lists.absent.length > 0) aiText += `Verify the status of ${analyticsData.lists.absent.length} unaccounted personnel. `;
-            if (analyticsData.lists.birthday.length > 0) aiText += `There are ${analyticsData.lists.birthday.length} birthdays this month to celebrate!`;
+            if (analyticsData.lists.birthday.length > 0) aiText += `There are ${analyticsData.lists.birthday.length} birthdays this month to celebrate! `;
+            if (analyticsData.insights.topDest.count > 0) aiText += `<br><br>📍 The most visited destination this month is <strong>${analyticsData.insights.topDest.name}</strong> (${analyticsData.insights.topDest.count} visits). `;
+            if (analyticsData.insights.topTrav.count > 0) aiText += `👤 <strong>${analyticsData.insights.topTrav.name}</strong> has the most travel orders this month (${analyticsData.insights.topTrav.count} TOs). `;
 
             const renderListRows = (arr, detailKey, icon) => {
                 if (arr.length === 0) return `<div class="p-4 text-center text-xs text-gray-400 font-medium tracking-widest uppercase">No Records</div>`;
