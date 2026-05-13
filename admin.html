@@ -956,7 +956,10 @@
             content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
             
             try {
-                const { data: allEmps } = await supabaseClient.from('employees').select('*').eq('station', 'DARPO-CS1');
+                const { data: allEmps } = await supabaseClient.from('employees')
+                    .select('*')
+                    .eq('station', 'DARPO-CS1')
+                    .eq('emplyment_type', 'PERMANENT');
                 const validEmps = (allEmps || []).filter(e => checkScope(e.division, e.unit));
                 const validEmpIds = validEmps.map(e => e.emp_id);
                 
