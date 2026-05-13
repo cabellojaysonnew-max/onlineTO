@@ -1823,8 +1823,8 @@
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
 
             if (start < todayStr) {
-                if (!type.includes("Sick") && !type.includes("Wellness") && !type.includes("Vacation")) {
-                    return alert("Strictly no backdating for this leave type.");
+                if (type.includes("Vacation")) {
+                    return alert("Strictly no backdating for Vacation Leave.");
                 }
             }
 
