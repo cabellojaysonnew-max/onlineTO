@@ -1453,24 +1453,22 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             let groupedData = [];
-            let grandTotal = 0;
-            let combinedPurpose = [];
             
             tevItinerary.forEach((it, idx) => {
                 const fDate = new Date(it.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                combinedPurpose.push(it.purpose);
                 const rows = document.getElementById(`tev-rows-${idx}`).querySelectorAll('.tev-row');
                 let dayEntries = [];
+                let dayTotal = 0;
                 rows.forEach(r => {
                     const part = r.querySelector('.tev-part').value.trim();
                     const amt = parseFloat(r.querySelector('.tev-amt').value);
                     if (part && !isNaN(amt)) {
                         dayEntries.push({ particular: part, amount: amt });
-                        grandTotal += amt;
+                        dayTotal += amt;
                     }
                 });
                 if (dayEntries.length > 0) {
-                    groupedData.push({ date: fDate, entries: dayEntries });
+                    groupedData.push({ date: fDate, purpose: it.purpose, entries: dayEntries, total: dayTotal });
                 }
             });
             
@@ -1495,143 +1493,134 @@
                 chiefPos = "DIVISION CHIEF";
             }
 
-            doc.setDrawColor(0);
-            doc.setLineWidth(0.4);
-            
-            // Header
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, 18, { align: "center" });
-            
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-            doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, 25, { align: "center" });
+            groupedData.forEach((dayData, pageIndex) => {
+                if (pageIndex > 0) doc.addPage();
+                
+                doc.setDrawColor(0);
+                doc.setLineWidth(0.4);
+                
+                let startY = 15;
+                
+                doc.rect(10, startY, 190, 260); // A4 frame
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(13);
+                doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, startY + 8, { align: "center" });
+                
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, startY + 14, { align: "center" });
 
-            doc.line(10, 10, 200, 10); // Top Border
-            doc.line(10, 30, 200, 30);
-            
-            doc.setFontSize(10);
-            // Row 1
-            doc.text("Name of Employee", 27.5, 36, { align: "center" });
-            doc.line(45, 30, 45, 60); // V-Line 1 (goes through Office and Division)
-            doc.setFont("helvetica", "bold");
-            doc.text(currentUser.full_name ? currentUser.full_name.toUpperCase() : "", 47, 36);
-            
-            doc.line(130, 30, 130, 40); // V-Line 2
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(9);
-            doc.text("Employee\nNo", 140, 34, { align: "center" });
-            doc.line(150, 30, 150, 40); // V-Line 3
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(10);
-            doc.text(currentUser.emp_id || "", 152, 36);
-            
-            doc.line(10, 40, 200, 40);
-            
-            // Row 2
-            doc.setFont("helvetica", "normal");
-            doc.text("Office", 27.5, 46, { align: "center" });
-            doc.setFont("helvetica", "bold");
-            doc.text(empUnit || "OFFICE OF THE PARPO II", 47, 46);
-            doc.line(10, 50, 200, 50);
-            
-            // Row 3
-            doc.setFont("helvetica", "normal");
-            doc.text("Division", 27.5, 56, { align: "center" });
-            doc.setFont("helvetica", "bold");
-            doc.text(empDiv || "PARPOs OFFICE", 47, 56);
-            doc.line(10, 60, 200, 60);
-            
-            // Particulars / Amount Header
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
-            doc.text("PARTICULARS", 75, 66, { align: "center" });
-            doc.text("AMOUNT", 170, 66, { align: "center" });
-            
-            let curY = 70;
-            doc.line(10, curY, 200, curY);
-            
-            // Dynamic Rows
-            groupedData.forEach(group => {
+                let curY = startY + 20;
+                doc.line(10, curY, 200, curY); 
+                
+                doc.setFontSize(9);
+                doc.text("Name of Employee", 28, curY + 4.5, { align: "center" });
+                doc.line(45, curY, 45, curY + 18); // V-Line 1
+                doc.setFont("helvetica", "bold");
+                doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 48, curY + 4.5);
+                
+                doc.line(130, curY, 130, curY + 6); // V-Line 2
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.text("Employee\nNo", 140, curY + 3, { align: "center" });
+                doc.line(150, curY, 150, curY + 6); // V-Line 3
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
-                doc.text(group.date, 12, curY + 5);
-                curY += 7;
+                doc.text(currentUser.emp_id || "", 152, curY + 4.5);
+                
+                curY += 6;
                 doc.line(10, curY, 200, curY);
                 
                 doc.setFont("helvetica", "normal");
-                group.entries.forEach(entry => {
-                    doc.text(entry.particular, 138, curY + 5, { align: "right" });
-                    doc.text(entry.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 198, curY + 5, { align: "right" });
-                    curY += 7;
+                doc.text("Office", 28, curY + 4.5, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text(empUnit || "OFFICE OF THE PARPO II", 48, curY + 4.5);
+                curY += 6;
+                doc.line(10, curY, 200, curY);
+                
+                doc.setFont("helvetica", "normal");
+                doc.text("Division", 28, curY + 4.5, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text(empDiv || "PARPOs OFFICE", 48, curY + 4.5);
+                curY += 6;
+                doc.line(10, curY, 200, curY);
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("PARTICULARS", 75, curY + 4.5, { align: "center" });
+                doc.text("AMOUNT", 170, curY + 4.5, { align: "center" });
+                
+                let gridTop = curY;
+                curY += 6;
+                doc.line(10, curY, 200, curY);
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8);
+                doc.text(dayData.date, 12, curY + 4);
+                curY += 5.5;
+                doc.line(10, curY, 200, curY);
+                
+                doc.setFont("helvetica", "normal");
+                dayData.entries.forEach(entry => {
+                    doc.text(entry.particular, 148, curY + 4, { align: "right" });
+                    doc.text(entry.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 195, curY + 4, { align: "right" });
+                    curY += 5.5;
                     doc.line(10, curY, 200, curY);
                 });
+                
+                doc.line(150, gridTop, 150, curY + 6.5); 
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(12);
+                doc.text("T O T A L", 148, curY + 4.5, { align: "right" });
+                doc.setFontSize(9);
+                doc.text(dayData.total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 195, curY + 4.5, { align: "right" });
+                
+                curY += 6.5;
+                doc.line(10, curY, 200, curY);
+                
+                doc.setFontSize(10);
+                doc.text("PURPOSE", 12, curY + 6);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                const pLines = doc.splitTextToSize(dayData.purpose || "", 175);
+                doc.text(pLines, 12, curY + 12);
+                
+                let sigTop = 235;
+                doc.line(10, sigTop, 200, sigTop);
+                
+                doc.setFontSize(8.5);
+                const certText = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that above goods and services were acquired from parties not issuing receipts; And that I am fully aware that willful falsification of statements is punishable by law.";
+                const cLines = doc.splitTextToSize(certText, 175);
+                doc.text(cLines, 12, sigTop - 10);
+                doc.line(10, sigTop - 14, 200, sigTop - 14); 
+                
+                doc.text("Certified Correct:", 47, sigTop + 5);
+                doc.text("Noted by:", 125, sigTop + 5);
+                doc.line(10, sigTop + 7, 200, sigTop + 7);
+                
+                doc.text("Signature", 27.5, sigTop + 14, { align: "center" });
+                doc.line(10, sigTop + 20, 200, sigTop + 20);
+                
+                doc.text("Printed\nName", 27.5, sigTop + 24, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 84, sigTop + 25, { align: "center" });
+                doc.text(chiefName, 161, sigTop + 25, { align: "center" });
+                doc.setFont("helvetica", "normal");
+                doc.line(10, sigTop + 28, 200, sigTop + 28);
+                
+                doc.text("Employee", 84, sigTop + 32, { align: "center" });
+                doc.text("Immediate Supervisor", 161, sigTop + 32, { align: "center" });
+                doc.line(10, sigTop + 34, 200, sigTop + 34);
+                
+                const todayFmt = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                doc.text(`Date: ${todayFmt}`, 84, sigTop + 39, { align: "center" });
+                doc.text(`Date: ${todayFmt}`, 161, sigTop + 39, { align: "center" });
+                
+                doc.line(45, sigTop, 45, startY + 260); 
+                doc.line(122.5, sigTop, 122.5, startY + 260); 
             });
-            
-            // Vertical Divider for Grid
-            doc.line(140, 60, 140, curY + 9);
-            
-            // Total Row
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("T O T A L", 138, curY + 6.5, { align: "right" });
-            doc.setFontSize(10);
-            doc.text(grandTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 198, curY + 6, { align: "right" });
-            
-            curY += 9;
-            doc.line(10, curY, 200, curY);
-            
-            // Purpose Block
-            doc.setFontSize(12);
-            doc.text("PURPOSE", 12, curY + 8);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(10);
-            
-            const uniquePurposes = [...new Set(combinedPurpose)].join('; ');
-            const pLines = doc.splitTextToSize(uniquePurposes, 180);
-            doc.text(pLines, 12, curY + 20);
-            
-            curY += 50; 
-            doc.line(10, curY, 200, curY);
-            
-            // Cert Text
-            doc.setFontSize(10);
-            const certText = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that above goods and services were acquired from parties not issuing receipts; And that I am fully aware that willful falsification of statements is punishable by law.";
-            const cLines = doc.splitTextToSize(certText, 180);
-            doc.text(cLines, 12, curY + 8);
-            
-            curY += 25;
-            let sigTop = curY;
-            doc.line(10, sigTop, 200, sigTop);
-            
-            doc.text("Certified Correct:", 42, sigTop + 6);
-            doc.text("Noted by:", 122, sigTop + 6);
-            doc.line(10, sigTop + 9, 200, sigTop + 9);
-            
-            doc.text("Signature", 25, sigTop + 18, { align: "center" });
-            doc.line(10, sigTop + 25, 200, sigTop + 25);
-            
-            doc.text("Printed\nName", 25, sigTop + 31, { align: "center" });
-            doc.setFont("helvetica", "bold");
-            doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 80, sigTop + 33, { align: "center" });
-            doc.text(chiefName, 160, sigTop + 33, { align: "center" });
-            doc.setFont("helvetica", "normal");
-            doc.line(40, sigTop + 35, 200, sigTop + 35);
-            
-            doc.text("Employee", 80, sigTop + 39, { align: "center" });
-            doc.text("Immediate Supervisor", 160, sigTop + 39, { align: "center" });
-            doc.line(40, sigTop + 42, 200, sigTop + 42);
-            
-            const todayFmt = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            doc.text(`Date: ${todayFmt}`, 80, sigTop + 47, { align: "center" });
-            doc.text(`Date: ${todayFmt}`, 160, sigTop + 47, { align: "center" });
-            
-            doc.line(40, sigTop, 40, sigTop + 50); 
-            doc.line(120, sigTop, 120, sigTop + 50); 
-            
-            doc.line(10, sigTop + 50, 200, sigTop + 50); // Bottom cap
-            doc.line(10, 10, 10, sigTop + 50); // Left border
-            doc.line(200, 10, 200, sigTop + 50); // Right border
 
             doc.save(`TEV_Claim_${currentTevToNo}.pdf`);
             window.closeTEVModal();
@@ -1834,7 +1823,7 @@
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
 
             if (start < todayStr) {
-                if (!type.includes("Sick") && !type.includes("Wellness")) {
+                if (!type.includes("Sick") && !type.includes("Wellness") && !type.includes("Vacation")) {
                     return alert("Strictly no backdating for this leave type.");
                 }
             }
@@ -1888,12 +1877,30 @@
                 if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will overwrite the TO on the affected dates. Continue?`)) return;
                 const uniqueToNos = [...new Set(toConflicts.map(t => t.to_no))];
                 for(let to_no of uniqueToNos) {
+                    const { data: toData } = await supabase.from('travel_orders').select('status, transport').eq('to_no', to_no).single();
+                    const isApproved = toData && toData.status === 'APPROVED';
+
                     for (let d of dates_to_check) {
                         await supabase.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
+                        if (toData && toData.transport === "GOV'T VEHICLE") {
+                            await supabase.from('vehicle_logs').delete().eq('to_no', to_no).eq('travel_date', d);
+                        }
                     }
                     const { data: remItin } = await supabase.from('itinerary').select('id').eq('to_no', to_no);
                     if (!remItin || remItin.length === 0) {
-                        await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
+                        await supabase.from('travel_orders').update({status: 'CANCELLED', remarks: 'overwritten by leave application'}).eq('to_no', to_no);
+                        if (isApproved) {
+                            await supabase.from('notifications').insert({
+                                recipient_role: 'PARPO',
+                                message: `Approved TO ${to_no} was cancelled due to a leave application by ${currentUser.full_name}.`,
+                                to_no: to_no
+                            });
+                            await supabase.from('hr_notifications').insert({
+                                emp_id: 'HR_OFFICE',
+                                sender_name: currentUser.full_name || currentUser.fullName,
+                                message: `Approved TO ${to_no} was cancelled due to a leave application.`
+                            });
+                        }
                     }
                 }
             }
