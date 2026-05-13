@@ -1,1349 +1,1351 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>DAR Console</title>
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="DAR Console">
-    <meta name="theme-color" content="#003811">
-    
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    
-    <link id="pwa-manifest" rel="manifest">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-    
-    <style>
-        .dar-green { background-color: #003811; }
-        .text-dar-green { color: #003811; }
-        .dar-gold { background-color: #D4AF37; }
-        .text-dar-gold { color: #D4AF37; }
-        
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #f3f4f6; 
-            -webkit-tap-highlight-color: transparent; 
-            overscroll-behavior-y: none; 
-        }
-        
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DAR Console</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DAR Console">
+    <meta name="theme-color" content="#003811">
+    
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <link id="pwa-manifest" rel="manifest">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    
+    <style>
+        .dar-green { background-color: #003811; }
+        .text-dar-green { color: #003811; }
+        .dar-gold { background-color: #D4AF37; }
+        .text-dar-gold { color: #D4AF37; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f3f4f6; 
+            -webkit-tap-highlight-color: transparent; 
+            overscroll-behavior-y: none; 
+        }
+        
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
 
-        .modal-fade { animation: fadeIn 0.2s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-        .batch-bar-position { bottom: calc(4rem + env(safe-area-inset-bottom)); }
-        
-        .batch-checkbox {
-            appearance: none;
-            width: 1.25rem;
-            height: 1.25rem;
-            border: 2px solid #d1d5db;
-            border-radius: 0.375rem;
-            outline: none;
-            cursor: pointer;
-            position: relative;
-            background-color: white;
-            transition: all 0.2s;
-        }
-        .batch-checkbox:checked {
-            background-color: #003811;
-            border-color: #003811;
-        }
-        .batch-checkbox:checked::after {
-            content: '✓';
-            position: absolute;
-            color: white;
-            font-size: 0.875rem;
-            font-weight: bold;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
+        .modal-fade { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .batch-bar-position { bottom: calc(4rem + env(safe-area-inset-bottom)); }
+        
+        .batch-checkbox {
+            appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #d1d5db;
+            border-radius: 0.375rem;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            background-color: white;
+            transition: all 0.2s;
+        }
+        .batch-checkbox:checked {
+            background-color: #003811;
+            border-color: #003811;
+        }
+        .batch-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: bold;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
 
-        .analytics-card {
-            background: #ffffff;
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e2e8f0;
-            margin-bottom: 1.25rem;
-            overflow: hidden;
-        }
-        .analytics-header {
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid #f1f5f9;
-            background: #f8fafc;
-            font-weight: 800;
-            font-size: 0.70rem;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: #334155;
-        }
-        .analytics-list {
-            max-height: 14rem;
-            overflow-y: auto;
-        }
-        .list-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.875rem 1.25rem;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .list-row:last-child { border-bottom: none; }
-        
-        .kpi-value { font-size: 1.5rem; font-weight: 900; color: #0f172a; line-height: 1; margin-top: 0.25rem; }
-        .kpi-label { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-    </style>
+        .analytics-card {
+            background: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+        }
+        .analytics-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+            background: #f8fafc;
+            font-weight: 800;
+            font-size: 0.70rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #334155;
+        }
+        .analytics-list {
+            max-height: 14rem;
+            overflow-y: auto;
+        }
+        .list-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .list-row:last-child { border-bottom: none; }
+        
+        .kpi-value { font-size: 1.5rem; font-weight: 900; color: #0f172a; line-height: 1; margin-top: 0.25rem; }
+        .kpi-label { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    </style>
 </head>
 <body class="h-[100dvh] w-full flex flex-col overflow-hidden text-gray-800 bg-gray-100 text-left">
 
-    <div id="app" class="w-full h-full flex flex-col relative"></div>
-
-    <script>
-        const manifestData = {
-            "name": "DAR Cam Sur 1 Console",
-            "short_name": "DAR Console",
-            "start_url": ".",
-            "display": "standalone",
-            "background_color": "#F3F4F6",
-            "theme_color": "#003811",
-            "icons": [{
-                "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwMzgxMSIvPjx0ZXh0IHg9IjUwIiB5PSI2NSIgZm9udC1zaXplPSI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI0Q0QUYzNyI+RDwvdGV4dD48L3N2Zz4=",
-                "sizes": "192x192",
-                "type": "image/svg+xml"
-            }]
-        };
-        document.getElementById('pwa-manifest').setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData)));
-
-        // --- SUPABASE CONFIG ---
-        const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let currentUser = null;
-        let currentTab = 'pending'; 
-        let reportFilter = 'day'; 
-        let reportData = [];
-        let analyticsData = {};
-        let selectedPendingOrders = new Set(); 
-        let currentCancelToNo = null;
-
-        // PASSWORD HASHING UTILITY
-        async function hashPassword(msg) {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-        function base64ToBuffer(b64) {
-            const binary_string = atob(b64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
-            return bytes.buffer;
-        }
-
-        async function setupAdminBiometric(username, hashedPass) {
-            if (!window.PublicKeyCredential) return;
-            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-            if (!available) return;
-
-            if (!localStorage.getItem('dar_admin_bio_cred')) {
-                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
-                    try {
-                        const challenge = new Uint8Array(32);
-                        window.crypto.getRandomValues(challenge);
-                        const userId = new Uint8Array(16);
-                        window.crypto.getRandomValues(userId);
-
-                        const cred = await navigator.credentials.create({
-                            publicKey: {
-                                challenge: challenge,
-                                rp: { name: "DAR Admin Console" },
-                                user: { id: userId, name: username, displayName: username },
-                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                                timeout: 60000,
-                                attestation: "none"
-                            }
-                        });
-                        localStorage.setItem('dar_admin_bio_cred', bufferToBase64(cred.rawId));
-                        localStorage.setItem('dar_admin_user', username);
-                        localStorage.setItem('dar_admin_token', hashedPass);
-                        alert("Biometric login enabled!");
-                        const bioBtn = document.getElementById('bioLoginBtn');
-                        if(bioBtn) bioBtn.classList.remove('hidden');
-                    } catch(e) { console.log("Biometric setup failed or cancelled", e); }
-                }
-            }
-        }
-
-        async function handleBiometricLogin() {
-            try {
-                const credId = localStorage.getItem('dar_admin_bio_cred');
-                const username = localStorage.getItem('dar_admin_user');
-                const token = localStorage.getItem('dar_admin_token');
-                if (!credId || !username) return;
-
-                const challenge = new Uint8Array(32);
-                window.crypto.getRandomValues(challenge);
-
-                await navigator.credentials.get({
-                    publicKey: {
-                        challenge: challenge,
-                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
-                        userVerification: "required",
-                        timeout: 60000
-                    }
-                });
-
-                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
-                if (users && (users.password === token)) {
-                    currentUser = {
-                        username: users.username,
-                        fullName: users.full_name,
-                        role: users.role.toUpperCase(),
-                        divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
-                        units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : [],
-                        emp_id: users.id
-                    };
-                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
-                    render();
-                } else { alert("Authentication failed. Please use password."); }
-            } catch(e) { console.log("Biometric auth failed", e); }
-        }
-
-        function checkSession() {
-            const stored = localStorage.getItem('dar_admin_session');
-            if (stored) {
-                const session = JSON.parse(stored);
-                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
-                    currentUser = session.user;
-                } else {
-                    localStorage.removeItem('dar_admin_session');
-                }
-            }
-        }
-
-        function render() { if (!currentUser) renderLogin(); else renderMain(); }
-
-        function renderLogin() {
-            document.getElementById('app').innerHTML = `
-                <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
-                    <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-                        <div class="dar-gold h-2 w-full"></div>
-                        <div class="p-8">
-                            <h1 class="text-dar-green font-bold text-3xl font-serif mb-1 text-center">DAR</h1>
-                            <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Cam Sur 1 Console</p>
-                            <div class="space-y-4">
-                                <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="username" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
-                                <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
-                                <p id="loginError" class="text-red-600 text-[10px] font-bold text-center hidden"></p>
-                                <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg">LOG IN</button>
-                                <button onclick="handleBiometricLogin()" id="bioLoginBtn" class="w-full mt-2 bg-gray-200 text-dar-green font-bold py-3.5 rounded-xl shadow-lg hidden">🧬 BIOMETRIC LOGIN</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-            document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
-
-            setTimeout(() => {
-                if (window.PublicKeyCredential) {
-                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
-                        if (avail && localStorage.getItem('dar_admin_bio_cred')) {
-                            const btn = document.getElementById('bioLoginBtn');
-                            if(btn) btn.classList.remove('hidden');
-                        }
-                    });
-                }
-            }, 100);
-        }
-
-        async function handleLogin() {
-            const uBox = document.getElementById('username').value.trim();
-            const pBox = document.getElementById('password').value.trim();
-            const err = document.getElementById('loginError');
-            try {
-                const hashedPBox = await hashPassword(pBox);
-                const { data: users } = await supabaseClient.from('users').select('*');
-                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
-                
-                if (u) {
-                    currentUser = { 
-                        username: u.username, 
-                        fullName: u.full_name, 
-                        role: u.role.toUpperCase(), 
-                        divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
-                        units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [],
-                        emp_id: u.id
-                    };
-                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
-                    setupAdminBiometric(u.username, u.password);
-                    render();
-                } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
-            } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
-        }
-
-        function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
-
-        function renderMain() {
-            document.getElementById('app').innerHTML = `
-                <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
-                    <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.role}</p></div>
-                    <div class="flex items-center space-x-2"><button onclick="showChangePassword()" class="text-xl px-2">🔒</button><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
-                </header>
-                <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
-                <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
-                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Analytics</span></button>
-                </nav>
-                <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
-                    <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
-                    <div class="space-x-2">
-                        <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
-                        <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
-                    </div>
-                </div>
-                
-                <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
-                
-                <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Cancel Selected Dates</button><button onclick="cancelEntireTO()" class="w-full bg-red-800 text-white font-bold py-3 rounded-xl mt-2">Cancel Entire TO</button></div></div></div>
-
-                <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
-            `;
-            
-            if (currentTab === 'pending') loadPendingTab();
-            else {
-                hideBatchActionBar();
-                if (currentTab === 'approved') loadStatusTab('APPROVED');
-                else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
-                else if (currentTab === 'reports') loadReportsTab();
-                else loadAnalyticsTab();
-            }
-        }
-
-        window.switchTab = function(tab) { 
-            currentTab = tab; 
-            selectedPendingOrders.clear(); 
-            renderMain(); 
-        }
-        window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; }
-        window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; }
-
-        async function updatePassword() {
-            const o = document.getElementById('oldPwd').value.trim();
-            const n = document.getElementById('newPwd').value.trim();
-            const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
-            const hashedOld = await hashPassword(o);
-            
-            if (data.password !== o && data.password !== hashedOld) {
-                return alert("Incorrect.");
-            }
-            
-            const hashedNew = await hashPassword(n);
-            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
-            alert("Updated!"); hideChangePassword();
-        }
-
-        // --- CANCEL MODAL LOGIC (Approved Tab) ---
-        function showCancelModal(to_no, datesEncoded) {
-            const dates = JSON.parse(decodeURIComponent(datesEncoded));
-            currentCancelToNo = to_no;
-            const list = document.getElementById('cancelDatesList');
-            list.innerHTML = '';
-            dates.forEach(d => {
-                list.innerHTML += `
-                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
-                        <input type="checkbox" value="${d}" class="cancel-date-cb w-5 h-5 text-red-600 rounded focus:ring-red-500 border-gray-300">
-                        <span class="text-sm font-bold text-gray-700">${d}</span>
-                    </label>
-                `;
-            });
-            document.getElementById('cancelModal').style.display = 'flex';
-        }
-
-        function hideCancelModal() {
-            document.getElementById('cancelModal').style.display = 'none';
-        }
-
-        function cancelEntireTO() {
-            if(confirm("Are you sure you want to cancel this ENTIRE Travel Order?")) {
-                hideCancelModal();
-                processFullCancel(currentCancelToNo);
-            }
-        }
-
-        async function confirmCancelTO() {
-            const checkboxes = document.querySelectorAll('.cancel-date-cb');
-            const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
-            const totalDates = checkboxes.length;
-
-            if (selectedDates.length === 0) return alert("Select at least one date.");
-
-            const targetToNo = currentCancelToNo;
-            hideCancelModal();
-
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Processing Cancellation...</p>`;
-
-            if (selectedDates.length === totalDates) {
-                await processFullCancel(targetToNo);
-            } else {
-                for (let d of selectedDates) {
-                    await supabaseClient.from('itinerary').delete().eq('to_no', targetToNo).eq('travel_date', d);
-                }
-                await supabaseClient.from('notifications').insert({
-                    recipient_role: 'PARPO',
-                    message: `Approved TO ${targetToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
-                    to_no: targetToNo
-                });
-                loadStatusTab('APPROVED');
-            }
-        }
-
-        async function processFullCancel(to_no) {
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Cancelling TO...</p>`;
-            await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', to_no);
-            await supabaseClient.from('notifications').insert({
-                recipient_role: 'PARPO',
-                message: `Approved TO ${to_no} was entirely cancelled by ${currentUser.fullName}`,
-                to_no: to_no
-            });
-            loadStatusTab('APPROVED');
-        }
-
-        // --- SHARED SCOPE CHECK ---
-        const checkScope = (div, unit) => {
-            const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
-            
-            const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
-            const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
-            
-            if (role === "CHIEF") return dMatch;
-            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
-            
-            const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
-            const uMatch = oUnits.some(u => currentUser.units.includes(u));
-            
-            return dMatch && uMatch;
-        };
-
-        // --- BATCH ACTION LOGIC ---
-        window.toggleBatchSelection = function(to_no, isChecked) {
-            if (isChecked) selectedPendingOrders.add(to_no);
-            else selectedPendingOrders.delete(to_no);
-            updateBatchActionBar();
-        }
-
-        window.selectAllPending = function(checkbox) {
-            const checkboxes = document.querySelectorAll('.to-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = checkbox.checked;
-                if (checkbox.checked) selectedPendingOrders.add(cb.value);
-                else selectedPendingOrders.delete(cb.value);
-            });
-            updateBatchActionBar();
-        }
-
-        function updateBatchActionBar() {
-            const bar = document.getElementById('batchActionBar');
-            const countText = document.getElementById('batchCountText');
-            if (selectedPendingOrders.size > 0) {
-                countText.innerText = `${selectedPendingOrders.size} selected`;
-                bar.classList.remove('translate-y-full');
-            } else {
-                hideBatchActionBar();
-            }
-        }
-
-        function hideBatchActionBar() {
-            const bar = document.getElementById('batchActionBar');
-            if(bar) bar.classList.add('translate-y-full');
-        }
-
-        window.processBatch = async function(action) {
-            try {
-                if (selectedPendingOrders.size === 0) return;
-
-                hideBatchActionBar();
-
-                if (action === 'DISAPPROVED') {
-                    let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
-                    if (!p.received) { loadPendingTab(); return; }
-                    const content = document.getElementById('mainContent');
-                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-                    
-                    const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
-                        const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                        if(error) throw error;
-                    });
-                    await Promise.all(updatePromises);
-
-                } else {
-                    const toNos = Array.from(selectedPendingOrders);
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').in('to_no', toNos);
-                    if (error) throw error;
-
-                    const content = document.getElementById('mainContent');
-                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-
-                    const updatePromises = toNos.map(async (to_no) => {
-                        const toRec = (toDataList || []).find(t => t.to_no === to_no);
-                        const p = getAppPayload(currentUser, toRec);
-                        
-                        if (Object.keys(p).length === 0) return null; 
-
-                        const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                        if(updError) throw updError;
-                        return true;
-                    });
-
-                    const results = await Promise.all(updatePromises);
-                    const validUpdates = results.filter(r => r !== null);
-                    
-                    if (validUpdates.length === 0) {
-                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
-                    }
-                }
-
-                selectedPendingOrders.clear();
-                loadPendingTab();
-            } catch (err) {
-                alert("Batch processing error: " + err.message);
-                loadPendingTab();
-            }
-        }
-
-        window.processDirectTO = async function(to_no, action) {
-            try {
-                let p;
-                if (action === 'DISAPPROVED') {
-                    p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
-                    if (!p.received) return;
-                } else {
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
-                    if (error) throw error;
-                    p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
-                }
-                
-                // Guard against blank payload if role mapping failed
-                if (Object.keys(p).length === 0) {
-                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
-                    return;
-                }
-
-                const content = document.getElementById('mainContent');
-                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
-                
-                const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                if (updErr) throw updErr;
-                
-                loadPendingTab();
-            } catch (err) {
-                alert("Error processing TO: " + err.message);
-                loadPendingTab();
-            }
-        }
-
-        function getAppPayload(u, toRecord = null) {
-            const nowISO = new Date().toISOString(); 
-            const role = u.role ? u.role.trim().toUpperCase() : "";
-            
-            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
-                let nextStatus = "PENDING_CHIEF";
-                if (toRecord && toRecord.unit) {
-                    const unt = toRecord.unit.trim().toUpperCase();
-                    if (unt === "PARPO") nextStatus = "PENDING_PARPO";
-                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
-                }
-                return { status: nextStatus };
-            }
-
-            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
-                if (!toRecord) return {};
-                
-                const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
-                const matchingUnitsToSign = requiredUnits.filter(reqU => u.units.includes(reqU));
-                
-                let currentSigs = toRecord.unithead_signed ? toRecord.unithead_signed : "";
-                
-                matchingUnitsToSign.forEach(unit => {
-                    const sigFragment = `${u.fullName} (${unit})`;
-                    if (!currentSigs.includes(sigFragment)) {
-                        currentSigs = currentSigs ? currentSigs + ", " + sigFragment : sigFragment;
-                    }
-                });
-                
-                let allSigned = true;
-                if (requiredUnits.length > 0) {
-                    allSigned = requiredUnits.every(reqU => currentSigs.toUpperCase().includes(`(${reqU})`));
-                }
-
-                return { 
-                    status: allSigned ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD", 
-                    unithead_signed: currentSigs, 
-                    uh_signed_time: nowISO 
-                };
-            }
-
-            if (role === "CHIEF") {
-                return { 
-                    status: "PENDING_PARPO", 
-                    dc_signed: u.fullName, 
-                    dc_signed_time: nowISO 
-                };
-            }
-            if (role === "PARPO") {
-                return { 
-                    status: "APPROVED", 
-                    parpo_signed: u.fullName, 
-                    parpo_signed_time: nowISO 
-                };
-            }
-            
-            return {};
-        }
-
-        // --- PENDING TAB ---
-        async function loadPendingTab() {
-            selectedPendingOrders.clear();
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Syncing Inbox...</p>`;
-            const [oRes, iRes] = await Promise.all([supabaseClient.from('travel_orders').select('*'), supabaseClient.from('itinerary').select('*')]);
-            let grp = {};
-            (oRes.data || []).forEach(o => { if (!grp[o.to_no]) grp[o.to_no] = []; grp[o.to_no].push(o); });
-            let pendingOrders = [];
-            for (const [to_no, list] of Object.entries(grp)) {
-                let show = false;
-                let showOnlyDatesForUnits = null;
-                
-                for (let o of list) {
-                    const s = (o.status || "").trim().toUpperCase();
-                    const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
-                    const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
-                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-
-                    const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
-                    const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
-                    const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
-                    const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
-
-                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
-                        if (unitsCanSign.length > 0 && hasUnsignedUnit) {
-                            show = true;
-                            // Set flag to filter itinerary tags
-                            showOnlyDatesForUnits = unitsCanSign; 
-                        }
-                    }
-                }
-                
-                if (show) {
-                    let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
-                    
-                    let dt = "N/A";
-                    if(fullItinerary.length > 0) {
-                        const start = new Date(fullItinerary[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const end = new Date(fullItinerary[fullItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
-                    }
-
-                    pendingOrders.push({ 
-                        to_no, 
-                        names: list.map(g => g.emp_name), 
-                        destinations: [...new Set(fullItinerary.map(i => i.destination))].join(', ') || 'N/A', 
-                        purpose: [...new Set(fullItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
-                        report_to: list[0].report_to || 'N/A', 
-                        dateStr: dt
-                    });
-                }
-            }
-            if (pendingOrders.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
-            else {
-                let h = `
-                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 flex justify-between items-center shadow-sm border-b">
-                    <label class="flex items-center space-x-2 cursor-pointer text-sm font-bold text-gray-700">
-                        <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
-                        <span>Select All</span>
-                    </label>
-                    <span class="text-xs text-gray-500 font-bold">${pendingOrders.length} Pending</span>
-                </div>
-                <div class="p-4 space-y-4 pb-32">`;
-                
-                pendingOrders.forEach(o => { 
-                    h += `
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border flex gap-3 relative">
-                        <div class="pt-1">
-                            <input type="checkbox" value="${o.to_no}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('${o.to_no}', this.checked)">
-                        </div>
-                        <div class="flex-grow overflow-hidden">
-                            <div class="flex justify-between items-start">
-                                <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
-                            </div>
-                            <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
-                            <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
-                            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
-                            </div>
-                        </div>
-                    </div>`; 
-                });
-                content.innerHTML = h + `</div>`;
-            }
-        }
-
-        // --- APPROVED / DENIED TAB (DETAILED) ---
-        async function loadStatusTab(tabStatus) {
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-gray-400">Loading...</p>`;
-            
-            const [oRes, iRes] = await Promise.all([
-                supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }), 
-                supabaseClient.from('itinerary').select('*')
-            ]);
-            
-            let h = `<div class="p-4 space-y-3 pb-32">`;
-            let count = 0;
-            const maxLimit = tabStatus === 'APPROVED' ? 50 : 9999;
-            
-            for (let i = 0; i < (oRes.data || []).length; i++) {
-                if (count >= maxLimit) break;
-                const o = oRes.data[i];
-                
-                if (checkScope(o.division, o.unit)) {
-                    let show = false;
-                    let displayStatus = o.status;
-                    let borderColor = tabStatus === 'APPROVED' ? 'border-dar-green' : 'border-red-500';
-                    let textColor = 'text-gray-400';
-                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-
-                    if (tabStatus === 'APPROVED') {
-                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
-                            if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'CHIEF') {
-                            if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
-                            if (o.status === 'APPROVED') show = true;
-                        }
-
-                        if (show) {
-                            if (o.status === 'PENDING_CHIEF') {
-                                displayStatus = 'PENDING CHIEF';
-                                borderColor = 'border-yellow-500';
-                                textColor = 'text-yellow-600';
-                            } else if (o.status === 'PENDING_PARPO') {
-                                displayStatus = 'PENDING PARPO';
-                                borderColor = 'border-blue-500';
-                                textColor = 'text-blue-600';
-                            } else if (o.status === 'APPROVED') {
-                                displayStatus = 'APPROVED';
-                                borderColor = 'border-dar-green';
-                                textColor = 'text-dar-green';
-                            }
-                        }
-                    } else if (tabStatus === 'DISAPPROVED') {
-                        if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED') {
-                            show = true;
-                            displayStatus = o.status;
-                            textColor = 'text-red-500';
-                        }
-                    }
-
-                    if (show) {
-                        count++;
-                        const myI = (iRes.data || []).filter(item => item.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
-                        const ds = [...new Set(myI.map(item => item.destination))].join(', ') || 'N/A';
-                        const purpose = [...new Set(myI.map(item => item.purpose))].join(', ') || 'N/A';
-                        let dt = "N/A";
-                        if(myI.length > 0) {
-                            const start = new Date(myI[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                            const end = new Date(myI[myI.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                            dt = myI.length === 1 ? end : `${start} - ${end}`;
-                        }
-                        
-                        let actionBtns = '';
-                        if (tabStatus === 'APPROVED') {
-                            const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(item => item.travel_date)));
-                            actionBtns = `
-                                <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end space-x-2">
-                                    <button onclick="showCancelModal('${o.to_no}', '${datesEncoded}')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button>
-                                </div>`;
-                        }
-                        
-                        h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm">
-                                <div class="flex justify-between mb-1">
-                                    <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
-                                    <span class="text-[9px] text-gray-400">${o.to_no}</span>
-                                </div>
-                                <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
-                                <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
-                                <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${purpose}</p>
-                                <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
-                                <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
-                                ${actionBtns}
-                              </div>`;
-                    }
-                }
-            }
-            
-            if (count === 0) {
-                content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📄</span><p class="font-bold mt-2 text-xs uppercase">No Records</p></div>`;
-            } else {
-                content.innerHTML = h + `</div>`;
-            }
-        }
-
-        // --- REPORTS (WHEREABOUTS) ---
-        async function loadReportsTab() {
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-blue-500 font-bold animate-pulse">Building Activity Dashboard...</p>`;
-            try {
-                const [toR, itR, psR, soR, hoR] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('*').eq('status', 'APPROVED'),
-                    supabaseClient.from('itinerary').select('*'),
-                    supabaseClient.from('pso_records').select('*'),
-                    supabaseClient.from('so_records').select('*'),
-                    supabaseClient.from('holidays').select('*')
-                ]);
-
-                const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
-                let attData = [];
-                if (validTOEmps.length > 0) {
-                    const { data } = await supabaseClient.from('attendance_logs')
-                        .select('emp_id, log_time, device_id, place_name')
-                        .in('emp_id', validTOEmps)
-                        .order('log_time', { ascending: false })
-                        .limit(2000);
-                    attData = data || [];
-                }
-
-                reportData = [];
-                let seen = new Set();
-                (itR.data || []).forEach(i => {
-                    const p = (toR.data || []).find(x => x.to_no === i.to_no);
-                    if(p && i.travel_date && checkScope(p.division, p.unit)) {
-                        const key = `${p.emp_name}-${i.travel_date}`;
-                        if (!seen.has(key)) {
-                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
-                            const dStr = i.travel_date.split('T')[0];
-                            
-                            const logsToday = attData.filter(l => {
-                                if(!l.log_time) return false;
-                                const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
-                                return l.emp_id === p.emp_id && logDateStr === dStr;
-                            });
-                            
-                            const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
-
-                            if (mobileLog) {
-                                const loc = (mobileLog.place_name || '').toLowerCase();
-                                const dest = (i.destination || '').toLowerCase();
-                                
-                                const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                                const destParts = dest.split(/[\\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
-                                
-                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
-                                
-                                if (isMatch) {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-emerald-600 font-bold truncate">📱 Employee Reported to the Destination</span></div>`;
-                                } else {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span></div>`;
-                                }
-                            }
-
-                            reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
-                            seen.add(key);
-                        }
-                    }
-                });
-                (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
-                (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', purpose: s.subject, color: 'orange' }); });
-                (hoR.data || []).forEach(h => { if(h.date) {
-                    const name = h.name || h.holiday || h.description || "Holiday";
-                    reportData.push({ type: 'HOLIDAY', date: new Date(h.date), title: name, subtitle: 'National/Local Holiday', purpose: '', color: 'red' }); 
-                }});
-                renderReportsShell();
-            } catch (e) { content.innerHTML = `<p class="p-10 text-red-500">Error.</p>`; }
-        }
-
-        function renderReportsShell() {
-            document.getElementById('mainContent').innerHTML = `
-                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
-                    <h2 class="font-extrabold text-lg text-slate-800 mb-3 text-center tracking-tighter uppercase">Whereabouts Log</h2>
-                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
-                        <button id="btn-day" onclick="setReportFilter('day')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'day' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Today</button>
-                        <button id="btn-week" onclick="setReportFilter('week')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Week</button>
-                        <button id="btn-month" onclick="setReportFilter('month')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'month' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Month</button>
-                    </div>
-                </div>
-                <div id="reportListContainer" class="p-4 space-y-4 pb-20"></div>`;
-            updateReportList();
-        }
-
-        function setReportFilter(v) { reportFilter = v; renderReportsShell(); }
-
-        function updateReportList() {
-            const container = document.getElementById('reportListContainer');
-            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-            const [ty, tm, td] = todayStr.split('-').map(Number);
-            const nowManila = new Date(ty, tm - 1, td);
-            
-            let f = reportData.filter(r => {
-                const rStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(r.date);
-                const [ry, rm, rd] = rStr.split('-').map(Number);
-                const dManila = new Date(ry, rm - 1, rd);
-
-                if (reportFilter === 'day') return rStr === todayStr;
-                if (reportFilter === 'week') { 
-                    const s = new Date(nowManila); 
-                    s.setDate(nowManila.getDate() - nowManila.getDay()); 
-                    const e = new Date(s); 
-                    e.setDate(s.getDate() + 6); 
-                    return dManila >= s && dManila <= e; 
-                }
-                if (reportFilter === 'month') return rm === tm && ry === ty;
-                return true;
-            });
-            
-            f.sort((a, b) => b.date.getTime() - a.date.getTime());
-            
-            if (f.length === 0) { container.innerHTML = `<p class="text-center py-20 text-slate-400 font-bold text-[10px] tracking-widest uppercase">No Records Found</p>`; return; }
-            let h = '', last = '';
-            f.forEach(r => {
-                const rStrManila = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(r.date);
-                if (rStrManila !== last) {
-                    last = rStrManila;
-                    h += `<h3 class="text-[10px] font-black text-slate-400 mt-6 mb-2 tracking-widest text-left border-b pb-1 uppercase">${new Date(rStrManila).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h3>`;
-                }
-                const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
-                const c = cMap[r.color];
-                const extra = r.extraHTML ? r.extraHTML : '';
-                h += `<div class="bg-white p-4 rounded-xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-slate-800 truncate">${r.title}</p><p class="text-[10px] text-slate-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-slate-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded bg-white border opacity-80 uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
-            });
-            container.innerHTML = h;
-        }
-
-        // --- AI ANALYTICS TAB ---
-        async function loadAnalyticsTab() {
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
-            
-            try {
-                const { data: allEmps } = await supabaseClient.from('employees').select('*');
-                const validEmps = (allEmps || []).filter(e => checkScope(e.division, e.unit));
-                const validEmpIds = validEmps.map(e => e.emp_id);
-                
-                if (validEmpIds.length === 0) {
-                    content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><p class="font-bold text-xs uppercase text-slate-500">No personnel under your scope</p></div>`;
-                    return;
-                }
-
-                const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-                const [tY, tM, tD] = todayStr.split('-');
-                
-                const nowManilaStr = new Date().toLocaleString("en-US", {timeZone: "Asia/Manila"});
-                const nowManilaObj = new Date(nowManilaStr);
-                const currentMonth = Number(tM);
-                const isMonday = nowManilaObj.getDay() === 1;
-
-                const firstDayOfMonth = `${tY}-${tM}-01`;
-                const lastDayObj = new Date(tY, tM, 0); 
-                const lastDayOfMonth = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth()+1).padStart(2,'0')}-${String(lastDayObj.getDate()).padStart(2,'0')}`;
-
-                // Supabase explicit timezone bounds for Philippine Standard Time (UTC+08:00)
-                const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
-
-                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
-                    supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
-                    supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination').eq('travel_date', todayStr),
-                    supabaseClient.from('pso_records').select('emp_id').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
-                    isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
-                    supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
-                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
-                ]);
-
-                const tos = toRes.data || [];
-                const activeTOs = tos.filter(t => t.status === 'APPROVED');
-                const activeToNos = activeTOs.map(t => t.to_no);
-                const itinsToday = (itRes.data || []).filter(i => activeToNos.includes(i.to_no));
-                const empIdsOnTO = activeTOs.filter(t => itinsToday.some(i => i.to_no === t.to_no)).map(t => t.emp_id);
-                
-                const empIdsOnPSO = (psoRes.data || []).map(p => p.emp_id);
-                const empIdsOnSO = (soRes.data || []).map(s => s.emp_id);
-
-                const leavesMap = new Map();
-                (leaveRes.data || []).forEach(l => leavesMap.set(l.emp_id, l.type));
-
-                const schedMap = new Map();
-                (schedRes.data || []).forEach(s => schedMap.set(s.emp_id, s.start_time));
-
-                let anomalyCount = 0;
-                const logsMap = new Map();
-                (logRes.data || []).forEach(l => {
-                    const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
-                    
-                    if (logDateStr === todayStr) {
-                        if (l.spoof_flag === true) anomalyCount++;
-                        if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
-                            logsMap.set(l.emp_id, l.log_time);
-                        }
-                    }
-                });
-
-                const flagsMap = new Map();
-                (flagRes.data || []).forEach(f => flagsMap.set(f.emp_id, f));
-
-                let listLate = [];
-                let listAbsent = [];
-                let listLeave = [];
-                let listBirthday = [];
-                let listGatePass = [];
-                
-                // Trackers for Field Staff Location matching
-                let listAtDestination = [];
-                let listOutsideDestination = [];
-                let listNoLogsField = [];
-
-                (gateRes.data || []).forEach(gp => {
-                    if (gp.time_out && !gp.time_in) {
-                        const empName = validEmps.find(e => e.emp_id === gp.emp_id)?.full_name || 'Unknown';
-                        listGatePass.push({ name: empName, purpose: gp.purpose });
-                    }
-                });
-
-                // Compute exact destination matches for personnel on travel order
-                empIdsOnTO.forEach(empId => {
-                    const emp = validEmps.find(e => e.emp_id === empId);
-                    if(!emp) return;
-                    
-                    const toForEmp = activeTOs.find(t => t.emp_id === empId);
-                    const itinForEmp = itinsToday.find(i => i.to_no === toForEmp.to_no);
-                    
-                    if(itinForEmp) {
-                        const logsToday = (logRes.data || []).filter(l => {
-                             if(!l.log_time) return false;
-                             const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
-                             return l.emp_id === empId && logDateStr === todayStr;
-                        });
-                        
-                        const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
-                        
-                        if (mobileLog) {
-                            const loc = (mobileLog.place_name || '').toLowerCase();
-                            const dest = (itinForEmp.destination || '').toLowerCase();
-                            const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                            const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
-                            const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
-                            
-                            if(isMatch) {
-                                listAtDestination.push({ name: emp.full_name, location: mobileLog.place_name || 'Destination Matched' });
-                            } else {
-                                listOutsideDestination.push({ name: emp.full_name, location: mobileLog.place_name || 'Outside Dest.' });
-                            }
-                        } else {
-                            listNoLogsField.push({ name: emp.full_name, destination: itinForEmp.destination });
-                        }
-                    }
-                });
-
-                validEmps.forEach(emp => {
-                    if (emp.dob) {
-                        try {
-                            const dobDate = new Date(emp.dob);
-                            if (dobDate.getMonth() + 1 === currentMonth) {
-                                listBirthday.push({ name: emp.full_name, date: dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
-                            }
-                        } catch(e){}
-                    }
-
-                    if (leavesMap.has(emp.emp_id)) {
-                        listLeave.push({ name: emp.full_name, type: leavesMap.get(emp.emp_id) });
-                        return; 
-                    }
-
-                    if (empIdsOnTO.includes(emp.emp_id) || empIdsOnPSO.includes(emp.emp_id) || empIdsOnSO.includes(emp.emp_id)) {
-                        return; 
-                    }
-
-                    if (logsMap.has(emp.emp_id)) {
-                        const timeIn = new Date(logsMap.get(emp.emp_id));
-                        
-                        const formatter12 = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true });
-                        const timeInStr12 = formatter12.format(timeIn); 
-                        
-                        const formatter24 = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
-                        const timeInStr24 = formatter24.format(timeIn); 
-                        const [timeInH, timeInM] = timeInStr24.split(':').map(Number);
-                        
-                        let flexiEnd = schedMap.has(emp.emp_id) ? schedMap.get(emp.emp_id) : (emp.flexi_range_end || "08:00"); 
-                        let [h, m] = flexiEnd.split(':').map(Number);
-
-                        if (timeInH > h || (timeInH === h && timeInM > m)) {
-                            listLate.push({ name: emp.full_name, time: timeInStr12 });
-                        } else if (isMonday) {
-                            if (flagsMap.has(emp.emp_id)) {
-                                const fLog = flagsMap.get(emp.emp_id);
-                                if (fLog.status === 'LATE' || fLog.status === 'ABSENT') {
-                                    listLate.push({ name: emp.full_name, time: `Flag: ${fLog.time_in || fLog.status}` });
-                                }
-                            } else {
-                                 listLate.push({ name: emp.full_name, time: `No Flag Record` });
-                            }
-                        }
-                    } else {
-                        const dayOfWeek = nowManilaObj.getDay();
-                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                            listAbsent.push({ name: emp.full_name });
-                        }
-                    }
-                });
-
-                const toStats = { Approved: 0, Pending: 0, Denied: 0 };
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED') toStats.Approved++;
-                    else if (t.status.includes('DISAPPROVED') || t.status === 'CANCELLED') toStats.Denied++;
-                    else toStats.Pending++;
-                });
-
-                const monthItineraries = monthItRes.data || [];
-                const destCounts = {};
-                monthItineraries.forEach(i => {
-                    if (i.destination && i.destination.toUpperCase() !== 'N/A') {
-                        const d = i.destination.trim();
-                        destCounts[d] = (destCounts[d] || 0) + 1;
-                    }
-                });
-                let topDest = { name: 'None', count: 0 };
-                for (const [dest, count] of Object.entries(destCounts)) {
-                    if (count > topDest.count) topDest = { name: dest, count };
-                }
-
-                const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
-                const travCounts = {};
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.emp_name) {
-                        const n = t.emp_name.trim();
-                        travCounts[n] = (travCounts[n] || 0) + 1;
-                    }
-                });
-                let topTrav = { name: 'None', count: 0 };
-                for (const [name, count] of Object.entries(travCounts)) {
-                    if (count > topTrav.count) topTrav = { name, count };
-                }
-
-                const totalStaff = validEmps.length;
-                const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
-                const deskStaff = logsMap.size - fieldStaff; 
-
-                analyticsData = { 
-                    toStats, 
-                    workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
-                    lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listNoLogsField.length > 0 ? listOutsideDestination : listOutsideDestination, noLogsField: listNoLogsField },
-                    anomalies: anomalyCount,
-                    insights: { topDest, topTrav }
-                };
-                
-                renderAnalyticsView();
-
-            } catch(e) {
-                content.innerHTML = `<p class="p-10 text-red-500 text-center">Analytics Error: ${e.message}</p>`;
-            }
-        }
-
-        function renderAnalyticsView() {
-            let activeForce = analyticsData.workforce.field + analyticsData.workforce.desk;
-            let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
-            let availabilityRate = Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.workforce.onLeave) / Math.max(1, analyticsData.workforce.total)) * 100);
-            
-            let aiText = `<strong>MANAGEMENT BRIEF:</strong> Daily operational capacity stands at ${capacity}%. `;
-            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. `;
-            if (analyticsData.anomalies > 0) aiText += `<span class="text-rose-600 font-bold">Action Required: ${analyticsData.anomalies} attendance log(s) flagged for potential compliance review.</span> `;
-            if (analyticsData.lists.absent.length > 0) aiText += `Unaccounted personnel stands at ${analyticsData.lists.absent.length}. `;
-
-            const renderListRows = (arr, detailKey, iconPath) => {
-                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
-                return arr.map(item => `
-                    <div class="list-row">
-                        <div class="flex items-center space-x-3">
-                            <span class="text-slate-400 w-4 h-4">${iconPath}</span>
-                            <span class="text-xs font-bold text-slate-700">${item.name}</span>
-                        </div>
-                        ${item[detailKey] ? `<span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">${item[detailKey]}</span>` : ''}
-                    </div>
-                `).join('');
-            };
-
-            const iconUser = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>`;
-            const iconClock = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
-            const iconDoor = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>`;
-            const iconSun = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
-            const iconCake = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 1 0 9.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1 1 14.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`;
-            const iconLocation = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>`;
-
-            document.getElementById('mainContent').innerHTML = `
-                <div class="p-4 pb-32 space-y-4">
-                    <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
-                        ${aiText}
-                    </p>
-
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="kpi-label mb-1">Most Visited</span>
-                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
-                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="kpi-label mb-1">Top Traveler</span>
-                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
-                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="kpi-label">Availability</span>
-                            <span class="kpi-value">${availabilityRate}%</span>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="kpi-label">Compliance Flags</span>
-                            <span class="kpi-value ${analyticsData.anomalies > 0 ? 'text-rose-600' : 'text-emerald-600'}">${analyticsData.anomalies}</span>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="analytics-card mb-0">
-                            <div class="analytics-header">Workforce Dist.</div>
-                            <div class="p-4 relative h-40"><canvas id="workforceChart"></canvas></div>
-                        </div>
-                        <div class="analytics-card mb-0">
-                            <div class="analytics-header">Approval Queue</div>
-                            <div class="p-4 relative h-40"><canvas id="toQueueChart"></canvas></div>
-                        </div>
-                    </div>
-
-                    <!-- NEW DESTINATION TRACKING CARDS -->
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>At Actual Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.atDestination.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.atDestination, 'location', iconLocation)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>Outside Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.outsideDestination.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.outsideDestination, 'location', iconLocation)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>No Logs (Field Personnel)</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.noLogsField.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.noLogsField, 'destination', iconLocation)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>Absent / Unaccounted</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.absent.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.absent, null, iconUser)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>Late Arrivals</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.late.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.late, 'time', iconClock)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>Currently Out (Gate Pass)</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.gatepass.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.gatepass, 'purpose', iconDoor)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>On Leave</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.leave.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.leave, 'type', iconSun)}</div>
-                    </div>
-
-                    <div class="analytics-card">
-                        <div class="analytics-header flex justify-between"><span>Birthdays This Month</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.birthday.length}</span></div>
-                        <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', iconCake)}</div>
-                    </div>
-                </div>
-            `;
-
-            // Draw Workforce Chart (Doughnut)
-            const ctxWork = document.getElementById('workforceChart').getContext('2d');
-            const absentEstimate = Math.max(0, analyticsData.workforce.total - analyticsData.workforce.desk - analyticsData.workforce.field - analyticsData.workforce.onLeave);
-            new Chart(ctxWork, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Desk', 'Field', 'Leave', 'Absent'],
-                    datasets: [{
-                        data: [
-                            analyticsData.workforce.desk, 
-                            analyticsData.workforce.field,
-                            analyticsData.workforce.onLeave, 
-                            absentEstimate
-                        ],
-                        backgroundColor: ['#059669', '#2563eb', '#d97706', '#e11d48'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    cutout: '70%'
-                }
-            });
-
-            // Draw TO Queue Chart (Bar)
-            const ctxQueue = document.getElementById('toQueueChart').getContext('2d');
-            new Chart(ctxQueue, {
-                type: 'bar',
-                data: {
-                    labels: ['Apprv', 'Pend', 'Deny'],
-                    datasets: [{
-                        data: [analyticsData.toStats.Approved, analyticsData.toStats.Pending, analyticsData.toStats.Denied],
-                        backgroundColor: ['#059669', '#d97706', '#e11d48'],
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { display: false, beginAtZero: true },
-                        x: { grid: { display: false }, ticks: { font: {size: 9, family: "-apple-system, sans-serif"}, color: '#64748b' } }
-                    }
-                }
-            });
-        }
-
-        window.onload = () => { checkSession(); render(); };
-    </script>
+    <div id="app" class="w-full h-full flex flex-col relative"></div>
+
+    <script>
+        const manifestData = {
+            "name": "DAR Cam Sur 1 Console",
+            "short_name": "DAR Console",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#F3F4F6",
+            "theme_color": "#003811",
+            "icons": [{
+                "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwMzgxMSIvPjx0ZXh0IHg9IjUwIiB5PSI2NSIgZm9udC1zaXplPSI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI0Q0QUYzNyI+RDwvdGV4dD48L3N2Zz4=",
+                "sizes": "192x192",
+                "type": "image/svg+xml"
+            }]
+        };
+        document.getElementById('pwa-manifest').setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData)));
+
+        // --- SUPABASE CONFIG ---
+        const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let currentUser = null;
+        let currentTab = 'pending'; 
+        let reportFilter = 'day'; 
+        let reportData = [];
+        let analyticsData = {};
+        let selectedPendingOrders = new Set(); 
+        let currentCancelToNo = null;
+
+        // PASSWORD HASHING UTILITY
+        async function hashPassword(msg) {
+            const msgUint8 = new TextEncoder().encode(msg);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+        function base64ToBuffer(b64) {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
+        }
+
+        async function setupAdminBiometric(username, hashedPass) {
+            if (!window.PublicKeyCredential) return;
+            const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (!available) return;
+
+            if (!localStorage.getItem('dar_admin_bio_cred')) {
+                if(confirm("Do you want to enable Biometric/Device lock login for future use?")) {
+                    try {
+                        const challenge = new Uint8Array(32);
+                        window.crypto.getRandomValues(challenge);
+                        const userId = new Uint8Array(16);
+                        window.crypto.getRandomValues(userId);
+
+                        const cred = await navigator.credentials.create({
+                            publicKey: {
+                                challenge: challenge,
+                                rp: { name: "DAR Admin Console" },
+                                user: { id: userId, name: username, displayName: username },
+                                pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                                timeout: 60000,
+                                attestation: "none"
+                            }
+                        });
+                        localStorage.setItem('dar_admin_bio_cred', bufferToBase64(cred.rawId));
+                        localStorage.setItem('dar_admin_user', username);
+                        localStorage.setItem('dar_admin_token', hashedPass);
+                        alert("Biometric login enabled!");
+                        const bioBtn = document.getElementById('bioLoginBtn');
+                        if(bioBtn) bioBtn.classList.remove('hidden');
+                    } catch(e) { console.log("Biometric setup failed or cancelled", e); }
+                }
+            }
+        }
+
+        async function handleBiometricLogin() {
+            try {
+                const credId = localStorage.getItem('dar_admin_bio_cred');
+                const username = localStorage.getItem('dar_admin_user');
+                const token = localStorage.getItem('dar_admin_token');
+                if (!credId || !username) return;
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge,
+                        allowCredentials: [{ type: "public-key", id: base64ToBuffer(credId) }],
+                        userVerification: "required",
+                        timeout: 60000
+                    }
+                });
+
+                const { data: users } = await supabaseClient.from('users').select('*').eq('username', username).single();
+                if (users && (users.password === token)) {
+                    currentUser = {
+                        username: users.username,
+                        fullName: users.full_name,
+                        role: users.role.toUpperCase(),
+                        divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
+                        units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : [],
+                        emp_id: users.id
+                    };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    render();
+                } else { alert("Authentication failed. Please use password."); }
+            } catch(e) { console.log("Biometric auth failed", e); }
+        }
+
+        function checkSession() {
+            const stored = localStorage.getItem('dar_admin_session');
+            if (stored) {
+                const session = JSON.parse(stored);
+                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
+                    currentUser = session.user;
+                } else {
+                    localStorage.removeItem('dar_admin_session');
+                }
+            }
+        }
+
+        function render() { if (!currentUser) renderLogin(); else renderMain(); }
+
+        function renderLogin() {
+            document.getElementById('app').innerHTML = `
+                <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
+                    <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+                        <div class="dar-gold h-2 w-full"></div>
+                        <div class="p-8">
+                            <h1 class="text-dar-green font-bold text-3xl font-serif mb-1 text-center">DAR</h1>
+                            <p class="text-[10px] text-gray-400 font-bold tracking-widest mb-6 uppercase text-center">Cam Sur 1 Console</p>
+                            <div class="space-y-4">
+                                <div><label class="block text-xs font-bold text-gray-700 mb-1">USERNAME</label><input type="text" id="username" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
+                                <div><label class="block text-xs font-bold text-gray-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:outline-none"></div>
+                                <p id="loginError" class="text-red-600 text-[10px] font-bold text-center hidden"></p>
+                                <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg">LOG IN</button>
+                                <button onclick="handleBiometricLogin()" id="bioLoginBtn" class="w-full mt-2 bg-gray-200 text-dar-green font-bold py-3.5 rounded-xl shadow-lg hidden">🧬 BIOMETRIC LOGIN</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
+
+            setTimeout(() => {
+                if (window.PublicKeyCredential) {
+                    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+                        if (avail && localStorage.getItem('dar_admin_bio_cred')) {
+                            const btn = document.getElementById('bioLoginBtn');
+                            if(btn) btn.classList.remove('hidden');
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        async function handleLogin() {
+            const uBox = document.getElementById('username').value.trim();
+            const pBox = document.getElementById('password').value.trim();
+            const err = document.getElementById('loginError');
+            try {
+                const hashedPBox = await hashPassword(pBox);
+                const { data: users } = await supabaseClient.from('users').select('*');
+                const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+                
+                if (u) {
+                    currentUser = { 
+                        username: u.username, 
+                        fullName: u.full_name, 
+                        role: u.role.toUpperCase(), 
+                        divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
+                        units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [],
+                        emp_id: u.id
+                    };
+                    localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                    setupAdminBiometric(u.username, u.password);
+                    render();
+                } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
+            } catch (e) { err.innerText = "Error."; err.classList.remove("hidden"); }
+        }
+
+        function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
+
+        function renderMain() {
+            document.getElementById('app').innerHTML = `
+                <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
+                    <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.role}</p></div>
+                    <div class="flex items-center space-x-2"><button onclick="showChangePassword()" class="text-xl px-2">🔒</button><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
+                </header>
+                <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
+                <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Analytics</span></button>
+                </nav>
+                <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
+                    <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
+                    <div class="space-x-2">
+                        <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
+                        <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
+                    </div>
+                </div>
+                
+                <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
+                
+                <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Cancel Selected Dates</button><button onclick="cancelEntireTO()" class="w-full bg-red-800 text-white font-bold py-3 rounded-xl mt-2">Cancel Entire TO</button></div></div></div>
+
+                <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
+            `;
+            
+            if (currentTab === 'pending') loadPendingTab();
+            else {
+                hideBatchActionBar();
+                if (currentTab === 'approved') loadStatusTab('APPROVED');
+                else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
+                else if (currentTab === 'reports') loadReportsTab();
+                else loadAnalyticsTab();
+            }
+        }
+
+        window.switchTab = function(tab) { 
+            currentTab = tab; 
+            selectedPendingOrders.clear(); 
+            renderMain(); 
+        }
+        window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; }
+        window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; }
+
+        async function updatePassword() {
+            const o = document.getElementById('oldPwd').value.trim();
+            const n = document.getElementById('newPwd').value.trim();
+            const { data } = await supabaseClient.from('users').select('password').eq('username', currentUser.username).single();
+            const hashedOld = await hashPassword(o);
+            
+            if (data.password !== o && data.password !== hashedOld) {
+                return alert("Incorrect.");
+            }
+            
+            const hashedNew = await hashPassword(n);
+            await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
+            alert("Updated!"); hideChangePassword();
+        }
+
+        // --- CANCEL MODAL LOGIC (Approved Tab) ---
+        function showCancelModal(to_no, datesEncoded) {
+            const dates = JSON.parse(decodeURIComponent(datesEncoded));
+            currentCancelToNo = to_no;
+            const list = document.getElementById('cancelDatesList');
+            list.innerHTML = '';
+            dates.forEach(d => {
+                list.innerHTML += `
+                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
+                        <input type="checkbox" value="${d}" class="cancel-date-cb w-5 h-5 text-red-600 rounded focus:ring-red-500 border-gray-300">
+                        <span class="text-sm font-bold text-gray-700">${d}</span>
+                    </label>
+                `;
+            });
+            document.getElementById('cancelModal').style.display = 'flex';
+        }
+
+        function hideCancelModal() {
+            document.getElementById('cancelModal').style.display = 'none';
+        }
+
+        function cancelEntireTO() {
+            if(confirm("Are you sure you want to cancel this ENTIRE Travel Order?")) {
+                hideCancelModal();
+                processFullCancel(currentCancelToNo);
+            }
+        }
+
+        async function confirmCancelTO() {
+            const checkboxes = document.querySelectorAll('.cancel-date-cb');
+            const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            const totalDates = checkboxes.length;
+
+            if (selectedDates.length === 0) return alert("Select at least one date.");
+
+            const targetToNo = currentCancelToNo;
+            hideCancelModal();
+
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Processing Cancellation...</p>`;
+
+            if (selectedDates.length === totalDates) {
+                await processFullCancel(targetToNo);
+            } else {
+                for (let d of selectedDates) {
+                    await supabaseClient.from('itinerary').delete().eq('to_no', targetToNo).eq('travel_date', d);
+                }
+                await supabaseClient.from('notifications').insert({
+                    recipient_role: 'PARPO',
+                    message: `Approved TO ${targetToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
+                    to_no: targetToNo
+                });
+                loadStatusTab('APPROVED');
+            }
+        }
+
+        async function processFullCancel(to_no) {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Cancelling TO...</p>`;
+            await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', to_no);
+            await supabaseClient.from('notifications').insert({
+                recipient_role: 'PARPO',
+                message: `Approved TO ${to_no} was entirely cancelled by ${currentUser.fullName}`,
+                to_no: to_no
+            });
+            loadStatusTab('APPROVED');
+        }
+
+        // --- SHARED SCOPE CHECK ---
+        const checkScope = (div, unit) => {
+            const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
+            
+            const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
+            const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+            
+            if (role === "CHIEF") return dMatch;
+            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            
+            const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
+            const uMatch = oUnits.some(u => currentUser.units.includes(u));
+            
+            return dMatch && uMatch;
+        };
+
+        // --- BATCH ACTION LOGIC ---
+        window.toggleBatchSelection = function(to_no, isChecked) {
+            if (isChecked) selectedPendingOrders.add(to_no);
+            else selectedPendingOrders.delete(to_no);
+            updateBatchActionBar();
+        }
+
+        window.selectAllPending = function(checkbox) {
+            const checkboxes = document.querySelectorAll('.to-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = checkbox.checked;
+                if (checkbox.checked) selectedPendingOrders.add(cb.value);
+                else selectedPendingOrders.delete(cb.value);
+            });
+            updateBatchActionBar();
+        }
+
+        function updateBatchActionBar() {
+            const bar = document.getElementById('batchActionBar');
+            const countText = document.getElementById('batchCountText');
+            if (selectedPendingOrders.size > 0) {
+                countText.innerText = `${selectedPendingOrders.size} selected`;
+                bar.classList.remove('translate-y-full');
+            } else {
+                hideBatchActionBar();
+            }
+        }
+
+        function hideBatchActionBar() {
+            const bar = document.getElementById('batchActionBar');
+            if(bar) bar.classList.add('translate-y-full');
+        }
+
+        window.processBatch = async function(action) {
+            try {
+                if (selectedPendingOrders.size === 0) return;
+
+                hideBatchActionBar();
+
+                if (action === 'DISAPPROVED') {
+                    let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
+                    if (!p.received) { loadPendingTab(); return; }
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+                    
+                    const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
+                        const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(error) throw error;
+                    });
+                    await Promise.all(updatePromises);
+
+                } else {
+                    const toNos = Array.from(selectedPendingOrders);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').in('to_no', toNos);
+                    if (error) throw error;
+
+                    const content = document.getElementById('mainContent');
+                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+
+                    const updatePromises = toNos.map(async (to_no) => {
+                        const toRec = (toDataList || []).find(t => t.to_no === to_no);
+                        const p = getAppPayload(currentUser, toRec);
+                        
+                        if (Object.keys(p).length === 0) return null; 
+
+                        const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                        if(updError) throw updError;
+                        return true;
+                    });
+
+                    const results = await Promise.all(updatePromises);
+                    const validUpdates = results.filter(r => r !== null);
+                    
+                    if (validUpdates.length === 0) {
+                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
+                    }
+                }
+
+                selectedPendingOrders.clear();
+                loadPendingTab();
+            } catch (err) {
+                alert("Batch processing error: " + err.message);
+                loadPendingTab();
+            }
+        }
+
+        window.processDirectTO = async function(to_no, action) {
+            try {
+                let p;
+                if (action === 'DISAPPROVED') {
+                    p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
+                    if (!p.received) return;
+                } else {
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
+                    if (error) throw error;
+                    p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
+                }
+                
+                // Guard against blank payload if role mapping failed
+                if (Object.keys(p).length === 0) {
+                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
+                    return;
+                }
+
+                const content = document.getElementById('mainContent');
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
+                
+                const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                if (updErr) throw updErr;
+                
+                loadPendingTab();
+            } catch (err) {
+                alert("Error processing TO: " + err.message);
+                loadPendingTab();
+            }
+        }
+
+        function getAppPayload(u, toRecord = null) {
+            const nowISO = new Date().toISOString(); 
+            const role = u.role ? u.role.trim().toUpperCase() : "";
+            
+            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
+                let nextStatus = "PENDING_CHIEF";
+                if (toRecord && toRecord.unit) {
+                    const unt = toRecord.unit.trim().toUpperCase();
+                    if (unt === "PARPO") nextStatus = "PENDING_PARPO";
+                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
+                }
+                return { status: nextStatus };
+            }
+
+            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+                if (!toRecord) return {};
+                
+                const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
+                const matchingUnitsToSign = requiredUnits.filter(reqU => u.units.includes(reqU));
+                
+                let currentSigs = toRecord.unithead_signed ? toRecord.unithead_signed : "";
+                
+                matchingUnitsToSign.forEach(unit => {
+                    const sigFragment = `${u.fullName} (${unit})`;
+                    if (!currentSigs.includes(sigFragment)) {
+                        currentSigs = currentSigs ? currentSigs + ", " + sigFragment : sigFragment;
+                    }
+                });
+                
+                let allSigned = true;
+                if (requiredUnits.length > 0) {
+                    allSigned = requiredUnits.every(reqU => currentSigs.toUpperCase().includes(`(${reqU})`));
+                }
+
+                return { 
+                    status: allSigned ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD", 
+                    unithead_signed: currentSigs, 
+                    uh_signed_time: nowISO 
+                };
+            }
+
+            if (role === "CHIEF") {
+                return { 
+                    status: "PENDING_PARPO", 
+                    dc_signed: u.fullName, 
+                    dc_signed_time: nowISO 
+                };
+            }
+            if (role === "PARPO") {
+                return { 
+                    status: "APPROVED", 
+                    parpo_signed: u.fullName, 
+                    parpo_signed_time: nowISO 
+                };
+            }
+            
+            return {};
+        }
+
+        // --- PENDING TAB ---
+        async function loadPendingTab() {
+            selectedPendingOrders.clear();
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Syncing Inbox...</p>`;
+            const [oRes, iRes] = await Promise.all([supabaseClient.from('travel_orders').select('*'), supabaseClient.from('itinerary').select('*')]);
+            let grp = {};
+            (oRes.data || []).forEach(o => { if (!grp[o.to_no]) grp[o.to_no] = []; grp[o.to_no].push(o); });
+            let pendingOrders = [];
+            for (const [to_no, list] of Object.entries(grp)) {
+                let show = false;
+                let showOnlyDatesForUnits = null;
+                
+                for (let o of list) {
+                    const s = (o.status || "").trim().toUpperCase();
+                    const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
+                    const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+
+                    const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
+                    const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
+                    const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
+                    const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
+
+                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
+                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                        if (unitsCanSign.length > 0 && hasUnsignedUnit) {
+                            show = true;
+                            // Set flag to filter itinerary tags
+                            showOnlyDatesForUnits = unitsCanSign; 
+                        }
+                    }
+                }
+                
+                if (show) {
+                    let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
+                    
+                    let dt = "N/A";
+                    if(fullItinerary.length > 0) {
+                        const start = new Date(fullItinerary[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const end = new Date(fullItinerary[fullItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
+                    }
+
+                    pendingOrders.push({ 
+                        to_no, 
+                        names: list.map(g => g.emp_name), 
+                        destinations: [...new Set(fullItinerary.map(i => i.destination))].join(', ') || 'N/A', 
+                        purpose: [...new Set(fullItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
+                        report_to: list[0].report_to || 'N/A', 
+                        dateStr: dt
+                    });
+                }
+            }
+            if (pendingOrders.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
+            else {
+                let h = `
+                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 flex justify-between items-center shadow-sm border-b">
+                    <label class="flex items-center space-x-2 cursor-pointer text-sm font-bold text-gray-700">
+                        <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
+                        <span>Select All</span>
+                    </label>
+                    <span class="text-xs text-gray-500 font-bold">${pendingOrders.length} Pending</span>
+                </div>
+                <div class="p-4 space-y-4 pb-32">`;
+                
+                pendingOrders.forEach(o => { 
+                    h += `
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border flex gap-3 relative">
+                        <div class="pt-1">
+                            <input type="checkbox" value="${o.to_no}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('${o.to_no}', this.checked)">
+                        </div>
+                        <div class="flex-grow overflow-hidden">
+                            <div class="flex justify-between items-start">
+                                <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
+                            </div>
+                            <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
+                            <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
+                            <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
+                            <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
+                            <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
+                            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
+                            </div>
+                        </div>
+                    </div>`; 
+                });
+                content.innerHTML = h + `</div>`;
+            }
+        }
+
+        // --- APPROVED / DENIED TAB (DETAILED) ---
+        async function loadStatusTab(tabStatus) {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-gray-400">Loading...</p>`;
+            
+            const [oRes, iRes] = await Promise.all([
+                supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }), 
+                supabaseClient.from('itinerary').select('*')
+            ]);
+            
+            let h = `<div class="p-4 space-y-3 pb-32">`;
+            let count = 0;
+            const maxLimit = tabStatus === 'APPROVED' ? 50 : 9999;
+            
+            for (let i = 0; i < (oRes.data || []).length; i++) {
+                if (count >= maxLimit) break;
+                const o = oRes.data[i];
+                
+                if (checkScope(o.division, o.unit)) {
+                    let show = false;
+                    let displayStatus = o.status;
+                    let borderColor = tabStatus === 'APPROVED' ? 'border-dar-green' : 'border-red-500';
+                    let textColor = 'text-gray-400';
+                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+
+                    if (tabStatus === 'APPROVED') {
+                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
+                            if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
+                        } else if (r === 'CHIEF') {
+                            if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
+                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
+                            if (o.status === 'APPROVED') show = true;
+                        }
+
+                        if (show) {
+                            if (o.status === 'PENDING_CHIEF') {
+                                displayStatus = 'PENDING CHIEF';
+                                borderColor = 'border-yellow-500';
+                                textColor = 'text-yellow-600';
+                            } else if (o.status === 'PENDING_PARPO') {
+                                displayStatus = 'PENDING PARPO';
+                                borderColor = 'border-blue-500';
+                                textColor = 'text-blue-600';
+                            } else if (o.status === 'APPROVED') {
+                                displayStatus = 'APPROVED';
+                                borderColor = 'border-dar-green';
+                                textColor = 'text-dar-green';
+                            }
+                        }
+                    } else if (tabStatus === 'DISAPPROVED') {
+                        if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED') {
+                            show = true;
+                            displayStatus = o.status;
+                            textColor = 'text-red-500';
+                        }
+                    }
+
+                    if (show) {
+                        count++;
+                        const myI = (iRes.data || []).filter(item => item.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
+                        const ds = [...new Set(myI.map(item => item.destination))].join(', ') || 'N/A';
+                        const purpose = [...new Set(myI.map(item => item.purpose))].join(', ') || 'N/A';
+                        let dt = "N/A";
+                        if(myI.length > 0) {
+                            const start = new Date(myI[0].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            const end = new Date(myI[myI.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            dt = myI.length === 1 ? end : `${start} - ${end}`;
+                        }
+                        
+                        let actionBtns = '';
+                        if (tabStatus === 'APPROVED') {
+                            const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(item => item.travel_date)));
+                            actionBtns = `
+                                <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end space-x-2">
+                                    <button onclick="showCancelModal('${o.to_no}', '${datesEncoded}')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button>
+                                </div>`;
+                        }
+                        
+                        h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm">
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
+                                    <span class="text-[9px] text-gray-400">${o.to_no}</span>
+                                </div>
+                                <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
+                                <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
+                                <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${purpose}</p>
+                                <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
+                                <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
+                                ${actionBtns}
+                              </div>`;
+                    }
+                }
+            }
+            
+            if (count === 0) {
+                content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📄</span><p class="font-bold mt-2 text-xs uppercase">No Records</p></div>`;
+            } else {
+                content.innerHTML = h + `</div>`;
+            }
+        }
+
+        // --- REPORTS (WHEREABOUTS) ---
+        async function loadReportsTab() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-blue-500 font-bold animate-pulse">Building Activity Dashboard...</p>`;
+            try {
+                const [toR, itR, psR, soR, hoR] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('*').eq('status', 'APPROVED'),
+                    supabaseClient.from('itinerary').select('*'),
+                    supabaseClient.from('pso_records').select('*'),
+                    supabaseClient.from('so_records').select('*'),
+                    supabaseClient.from('holidays').select('*')
+                ]);
+
+                const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
+                let attData = [];
+                if (validTOEmps.length > 0) {
+                    const { data } = await supabaseClient.from('attendance_logs')
+                        .select('emp_id, log_time, device_id, place_name')
+                        .in('emp_id', validTOEmps)
+                        .order('log_time', { ascending: false })
+                        .limit(2000);
+                    attData = data || [];
+                }
+
+                reportData = [];
+                let seen = new Set();
+                (itR.data || []).forEach(i => {
+                    const p = (toR.data || []).find(x => x.to_no === i.to_no);
+                    if(p && i.travel_date && checkScope(p.division, p.unit)) {
+                        const key = `${p.emp_name}-${i.travel_date}`;
+                        if (!seen.has(key)) {
+                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
+                            const dStr = i.travel_date.split('T')[0];
+                            
+                            const logsToday = attData.filter(l => {
+                                if(!l.log_time) return false;
+                                const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
+                                return l.emp_id === p.emp_id && logDateStr === dStr;
+                            });
+                            
+                            const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
+
+                            if (mobileLog) {
+                                const loc = (mobileLog.place_name || '').toLowerCase();
+                                const dest = (i.destination || '').toLowerCase();
+                                
+                                const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
+                                const destParts = dest.split(/[\\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                
+                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
+                                
+                                if (isMatch) {
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-emerald-600 font-bold truncate">📱 Employee Reported to the Destination</span></div>`;
+                                } else {
+                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span></div>`;
+                                }
+                            }
+
+                            reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
+                            seen.add(key);
+                        }
+                    }
+                });
+                (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
+                (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', purpose: s.subject, color: 'orange' }); });
+                (hoR.data || []).forEach(h => { if(h.date) {
+                    const name = h.name || h.holiday || h.description || "Holiday";
+                    reportData.push({ type: 'HOLIDAY', date: new Date(h.date), title: name, subtitle: 'National/Local Holiday', purpose: '', color: 'red' }); 
+                }});
+                renderReportsShell();
+            } catch (e) { content.innerHTML = `<p class="p-10 text-red-500">Error.</p>`; }
+        }
+
+        function renderReportsShell() {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
+                    <h2 class="font-extrabold text-lg text-slate-800 mb-3 text-center tracking-tighter uppercase">Whereabouts Log</h2>
+                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
+                        <button id="btn-day" onclick="setReportFilter('day')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'day' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Today</button>
+                        <button id="btn-week" onclick="setReportFilter('week')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Week</button>
+                        <button id="btn-month" onclick="setReportFilter('month')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${reportFilter === 'month' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}">Month</button>
+                    </div>
+                </div>
+                <div id="reportListContainer" class="p-4 space-y-4 pb-20"></div>`;
+            updateReportList();
+        }
+
+        function setReportFilter(v) { reportFilter = v; renderReportsShell(); }
+
+        function updateReportList() {
+            const container = document.getElementById('reportListContainer');
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            const [ty, tm, td] = todayStr.split('-').map(Number);
+            const nowManila = new Date(ty, tm - 1, td);
+            
+            let f = reportData.filter(r => {
+                const rStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(r.date);
+                const [ry, rm, rd] = rStr.split('-').map(Number);
+                const dManila = new Date(ry, rm - 1, rd);
+
+                if (reportFilter === 'day') return rStr === todayStr;
+                if (reportFilter === 'week') { 
+                    const s = new Date(nowManila); 
+                    s.setDate(nowManila.getDate() - nowManila.getDay()); 
+                    const e = new Date(s); 
+                    e.setDate(s.getDate() + 6); 
+                    return dManila >= s && dManila <= e; 
+                }
+                if (reportFilter === 'month') return rm === tm && ry === ty;
+                return true;
+            });
+            
+            f.sort((a, b) => b.date.getTime() - a.date.getTime());
+            
+            if (f.length === 0) { container.innerHTML = `<p class="text-center py-20 text-slate-400 font-bold text-[10px] tracking-widest uppercase">No Records Found</p>`; return; }
+            let h = '', last = '';
+            f.forEach(r => {
+                const rStrManila = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(r.date);
+                if (rStrManila !== last) {
+                    last = rStrManila;
+                    h += `<h3 class="text-[10px] font-black text-slate-400 mt-6 mb-2 tracking-widest text-left border-b pb-1 uppercase">${new Date(rStrManila).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h3>`;
+                }
+                const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
+                const c = cMap[r.color];
+                const extra = r.extraHTML ? r.extraHTML : '';
+                h += `<div class="bg-white p-4 rounded-xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-slate-800 truncate">${r.title}</p><p class="text-[10px] text-slate-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-slate-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded bg-white border opacity-80 uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+            });
+            container.innerHTML = h;
+        }
+
+        // --- AI ANALYTICS TAB ---
+        async function loadAnalyticsTab() {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
+            
+            try {
+                const { data: allEmps } = await supabaseClient.from('employees').select('*');
+                const validEmps = (allEmps || []).filter(e => checkScope(e.division, e.unit));
+                const validEmpIds = validEmps.map(e => e.emp_id);
+                
+                if (validEmpIds.length === 0) {
+                    content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><p class="font-bold text-xs uppercase text-slate-500">No personnel under your scope</p></div>`;
+                    return;
+                }
+
+                const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                const [tY, tM, tD] = todayStr.split('-');
+                
+                const nowManilaStr = new Date().toLocaleString("en-US", {timeZone: "Asia/Manila"});
+                const nowManilaObj = new Date(nowManilaStr);
+                const currentMonth = Number(tM);
+                const isMonday = nowManilaObj.getDay() === 1;
+
+                const firstDayOfMonth = `${tY}-${tM}-01`;
+                const lastDayObj = new Date(tY, tM, 0); 
+                const lastDayOfMonth = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth()+1).padStart(2,'0')}-${String(lastDayObj.getDate()).padStart(2,'0')}`;
+
+                // Supabase explicit timezone bounds for Philippine Standard Time (UTC+08:00)
+                const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
+
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
+                    supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
+                    supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('itinerary').select('to_no, destination').eq('travel_date', todayStr),
+                    supabaseClient.from('pso_records').select('emp_id').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
+                    isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
+                    supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
+                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
+                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
+                ]);
+
+                const tos = toRes.data || [];
+                const activeTOs = tos.filter(t => t.status === 'APPROVED');
+                const activeToNos = activeTOs.map(t => t.to_no);
+                const itinsToday = (itRes.data || []).filter(i => activeToNos.includes(i.to_no));
+                const empIdsOnTO = activeTOs.filter(t => itinsToday.some(i => i.to_no === t.to_no)).map(t => t.emp_id);
+                
+                const empIdsOnPSO = (psoRes.data || []).map(p => p.emp_id);
+                const empIdsOnSO = (soRes.data || []).map(s => s.emp_id);
+
+                const leavesMap = new Map();
+                (leaveRes.data || []).forEach(l => leavesMap.set(l.emp_id, l.type));
+
+                const schedMap = new Map();
+                (schedRes.data || []).forEach(s => schedMap.set(s.emp_id, s.start_time));
+
+                let anomalyCount = 0;
+                const logsMap = new Map();
+                (logRes.data || []).forEach(l => {
+                    const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
+                    
+                    if (logDateStr === todayStr) {
+                        if (l.spoof_flag === true) anomalyCount++;
+                        if(!logsMap.has(l.emp_id) || new Date(l.log_time) < new Date(logsMap.get(l.emp_id))) {
+                            logsMap.set(l.emp_id, l.log_time);
+                        }
+                    }
+                });
+
+                const flagsMap = new Map();
+                (flagRes.data || []).forEach(f => flagsMap.set(f.emp_id, f));
+
+                let listLate = [];
+                let listAbsent = [];
+                let listLeave = [];
+                let listBirthday = [];
+                let listGatePass = [];
+                
+                // Trackers for Field Staff Location matching
+                let listAtDestination = [];
+                let listOutsideDestination = [];
+                let listNoLogsField = [];
+
+                (gateRes.data || []).forEach(gp => {
+                    if (gp.time_out && !gp.time_in) {
+                        const empName = validEmps.find(e => e.emp_id === gp.emp_id)?.full_name || 'Unknown';
+                        listGatePass.push({ name: empName, purpose: gp.purpose });
+                    }
+                });
+
+                // Compute exact destination matches for personnel on travel order
+                empIdsOnTO.forEach(empId => {
+                    const emp = validEmps.find(e => e.emp_id === empId);
+                    if(!emp) return;
+                    
+                    // BUG FIX COMPLETED: Grab ALL approved TOs for the user, then find the specific one happening today.
+                    const empActiveTOs = activeTOs.filter(t => t.emp_id === empId);
+                    const itinForEmp = itinsToday.find(i => empActiveTOs.some(t => t.to_no === i.to_no));
+                    
+                    if(itinForEmp) {
+                        const logsToday = (logRes.data || []).filter(l => {
+                             if(!l.log_time) return false;
+                             const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
+                             return l.emp_id === empId && logDateStr === todayStr;
+                        });
+                        
+                        const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
+                        
+                        if (mobileLog) {
+                            const loc = (mobileLog.place_name || '').toLowerCase();
+                            const dest = (itinForEmp.destination || '').toLowerCase();
+                            const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
+                            const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                            const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
+                            
+                            if(isMatch) {
+                                listAtDestination.push({ name: emp.full_name, location: mobileLog.place_name || 'Destination Matched' });
+                            } else {
+                                listOutsideDestination.push({ name: emp.full_name, location: mobileLog.place_name || 'Outside Dest.' });
+                            }
+                        } else {
+                            listNoLogsField.push({ name: emp.full_name, destination: itinForEmp.destination });
+                        }
+                    }
+                });
+
+                validEmps.forEach(emp => {
+                    if (emp.dob) {
+                        try {
+                            const dobDate = new Date(emp.dob);
+                            if (dobDate.getMonth() + 1 === currentMonth) {
+                                listBirthday.push({ name: emp.full_name, date: dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+                            }
+                        } catch(e){}
+                    }
+
+                    if (leavesMap.has(emp.emp_id)) {
+                        listLeave.push({ name: emp.full_name, type: leavesMap.get(emp.emp_id) });
+                        return; 
+                    }
+
+                    if (empIdsOnTO.includes(emp.emp_id) || empIdsOnPSO.includes(emp.emp_id) || empIdsOnSO.includes(emp.emp_id)) {
+                        return; 
+                    }
+
+                    if (logsMap.has(emp.emp_id)) {
+                        const timeIn = new Date(logsMap.get(emp.emp_id));
+                        
+                        const formatter12 = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true });
+                        const timeInStr12 = formatter12.format(timeIn); 
+                        
+                        const formatter24 = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+                        const timeInStr24 = formatter24.format(timeIn); 
+                        const [timeInH, timeInM] = timeInStr24.split(':').map(Number);
+                        
+                        let flexiEnd = schedMap.has(emp.emp_id) ? schedMap.get(emp.emp_id) : (emp.flexi_range_end || "08:00"); 
+                        let [h, m] = flexiEnd.split(':').map(Number);
+
+                        if (timeInH > h || (timeInH === h && timeInM > m)) {
+                            listLate.push({ name: emp.full_name, time: timeInStr12 });
+                        } else if (isMonday) {
+                            if (flagsMap.has(emp.emp_id)) {
+                                const fLog = flagsMap.get(emp.emp_id);
+                                if (fLog.status === 'LATE' || fLog.status === 'ABSENT') {
+                                    listLate.push({ name: emp.full_name, time: `Flag: ${fLog.time_in || fLog.status}` });
+                                }
+                            } else {
+                                 listLate.push({ name: emp.full_name, time: `No Flag Record` });
+                            }
+                        }
+                    } else {
+                        const dayOfWeek = nowManilaObj.getDay();
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                            listAbsent.push({ name: emp.full_name });
+                        }
+                    }
+                });
+
+                const toStats = { Approved: 0, Pending: 0, Denied: 0 };
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED') toStats.Approved++;
+                    else if (t.status.includes('DISAPPROVED') || t.status === 'CANCELLED') toStats.Denied++;
+                    else toStats.Pending++;
+                });
+
+                const monthItineraries = monthItRes.data || [];
+                const destCounts = {};
+                monthItineraries.forEach(i => {
+                    if (i.destination && i.destination.toUpperCase() !== 'N/A') {
+                        const d = i.destination.trim();
+                        destCounts[d] = (destCounts[d] || 0) + 1;
+                    }
+                });
+                let topDest = { name: 'None', count: 0 };
+                for (const [dest, count] of Object.entries(destCounts)) {
+                    if (count > topDest.count) topDest = { name: dest, count };
+                }
+
+                const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
+                const travCounts = {};
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.emp_name) {
+                        const n = t.emp_name.trim();
+                        travCounts[n] = (travCounts[n] || 0) + 1;
+                    }
+                });
+                let topTrav = { name: 'None', count: 0 };
+                for (const [name, count] of Object.entries(travCounts)) {
+                    if (count > topTrav.count) topTrav = { name, count };
+                }
+
+                const totalStaff = validEmps.length;
+                const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
+                const deskStaff = logsMap.size - fieldStaff; 
+
+                // BUG FIX COMPLETED: listOutsideDestination variable assignment corrected.
+                analyticsData = { 
+                    toStats, 
+                    workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
+                    lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
+                    anomalies: anomalyCount,
+                    insights: { topDest, topTrav }
+                };
+                
+                renderAnalyticsView();
+
+            } catch(e) {
+                content.innerHTML = `<p class="p-10 text-red-500 text-center">Analytics Error: ${e.message}</p>`;
+            }
+        }
+
+        function renderAnalyticsView() {
+            let activeForce = analyticsData.workforce.field + analyticsData.workforce.desk;
+            let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
+            let availabilityRate = Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.workforce.onLeave) / Math.max(1, analyticsData.workforce.total)) * 100);
+            
+            let aiText = `<strong>MANAGEMENT BRIEF:</strong> Daily operational capacity stands at ${capacity}%. `;
+            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. `;
+            if (analyticsData.anomalies > 0) aiText += `<span class="text-rose-600 font-bold">Action Required: ${analyticsData.anomalies} attendance log(s) flagged for potential compliance review.</span> `;
+            if (analyticsData.lists.absent.length > 0) aiText += `Unaccounted personnel stands at ${analyticsData.lists.absent.length}. `;
+
+            const renderListRows = (arr, detailKey, iconPath) => {
+                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
+                return arr.map(item => `
+                    <div class="list-row">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-slate-400 w-4 h-4">${iconPath}</span>
+                            <span class="text-xs font-bold text-slate-700">${item.name}</span>
+                        </div>
+                        ${item[detailKey] ? `<span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">${item[detailKey]}</span>` : ''}
+                    </div>
+                `).join('');
+            };
+
+            const iconUser = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>`;
+            const iconClock = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
+            const iconDoor = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>`;
+            const iconSun = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
+            const iconCake = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 1 0 9.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1 1 14.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`;
+            const iconLocation = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>`;
+
+            document.getElementById('mainContent').innerHTML = `
+                <div class="p-4 pb-32 space-y-4">
+                    <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
+                        ${aiText}
+                    </p>
+
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label mb-1">Most Visited</span>
+                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
+                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label mb-1">Top Traveler</span>
+                            <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
+                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label">Availability</span>
+                            <span class="kpi-value">${availabilityRate}%</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                            <span class="kpi-label">Compliance Flags</span>
+                            <span class="kpi-value ${analyticsData.anomalies > 0 ? 'text-rose-600' : 'text-emerald-600'}">${analyticsData.anomalies}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="analytics-card mb-0">
+                            <div class="analytics-header">Workforce Dist.</div>
+                            <div class="p-4 relative h-40"><canvas id="workforceChart"></canvas></div>
+                        </div>
+                        <div class="analytics-card mb-0">
+                            <div class="analytics-header">Approval Queue</div>
+                            <div class="p-4 relative h-40"><canvas id="toQueueChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- NEW DESTINATION TRACKING CARDS -->
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>At Actual Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.atDestination.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.atDestination, 'location', iconLocation)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>Outside Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.outsideDestination.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.outsideDestination, 'location', iconLocation)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>No Logs (Field Personnel)</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.noLogsField.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.noLogsField, 'destination', iconLocation)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>Absent / Unaccounted</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.absent.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.absent, null, iconUser)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>Late Arrivals</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.late.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.late, 'time', iconClock)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>Currently Out (Gate Pass)</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.gatepass.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.gatepass, 'purpose', iconDoor)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>On Leave</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.leave.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.leave, 'type', iconSun)}</div>
+                    </div>
+
+                    <div class="analytics-card">
+                        <div class="analytics-header flex justify-between"><span>Birthdays This Month</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.birthday.length}</span></div>
+                        <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', iconCake)}</div>
+                    </div>
+                </div>
+            `;
+
+            // Draw Workforce Chart (Doughnut)
+            const ctxWork = document.getElementById('workforceChart').getContext('2d');
+            const absentEstimate = Math.max(0, analyticsData.workforce.total - analyticsData.workforce.desk - analyticsData.workforce.field - analyticsData.workforce.onLeave);
+            new Chart(ctxWork, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Desk', 'Field', 'Leave', 'Absent'],
+                    datasets: [{
+                        data: [
+                            analyticsData.workforce.desk, 
+                            analyticsData.workforce.field,
+                            analyticsData.workforce.onLeave, 
+                            absentEstimate
+                        ],
+                        backgroundColor: ['#059669', '#2563eb', '#d97706', '#e11d48'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '70%'
+                }
+            });
+
+            // Draw TO Queue Chart (Bar)
+            const ctxQueue = document.getElementById('toQueueChart').getContext('2d');
+            new Chart(ctxQueue, {
+                type: 'bar',
+                data: {
+                    labels: ['Apprv', 'Pend', 'Deny'],
+                    datasets: [{
+                        data: [analyticsData.toStats.Approved, analyticsData.toStats.Pending, analyticsData.toStats.Denied],
+                        backgroundColor: ['#059669', '#d97706', '#e11d48'],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: {size: 9, family: "-apple-system, sans-serif"}, color: '#64748b' } }
+                    }
+                }
+            });
+        }
+
+        window.onload = () => { checkSession(); render(); };
+    </script>
 </body>
 </html>
