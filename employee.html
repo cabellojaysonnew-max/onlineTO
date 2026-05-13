@@ -1392,6 +1392,259 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
+        window.generateOfficialPDF = async function(toNo) {
+            if(isSubmitting) return;
+            isSubmitting = true;
+            try {
+                alert("Fetching Travel Order Data to generate PDF...");
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4'); 
+                const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
+
+                const { data: group_orders, error: toErr } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+                if (toErr || !group_orders || group_orders.length === 0) return alert("Travel Order not found.");
+                
+                const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type').in('emp_id', group_orders.map(g => g.emp_id));
+                
+                // FETCH VEHICLE LOG SCHEDULE for red ink rendering
+                const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
+                
+                const od = group_orders[0];
+                const names = group_orders.map(m => (m.emp_name || "").toUpperCase()).join(", ");
+                const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
+                const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
+                
+                const rawType = emp_details?.find(e => e.emp_id === group_orders[0].emp_id)?.type;
+                const typeLabel = rawType ? (rawType.toUpperCase() === 'SPLIT' ? 'SPLIT/COS' : (rawType.toUpperCase() === 'REGULAR' ? 'REGULAR' : '')) : '';
+
+                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+
+                // Get Unique Units and Divisions from the Personnel in this TO
+                const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
+                const uniqueUnits = [...new Set(rawUnits)];
+                const uniqueDivs = [...new Set(group_orders.flatMap(o => o.division ? o.division.split(',').map(d=>d.trim()) : []).filter(d => d))];
+
+                let uh_list = [];
+                if (!isMARPO && uniqueUnits.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('unit', uniqueUnits);
+                    if (data) uh_list = data;
+                }
+
+                let dc_list = [];
+                if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
+                    if (data) dc_list = data;
+                }
+
+                const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
+                    urlToBase64(getAssetUrl("bg_form.jpg")),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
+                    urlToBase64(getAssetUrl("P2.png")), 
+                    ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
+                    ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
+                ]);
+                
+                const uh_imgs = sigs.slice(0, uh_list.length);
+                const dc_imgs = sigs.slice(uh_list.length);
+
+                for (let i = 0; i < 3; i++) {
+                    if (i > 0) doc.addPage();
+                    if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                    
+                    // TOP MOST RED INK REMARK FOR GOV'T VEHICLE (Y=8)
+                    if (od.transport === "GOV'T VEHICLE") {
+                        doc.setTextColor(255, 0, 0); // RED INK
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
+                        doc.setTextColor(0, 0, 0); // RESET TO BLACK
+                    }
+
+                    if (img_qr) { 
+                        try { 
+                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+
+                            // AUDIT TRAIL TIMESTAMPS
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(4);
+                            let auditText = [
+                                `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+                            ];
+                            doc.text(auditText, 190, 36, {align: 'center'});
+                        } catch(e){} 
+                    }
+
+                    if (od.remarks && od.remarks.includes("EXISTING PSO")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+                    }
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+                    const fDate = new Date(od.created_at || new Date()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                    doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
+
+                    const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
+                        let currentSize = defaultSize;
+                        doc.setFontSize(currentSize);
+                        let lines = doc.splitTextToSize(text || "", maxWidth);
+                        while (lines.length > maxLines && currentSize > 4.5) {
+                            currentSize -= 0.5;
+                            doc.setFontSize(currentSize);
+                            lines = doc.splitTextToSize(text || "", maxWidth);
+                        }
+                        let curY = y;
+                        lines.forEach((line) => {
+                            doc.text(line, x, curY);
+                            doc.line(x, curY + 1, lineEndX, curY + 1);
+                            curY += 4.5;
+                        });
+                        doc.setFontSize(defaultSize);
+                        return lines.length;
+                    };
+
+                    doc.setFontSize(10); 
+                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
+                    doc.setFont("helvetica", "normal");
+                    let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
+
+                    let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
+
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let posLinesCount = renderFlexibleText(positions, 40, nextY, 45, 85, 10, 2);
+                    
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
+
+                    let maxSubLines = Math.max(posLinesCount, statLinesCount);
+                    let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
+
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, transY);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    const drawCheck = (label, x, y, isChecked) => {
+                        doc.rect(x, y - 3, 3, 3);
+                        if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
+                        doc.text(label, x + 5, y);
+                    };
+                    drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                    
+                    drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                    if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
+                        doc.text(`Sched: ${vLog.schedule}`, 103, transY + 5);
+                        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+                    }
+
+                    drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
+                    drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
+
+                    doc.setFontSize(10); doc.setFont("helvetica", "bold");
+                    let destLabelY = transY + 17;
+                    doc.text("DESTINATION:", 20, destLabelY);
+                    const formatDestDate = (dateStr) => {
+                        try { return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch(e) { return dateStr; }
+                    };
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                    let destY = destLabelY;
+                    const destMaxWidth = 110;
+
+                    if (itin_list) {
+                        itin_list.forEach(it => {
+                            const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination || ''}`;
+                            const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
+                            wrappedDestLines.forEach((line) => {
+                                doc.text(line, 50, destY);
+                                destY += 3.5;
+                            });
+                        });
+                    }
+                    
+                    let curY = Math.max(destY, destLabelY + 5);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("DEPARTURE DATE:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text((itin_list && itin_list.length > 0) ? (itin_list[0].travel_date || "") : "", 55, curY); doc.line(55, curY+1, 90, curY+1);
+                    doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
+                    doc.setFont("helvetica", "normal"); doc.text((itin_list && itin_list.length > 0) ? (itin_list[itin_list.length-1].travel_date || "") : "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
+                    
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
+                    curY += 4;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+                    const uniquePurposes = itin_list ? [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ') : '';
+                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+                    purpLines.forEach((line) => {
+                        doc.text(line, 20, curY);
+                        doc.line(20, curY + 1, 160, curY + 1);
+                        curY += 4.5; 
+                    });
+                    curY += 2;
+                    
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(8);
+                    doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
+                    drawCheck("LIVE IN", 110, curY, false);
+                    drawCheck("LIVE OUT", 135, curY, false);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("Recommended by:", 20, 156);
+                    
+                    const renderSigs = (list, imgs, startX, width) => {
+                        if (!list || list.length === 0) return;
+                        const count = list.length;
+                        const step = width / count;
+                        const imgSize = count > 2 ? 18 : 25;
+                        
+                        for (let j = 0; j < count; j++) {
+                            let cx = startX + (step * j) + (step / 2); 
+                            let imgX = cx - (imgSize / 2);
+                            
+                            if (i > 0 && imgs[j]) { 
+                                try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
+                            }
+                            
+                            let name = (list[j].full_name || "").toUpperCase();
+                            let fontSize = 8;
+                            doc.setFontSize(fontSize);
+                            while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                                fontSize -= 0.5;
+                                doc.setFontSize(fontSize);
+                            }
+                            
+                            doc.text(name, cx, 166, { align: 'center' });
+                        }
+                    };
+
+                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                    renderSigs(dc_list, dc_imgs, 95, 60);
+
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text("RICARDO C. GARCIA", 114, 202);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.text("PARPO II", 128, 206);
+                }
+                await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
+            } catch (e) {
+                alert("PDF Generation Error: " + e.message);
+            } finally {
+                isSubmitting = false;
+            }
+        };
+
         window.openTEVModal = async function(to_no) {
             currentTevToNo = to_no;
             document.getElementById('tevModal').style.display = 'flex';
@@ -1905,34 +2158,10 @@
                 .in('to_no', (await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%')).data.map(t => t.to_no));
             
             if(toConflicts && toConflicts.length > 0) {
-                if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will overwrite the TO on the affected dates. Continue?`)) return;
+                if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will CANCEL/SPLIT the TO. Continue?`)) return;
                 const uniqueToNos = [...new Set(toConflicts.map(t => t.to_no))];
                 for(let to_no of uniqueToNos) {
-                    const { data: toData } = await supabase.from('travel_orders').select('status, transport').eq('to_no', to_no).single();
-                    const isApproved = toData && toData.status === 'APPROVED';
-
-                    for (let d of dates_to_check) {
-                        await supabase.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
-                        if (toData && toData.transport === "GOV'T VEHICLE") {
-                            await supabase.from('vehicle_logs').delete().eq('to_no', to_no).eq('travel_date', d);
-                        }
-                    }
-                    const { data: remItin } = await supabase.from('itinerary').select('id').eq('to_no', to_no);
-                    if (!remItin || remItin.length === 0) {
-                        await supabase.from('travel_orders').update({status: 'CANCELLED', remarks: 'overwritten by leave application'}).eq('to_no', to_no);
-                        if (isApproved) {
-                            await supabase.from('notifications').insert({
-                                recipient_role: 'PARPO',
-                                message: `Approved TO ${to_no} was cancelled due to a leave application by ${currentUser.full_name}.`,
-                                to_no: to_no
-                            });
-                            await supabase.from('hr_notifications').insert({
-                                emp_id: 'HR_OFFICE',
-                                sender_name: currentUser.full_name || currentUser.fullName,
-                                message: `Approved TO ${to_no} was cancelled due to a leave application.`
-                            });
-                        }
-                    }
+                    await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
                 }
             }
 
