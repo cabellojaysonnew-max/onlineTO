@@ -345,16 +345,6 @@
             return sha256(msg); 
         };
 
-        // WEBAUTHN UTILS
-        const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-        const base64ToBuffer = (b64) => {
-            const binary_string = atob(b64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
-            return bytes.buffer;
-        };
-
         // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
@@ -591,22 +581,56 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
+            
             if (!id || !pass) return alert("Please enter ID and Password");
+
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
-                if (!data) return alert("Employee ID not found.");
+                
+                if (error) {
+                    alert("Database connection issue: " + error.message);
+                    return;
+                }
+                if (!data) {
+                    alert("Employee ID not found.");
+                    return;
+                }
+                
                 const hashedPass = await window.hashPassword(pass);
-                if (data.pass === pass || data.pass === hashedPass) {
+
+                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
                     document.getElementById('app-screen').classList.add('active');
+                    document.getElementById('itin-from').min = todayStr;
+                    document.getElementById('itin-to').min = todayStr;
+                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                    window.renderPersonnel();
+
+                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
+                        document.getElementById('special-div-card').style.display = 'block';
+                        const sDivs = (data.division || "").split(',');
+                        let sdHtml = '';
+                        sDivs.forEach(d => {
+                            const val = d.trim();
+                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                        });
+                        document.getElementById('special-div-list').innerHTML = sdHtml;
+                    } else {
+                        document.getElementById('special-div-card').style.display = 'none';
+                    }
+
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
-                } else { alert("Incorrect Password."); }
-            } catch (err) { alert("Login Error: " + err.message); }
+                } else { 
+                    alert("Incorrect Password."); 
+                }
+            } catch (err) {
+                alert("Login Error: " + err.message);
+            }
         };
 
         // --- ATTENDANCE LOGIC ---
@@ -892,7 +916,7 @@
 
             tevDraftData = itin.map(i => ({
                 date: i.travel_date,
-                purpose: i.purpose,
+                purpose: i.purpose || '',
                 rows: [{ particular: '', amount: '' }]
             }));
 
@@ -947,6 +971,7 @@
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
+            const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
             
             try {
                 let chiefName = "_________________________";
@@ -978,7 +1003,7 @@
                     
                     curY += 8;
                     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-                    doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, curY, {align: "center"});
+                    doc.text("Pursuant to COA Circular No. 2017-001 dated June 19, 2017", 105, curY, {align: "center"});
 
                     curY += 10;
                     // Main Header Table
@@ -1458,7 +1483,6 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-        // --- PDF LOGIC (Silent & Signatures) ---
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -1659,12 +1683,15 @@
                         const count = list.length;
                         const step = width / count;
                         const imgSize = count > 2 ? 18 : 25;
+                        
                         for (let j = 0; j < count; j++) {
                             let cx = startX + (step * j) + (step / 2); 
                             let imgX = cx - (imgSize / 2);
+                            
                             if (i > 0 && imgs[j]) { 
                                 try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
                             }
+                            
                             let name = list[j].full_name.toUpperCase();
                             let fontSize = 8;
                             doc.setFontSize(fontSize);
@@ -1672,6 +1699,7 @@
                                 fontSize -= 0.5;
                                 doc.setFontSize(fontSize);
                             }
+                            
                             doc.text(name, cx, 166, { align: 'center' });
                         }
                     };
