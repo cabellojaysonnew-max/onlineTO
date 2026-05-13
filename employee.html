@@ -899,7 +899,6 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
-            // Collect Data
             let groupedData = [];
             let grandTotal = 0;
             let combinedPurpose = [];
@@ -924,134 +923,146 @@
             
             if (groupedData.length === 0) return alert("Please enter at least one valid expense.");
 
+            let chiefName = "_________________________";
+            let chiefPos = "DIVISION CHIEF";
+            const empDiv = (currentUser.divisions && currentUser.divisions.length > 0 ? currentUser.divisions[0] : "").toUpperCase().trim();
+            const empUnit = (currentUser.units && currentUser.units.length > 0 ? currentUser.units[0] : "").toUpperCase().trim();
+            
+            if (empDiv === "PARPO") {
+                chiefName = "RICARDO C. GARCIA";
+                chiefPos = "PARPO II";
+            } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                const { data: mData } = await supabaseClient.from('employees').select('full_name').eq('unit', currentUser.units[0]).ilike('position', '%MARPO%').maybeSingle();
+                if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                chiefPos = "MARPO";
+            } else {
+                const baseDiv = currentUser.divisions && currentUser.divisions.length > 0 ? currentUser.divisions[0].split(',')[0].trim() : "";
+                const { data: chiefData } = await supabaseClient.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                chiefPos = "DIVISION CHIEF";
+            }
+
             doc.setDrawColor(0);
             doc.setLineWidth(0.3);
-            doc.rect(10, 10, 190, 277); // Outer boundary
-
+            
             doc.setFont("helvetica", "bold");
             doc.setFontSize(14);
-            doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, 18, { align: "center" });
+            doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, 30, { align: "center" });
             
             doc.setFont("helvetica", "normal");
             doc.setFontSize(10);
-            doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, 25, { align: "center" });
+            doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, 38, { align: "center" });
 
-            doc.line(10, 30, 200, 30);
+            doc.line(15, 45, 195, 45);
             
-            // Header Info Rows
             doc.setFontSize(9);
-            doc.text("Name of Employee", 15, 35);
-            doc.line(45, 30, 45, 50); 
+            doc.text("Name of Employee", 35, 50, { align: "center" });
+            doc.line(55, 45, 55, 65); 
             doc.setFont("helvetica", "bold");
-            doc.text(currentUser.fullName.toUpperCase(), 47, 36);
+            doc.text(currentUser.fullName.toUpperCase(), 85, 50, { align: "center" });
             
-            doc.line(110, 30, 110, 38); 
+            doc.line(115, 45, 115, 53); 
             doc.setFont("helvetica", "normal");
-            doc.text("Employee\nNo", 115, 34);
-            doc.line(135, 30, 135, 38); 
+            doc.text("Employee\nNo", 130, 48, { align: "center" });
+            doc.line(145, 45, 145, 53); 
             doc.setFont("helvetica", "bold");
-            doc.text(currentUser.emp_id || "", 137, 36);
+            doc.text(currentUser.emp_id || "", 170, 50, { align: "center" });
             
-            doc.line(10, 38, 200, 38);
-            
-            doc.setFont("helvetica", "normal");
-            doc.text("Office", 15, 42);
-            doc.setFont("helvetica", "bold");
-            doc.text(currentUser.units[0] || "OFFICE OF THE PARPO II", 47, 42);
-            doc.line(10, 44, 200, 44);
+            doc.line(15, 53, 195, 53);
             
             doc.setFont("helvetica", "normal");
-            doc.text("Division", 15, 48);
+            doc.text("Office", 35, 57, { align: "center" });
             doc.setFont("helvetica", "bold");
-            doc.text(currentUser.divisions[0] || "PARPOs OFFICE", 47, 48);
-            doc.line(10, 50, 200, 50);
+            doc.text(empUnit || "OFFICE OF THE PARPO II", 57, 57);
+            doc.line(15, 59, 195, 59);
             
-            // Particulars / Amount Header
+            doc.setFont("helvetica", "normal");
+            doc.text("Division", 35, 63, { align: "center" });
+            doc.setFont("helvetica", "bold");
+            doc.text(empDiv || "PARPOs OFFICE", 57, 63);
+            doc.line(15, 65, 195, 65);
+            
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
-            doc.text("PARTICULARS", 75, 54, { align: "center" });
-            doc.text("AMOUNT", 170, 54, { align: "center" });
-            doc.line(10, 56, 200, 56);
+            doc.text("PARTICULARS", 80, 70, { align: "center" });
+            doc.text("AMOUNT", 170, 70, { align: "center" });
+            doc.line(15, 72, 195, 72);
             
-            let y = 60;
+            let curY = 72;
             groupedData.forEach(group => {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
-                doc.text(group.date, 12, y);
-                y += 5;
+                doc.text(group.date, 17, curY + 4);
+                curY += 5.5;
+                doc.line(15, curY, 195, curY);
                 doc.setFont("helvetica", "normal");
                 group.entries.forEach(entry => {
-                    doc.text(entry.particular, 138, y, { align: "right" });
-                    doc.text(entry.amount.toFixed(2), 195, y, { align: "right" });
-                    doc.line(10, y + 1.5, 200, y + 1.5);
-                    y += 5;
+                    doc.text(entry.particular, 143, curY + 4, { align: "right" });
+                    doc.text(entry.amount.toFixed(2), 193, curY + 4, { align: "right" });
+                    curY += 5.5;
+                    doc.line(15, curY, 195, curY);
                 });
             });
             
-            // Draw Main Vertical Divider down to current Y
-            doc.line(140, 50, 140, y + 1.5); 
+            doc.line(145, 65, 145, curY + 7); 
             
             doc.setFont("helvetica", "bold");
             doc.setFontSize(12);
-            doc.text("T O T A L", 138, y, { align: "right" });
+            doc.text("T O T A L", 143, curY + 5, { align: "right" });
             doc.setFontSize(10);
-            doc.text(grandTotal.toFixed(2), 195, y, { align: "right" });
-            doc.line(10, y + 1.5, 200, y + 1.5);
+            doc.text(grandTotal.toFixed(2), 193, curY + 5, { align: "right" });
             
-            y += 5;
-            doc.setFontSize(12);
-            doc.text("PURPOSE", 12, y + 6);
+            curY += 7;
+            doc.line(15, curY, 195, curY);
+            
+            doc.setFontSize(11);
+            doc.text("PURPOSE", 17, curY + 6);
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
             
             const uniquePurposes = [...new Set(combinedPurpose)].join('; ');
-            const pLines = doc.splitTextToSize(uniquePurposes, 180);
-            doc.text(pLines, 12, y + 16);
+            const pLines = doc.splitTextToSize(uniquePurposes, 175);
+            doc.text(pLines, 17, curY + 16);
             
-            y += 45; 
-            doc.line(10, y, 200, y);
+            curY += 40; 
+            doc.line(15, curY, 195, curY);
             
             doc.setFontSize(9);
             const certText = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that above goods and services were acquired from parties not issuing receipts; And that I am fully aware that willful falsification of statements is punishable by law.";
-            const cLines = doc.splitTextToSize(certText, 180);
-            doc.text(cLines, 12, y + 5);
+            const cLines = doc.splitTextToSize(certText, 175);
+            doc.text(cLines, 17, curY + 6);
             
-            y += 18;
-            let gridStart = y;
-            doc.line(10, gridStart, 200, gridStart);
+            curY += 25;
+            let sigTop = curY;
+            doc.line(15, sigTop, 195, sigTop);
             
-            doc.text("Certified Correct:", 47, gridStart + 5);
-            doc.text("Noted by:", 137, gridStart + 5);
-            doc.line(10, gridStart + 8, 200, gridStart + 8);
+            doc.text("Certified Correct:", 47, sigTop + 5);
+            doc.text("Noted by:", 122, sigTop + 5);
+            doc.line(15, sigTop + 8, 195, sigTop + 8);
             
-            doc.text("Signature", 15, gridStart + 15);
-            doc.line(10, gridStart + 22, 200, gridStart + 22);
+            doc.text("Signature", 30, sigTop + 16, { align: "center" });
+            doc.line(15, sigTop + 22, 195, sigTop + 22);
             
-            doc.text("Printed\\nName", 15, gridStart + 26);
+            doc.text("Printed\nName", 30, sigTop + 25, { align: "center" });
             doc.setFont("helvetica", "bold");
-            doc.text(currentUser.fullName.toUpperCase(), 90, gridStart + 28, { align: "center" });
-
-            let supervisor = "RICARDO C. GARCIA"; 
-            const { data: toInfo } = await supabaseClient.from('travel_orders').select('*').eq('to_no', currentTevToNo).single();
-            if(toInfo) {
-               if(toInfo.dc_signed) { supervisor = toInfo.dc_signed.toUpperCase(); }
-               else if(toInfo.unithead_signed) { supervisor = toInfo.unithead_signed.split('(')[0].trim().toUpperCase(); }
-            }
-
-            doc.text(supervisor, 167.5, gridStart + 28, { align: "center" });
+            doc.text(currentUser.fullName.toUpperCase(), 82.5, sigTop + 27, { align: "center" });
+            doc.text(chiefName, 157.5, sigTop + 27, { align: "center" });
             doc.setFont("helvetica", "normal");
-            doc.line(10, gridStart + 31, 200, gridStart + 31);
+            doc.line(15, sigTop + 30, 195, sigTop + 30);
             
-            doc.text("Employee", 90, gridStart + 35, { align: "center" });
-            doc.text("Immediate Supervisor", 167.5, gridStart + 35, { align: "center" });
-            doc.line(10, gridStart + 37, 200, gridStart + 37);
+            doc.text("Employee", 82.5, sigTop + 34, { align: "center" });
+            doc.text("Immediate Supervisor", 157.5, sigTop + 34, { align: "center" });
+            doc.line(15, sigTop + 36, 195, sigTop + 36);
             
             const todayFmt = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            doc.text(`Date: ${todayFmt}`, 90, gridStart + 41, { align: "center" });
-            doc.text(`Date: ${todayFmt}`, 167.5, gridStart + 41, { align: "center" });
+            doc.text(`Date: ${todayFmt}`, 82.5, sigTop + 40, { align: "center" });
+            doc.text(`Date: ${todayFmt}`, 157.5, sigTop + 40, { align: "center" });
             
-            doc.line(45, gridStart, 45, gridStart + 43); 
-            doc.line(135, gridStart, 135, gridStart + 43); 
+            curY = sigTop + 43;
+            doc.line(45, sigTop, 45, curY); 
+            doc.line(120, sigTop, 120, curY); 
+
+            doc.rect(15, 20, 180, curY - 20);
 
             doc.save(`TEV_Claim_${currentTevToNo}.pdf`);
             window.closeTEVModal();
