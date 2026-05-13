@@ -91,10 +91,6 @@
         .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .radio-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
         .radio-item input { width: auto; margin: 0; }
-        
-        .iot-row input { padding: 5px; font-size: 11px; margin-bottom: 0; border: 1px solid #ddd; border-radius: 4px; }
-        .iot-row { display: flex; gap: 4px; margin-bottom: 5px; align-items: center; }
-        .iot-action-bar { position: fixed; bottom: 65px; left: 15px; right: 15px; background: var(--dar-gold); padding: 10px; border-radius: 12px; box-shadow: 0 -4px 10px rgba(0,0,0,0.1); z-index: 990; display: none; }
     </style>
 </head>
 <body>
@@ -251,13 +247,6 @@
             <div id="status-list"></div>
         </div>
 
-        <div id="iot-action-bar" class="iot-action-bar">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="color:var(--dar-green); font-weight:bold; font-size:12px;">Selected TOs: <span id="iot-sel-count">0</span></span>
-            </div>
-            <button class="btn btn-primary" style="margin:0; width:100%; box-shadow:0 2px 4px rgba(0,0,0,0.2);" onclick="window.openIoTBuilder()">📝 BUILD ITINERARY OF TRAVEL</button>
-        </div>
-
         <div id="calendar-view" class="view">
             <h3 style="color: var(--dar-green);">Personal Schedule</h3>
             <div class="card" style="padding:0;">
@@ -298,26 +287,16 @@
             </div>
         </div>
 
-        <!-- IoT Builder Modal -->
-        <datalist id="past-dest-list"></datalist>
-        <datalist id="past-means-list">
-            <option value="GOVT VHCLE">
-            <option value="Tricycle">
-            <option value="PUV">
-            <option value="Habal">
-            <option value="Air">
-            <option value="Bus">
-            <option value="Taxi">
-            <option value="Grab">
-        </datalist>
-
-        <div id="iotModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1000; justify-content:center; align-items:center;">
-            <div class="card" style="width: 95%; max-width: 600px; height: 95%; background:white; padding:15px; border-radius: 12px; position:relative; display:flex; flex-direction:column;">
-                <button onclick="document.getElementById('iotModal').style.display='none'" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer; z-index:10;">✕</button>
-                <h3 style="margin-top:0; color:var(--dar-green);">Itinerary of Travel Builder</h3>
-                <p style="font-size:10px; color:gray; margin-top:-10px;">Insert rows dynamically. Past locations are auto-suggested.</p>
-                <div id="iot-modal-content" style="flex:1; overflow-y:auto; overflow-x:hidden; padding-right:5px; border-top: 1px solid #eee; padding-top:10px;"></div>
-                <button class="btn btn-success" style="margin-top:10px;" onclick="window.saveAndPrintIoT()">💾 SAVE & PRINT IoT (Appx 45)</button>
+        <!-- TEV Claim Modal -->
+        <div id="tevModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1000; justify-content:center; align-items:center;">
+            <div class="card" style="width: 95%; max-width: 500px; height: 90%; background:white; padding:20px; border-radius: 12px; position:relative; display:flex; flex-direction:column;">
+                <button onclick="window.closeTEVModal()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--dar-green);">TEV Claim</h3>
+                <div id="tev-modal-content" style="flex:1; overflow-y:auto; padding-right:5px;"></div>
+                <div style="margin-top:10px; border-top:2px solid #eee; padding-top:10px; text-align:right;">
+                    <strong style="font-size:16px;">GRAND TOTAL: ₱<span id="tev-grand-total">0.00</span></strong>
+                </div>
+                <button class="btn btn-success" style="margin-top:10px;" onclick="window.generateTEVPDF()">📄 Generate TEV PDF</button>
             </div>
         </div>
 
@@ -345,9 +324,9 @@
         let conflictsToProcess = []; 
         let cachedHolidays = [];
         
-        // IoT VARIABLES
-        let iotData = [];
-        let selectedIoT_TOs = [];
+        // TEV VARIABLES
+        let currentTevToNo = null;
+        let tevItinerary = [];
 
         // STRICT PHILIPPINE TIME (PST) FORMATTERS
         const getPSTDateFromDateObj = (dateObj) => {
@@ -359,13 +338,16 @@
         };
 
         const getPSTDate = () => getPSTDateFromDateObj(new Date());
+
         const todayStr = getPSTDate();
 
+        // PASSWORD HASHING UTILITY
         window.hashPassword = async function(msg) {
             if (!msg) return "";
             return sha256(msg); 
         };
 
+        // WEBAUTHN UTILS
         const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
         const base64ToBuffer = (b64) => {
             const binary_string = atob(b64);
@@ -375,6 +357,7 @@
             return bytes.buffer;
         };
 
+        // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
                 const pdfBytes = jsPdfDoc.output('arraybuffer');
@@ -407,6 +390,7 @@
             }
         };
 
+        // SETUP BIOMETRIC
         window.setupBiometric = async function(empId, hashedPass) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
@@ -436,11 +420,14 @@
                         localStorage.setItem('dar_emp_token', hashedPass);
                         alert("Biometric login enabled!");
                         document.getElementById('btn-bio-login').style.display = 'flex';
-                    } catch(e) { console.log("Biometric setup failed or cancelled", e); }
+                    } catch(e) {
+                        console.log("Biometric setup failed or cancelled", e);
+                    }
                 }
             }
         };
 
+        // HANDLE BIOMETRIC LOGIN
         window.handleBiometricLogin = async function() {
             try {
                 const credId = localStorage.getItem('dar_emp_bio_cred');
@@ -488,10 +475,15 @@
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
-                } else { alert("Invalid Credentials"); }
-            } catch(e) { console.log("Biometric auth failed", e); }
+                } else { 
+                    alert("Invalid Credentials"); 
+                }
+            } catch(e) {
+                console.log("Biometric auth failed", e);
+            }
         };
 
+        // INIT DROPDOWNS
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const dtrMonth = document.getElementById('dtr-month');
         const dtrYear = document.getElementById('dtr-year');
@@ -505,6 +497,7 @@
         dtrMonth.value = new Date().getMonth() + 1;
         dtrYear.value = currentYear;
 
+        // Show Bio Button on load if supported and registered
         if (window.PublicKeyCredential) {
             PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
                 if (avail && localStorage.getItem('dar_emp_bio_cred')) {
@@ -526,21 +519,28 @@
             } catch (e) { return null; }
         };
 
+        // CUSTOM PST TIME FORMATTER
         const formatTime12PST = (dateObj) => {
             if(!dateObj) return "";
             return dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true });
         };
         
+        // UNDERTIME CALCULATION HELPER
         const calcUndertime = (timeLogs, schedule, schedType) => {
             if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
+            
             let amIn = null, amOut = null, pmIn = null, pmOut = null;
             if(timeLogs.length > 0) amIn = timeLogs[0];
             if(timeLogs.length > 1) amOut = timeLogs[1];
             if(timeLogs.length > 2) pmIn = timeLogs[2];
             if(timeLogs.length > 3) pmOut = timeLogs[3];
-            if (!pmOut && timeLogs.length > 1) pmOut = timeLogs[timeLogs.length - 1]; 
+
+            if (!pmOut && timeLogs.length > 1) {
+                pmOut = timeLogs[timeLogs.length - 1]; 
+            }
 
             let totalUndertimeMinutes = 0;
+
             if (schedType === "Fixed") {
                 const schedStartParts = schedule.start_time.split(':');
                 const schedEndParts = schedule.end_time.split(':');
@@ -573,11 +573,17 @@
                     const pstOut = pmOut.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
                     const inHour = parseInt(pstIn.split(' ')[1].split(':')[0]);
                     const outHour = parseInt(pstOut.split(' ')[1].split(':')[0]);
-                    if (inHour < 12 && outHour > 13) diffMins -= 60; 
+                    
+                    if (inHour < 12 && outHour > 13) {
+                        diffMins -= 60; // deduct lunch break
+                    }
                     workMins = diffMins;
                 }
-                if (workMins > 0 && workMins < 480) totalUndertimeMinutes = 480 - workMins;
+                if (workMins > 0 && workMins < 480) {
+                    totalUndertimeMinutes = 480 - workMins;
+                }
             }
+
             return {
                 h: Math.max(0, Math.floor(totalUndertimeMinutes / 60)),
                 m: Math.max(0, Math.floor(totalUndertimeMinutes % 60))
@@ -587,14 +593,23 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
+            
             if (!id || !pass) return alert("Please enter ID and Password");
 
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
-                if (error) return alert("Database connection issue: " + error.message);
-                if (!data) return alert("Employee ID not found.");
+                
+                if (error) {
+                    alert("Database connection issue: " + error.message);
+                    return;
+                }
+                if (!data) {
+                    alert("Employee ID not found.");
+                    return;
+                }
                 
                 const hashedPass = await window.hashPassword(pass);
+
                 if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
@@ -622,18 +637,32 @@
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
+                    
                     window.setupBiometric(id, data.pass);
-                } else { alert("Incorrect Password."); }
-            } catch (err) { alert("Login Error: " + err.message); }
+                    
+                } else { 
+                    alert("Incorrect Password."); 
+                }
+            } catch (err) {
+                alert("Login Error: " + err.message);
+            }
         };
 
+        // --- ATTENDANCE LOGIC ---
         window.loadAttendance = async function() {
             document.getElementById('att-emp-name').innerText = currentUser.full_name;
             const fDate = new Date(todayStr).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' });
             document.getElementById('att-date-today').innerText = fDate.replace(/\//g, '-'); 
             
-            const { data: logs, error } = await supabase.from('attendance_logs').select('*').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00+08:00').lte('log_time', todayStr + 'T23:59:59+08:00').order('log_time', { ascending: true });
+            const { data: logs, error } = await supabase
+                .from('attendance_logs')
+                .select('*')
+                .eq('emp_id', currentUser.emp_id)
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00')
+                .order('log_time', { ascending: true });
 
+            // OFFLINE SYNC LOGIC Check
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
             let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
                 
@@ -692,7 +721,13 @@
         window.recordAttendance = async function() {
             if (isSubmitting) return;
             
-            let { data: checkLogs } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00+08:00').lte('log_time', todayStr + 'T23:59:59+08:00');
+            let { data: checkLogs } = await supabase
+                .from('attendance_logs')
+                .select('id')
+                .eq('emp_id', currentUser.emp_id)
+                .gte('log_time', todayStr + 'T00:00:00+08:00')
+                .lte('log_time', todayStr + 'T23:59:59+08:00');
+                
             let offlineLogs = JSON.parse(localStorage.getItem('dar_offline_logs_' + currentUser.emp_id) || '[]');
             let todayOfflineLogs = offlineLogs.filter(l => getPSTDateFromDateObj(new Date(l.log_time)) === todayStr);
 
@@ -701,6 +736,7 @@
                 return window.loadAttendance();
             }
 
+            // CHECK IF HAS TRAVEL ORDER TODAY
             const { data: toData } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
             const validTos = toData?.map(t => t.to_no) || [];
             let todayDestination = null;
@@ -742,6 +778,7 @@
                 return;
             }
 
+            // Sync offline logs if we are online before creating new log
             if (offlineLogs.length > 0) {
                 document.getElementById('btn-clock-text').innerText = "Syncing Offline...";
                 for (let ol of offlineLogs) {
@@ -759,6 +796,7 @@
                     } catch (e) { console.log("Geocoding/Sync failed", e); }
                 }
                 localStorage.removeItem('dar_offline_logs_' + currentUser.emp_id);
+                // Re-fetch accurate count after sync
                 const { data: newCheck } = await supabase.from('attendance_logs').select('id').eq('emp_id', currentUser.emp_id).gte('log_time', todayStr + 'T00:00:00+08:00').lte('log_time', todayStr + 'T23:59:59+08:00');
                 checkLogs = newCheck;
             }
@@ -775,9 +813,11 @@
             navigator.geolocation.getCurrentPosition(async (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
+                
                 document.getElementById('btn-clock-text').innerText = "Identifying Place...";
                 let placeName = "Unknown Location";
                 let addressStr = "";
+                
                 try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
                     const data = await res.json();
@@ -797,19 +837,40 @@
                 }
                 
                 document.getElementById('btn-clock-text').innerText = "Saving Log...";
+                
                 try {
                     const nextIndex = checkLogs ? checkLogs.length : 0;
                     const labels = ["AM IN", "AM OUT", "PM IN", "PM OUT"];
-                    const statusVal = labels[nextIndex];
-                    const { error } = await supabase.from('attendance_logs').insert({ emp_id: currentUser.emp_id, log_time: new Date().toISOString(), latitude: lat, longitude: lng, place_name: placeName, status: statusVal, device_id: 'MOBILE_WEB' });
+                    const statusVal = labels[nextIndex]; // Sequential assignment only
+                    
+                    const { error } = await supabase.from('attendance_logs').insert({
+                        emp_id: currentUser.emp_id,
+                        log_time: new Date().toISOString(),
+                        latitude: lat,
+                        longitude: lng,
+                        place_name: placeName,
+                        status: statusVal,
+                        device_id: 'MOBILE_WEB'
+                    });
+                    
                     if(error) throw error;
+                    
                     window.loadAttendance();
-                } catch(e) { alert("Failed to save log: " + e.message); } finally { isSubmitting = false; }
+                } catch(e) {
+                    alert("Failed to save log: " + e.message);
+                } finally {
+                    isSubmitting = false;
+                }
+                
             }, (error) => {
                 alert("Please enable GPS/Location services to clock in. " + error.message);
                 isSubmitting = false;
                 window.loadAttendance();
-            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
         };
 
         window.switchTab = function(id, el) {
@@ -830,25 +891,36 @@
 
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
+
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value.trim();
             const nw = document.getElementById('pass-new').value.trim();
+            
             if(!curr || !nw) return alert("Please fill out both fields.");
+
             try {
                 const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
                 if(error) throw error;
+
                 const hashedOld = await window.hashPassword(curr);
-                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) { return alert("Wrong current password."); }
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
                 const hashedNew = await window.hashPassword(nw);
                 const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
                 if (updErr) throw updErr;
+
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew;
+                currentUser.pass = hashedNew; // Update local session
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
-            } catch(e) { alert("Error updating password: " + e.message); }
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
         };
 
         window.loadCredits = async function() {
@@ -857,9 +929,13 @@
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            
             const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
             
-            let vl_deduct = 0, sl_deduct = 0, spl_deduct = 0, wl_deduct = 0;
+            let vl_deduct = 0;
+            let sl_deduct = 0;
+            let spl_deduct = 0;
+            let wl_deduct = 0;
             let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
                 <tr style="background: var(--dar-green); color: white;">
                     <th style="padding: 5px; text-align: left;">Date</th>
@@ -872,6 +948,7 @@
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
                     if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
+
                     hasDeductions = true;
                     const l_type = (l.type || '').toUpperCase();
                     const debit_val = parseFloat(l.debit || 0);
@@ -916,6 +993,7 @@
             }
 
             const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
+            
             let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
                 <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
                     <th style="padding: 5px; text-align: left;">Date</th>
@@ -942,6 +1020,7 @@
                 });
             }
             ctoHtml += `</table>`;
+
             if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
             
             ctoContainer.innerHTML = `
@@ -990,6 +1069,7 @@
                     ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="window.removePersonnel(${i})">X</button>` : ''}
                 </div>`).join('');
         }
+        
         window.removePersonnel = function(i) { personnelDraft.splice(i,1); window.renderPersonnel(); };
 
         window.handleStartDateChange = function() {
@@ -1018,11 +1098,13 @@
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let hasPSO = false;
+
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
 
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
+                
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
                     hasPSO = true; 
@@ -1033,12 +1115,16 @@
                     if (itins && itins.length > 0) {
                         const isApproved = to.status === 'APPROVED';
                         const isDisapproved = to.status.includes('DISAPPROVED');
+                        
                         if (isDisapproved) {
                             alert(`Conflict: You have a DISAPPROVED TO (${to.to_no}) on ${dateStr}. Overwriting is not allowed. Please select a different date.`);
                             container.innerHTML = ""; return;
                         }
+
                         const promptMsg = isApproved ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)` : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
-                        if (confirm(promptMsg)) { conflictsToProcess.push({ to_no: to.to_no, status: to.status, affected_date: dateStr }); } else { container.innerHTML = ""; return; } 
+                        if (confirm(promptMsg)) {
+                            conflictsToProcess.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
+                        } else { container.innerHTML = ""; return; } 
                     }
                 }
 
@@ -1093,21 +1179,28 @@
             let finalDiv = currentUser.division;
             let finalUnit = currentUser.unit;
             let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
+            
             let isOtherDivision = false;
             let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
 
-            if (isPBDD) finalUnit = Array.from(pbddUnits).join(', ');
+            if (isPBDD) {
+                finalUnit = Array.from(pbddUnits).join(', ');
+            }
 
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
                 if(checkedBoxes.length > 0) {
                     const selectedDivs = Array.from(checkedBoxes).map(cb => cb.value.trim());
                     const primaryDiv = toNoDiv;
+                    
                     if (!selectedDivs.includes(primaryDiv) && selectedDivs.length > 0) {
                         isOtherDivision = true;
-                        toNoDiv = selectedDivs[0]; 
+                        toNoDiv = selectedDivs[0]; // Set the TO generation target to the OTHER division
+                        // Ensure BOTH the original division and other division are logged to trigger all approvals
                         finalDiv = primaryDiv + ", " + selectedDivs.join(', ');
-                    } else { finalDiv = selectedDivs.join(', '); }
+                    } else {
+                        finalDiv = selectedDivs.join(', ');
+                    }
                 }
             }
 
@@ -1123,16 +1216,26 @@
                     } else if (conflict.status === "APPROVED") {
                         const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
                         const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
+                        
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
-                        await supabase.from('notifications').insert({ emp_id: currentUser.emp_id, message: `Approved TO ${conflict.to_no} was split/overwritten by ${currentUser.full_name}. Affected date: ${conflict.affected_date}`, sender: currentUser.full_name });
+
+                        await supabase.from('notifications').insert({ 
+                            emp_id: currentUser.emp_id, 
+                            message: `Approved TO ${conflict.to_no} was split/overwritten by ${currentUser.full_name}. Affected date: ${conflict.affected_date}`,
+                            sender: currentUser.full_name
+                        });
 
                         if (remainingDays.length > 0) {
+                            // Split TO should follow normal division generation
                             const remainderToNo = await window.generateToNo(currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN");
                             const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', conflict.to_no);
+                            
                             const batchRemainder = origTO.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo, status: 'APPROVED' }));
                             const batchRemainderItin = remainingDays.map(({ id, ...rest }) => ({ ...rest, to_no: remainderToNo }));
+                            
                             const { error: remErr1 } = await supabase.from('travel_orders').insert(batchRemainder);
                             if (remErr1) throw new Error("Conflict TO Insert Error: " + remErr1.message);
+                            
                             const { error: remErr2 } = await supabase.from('itinerary').insert(batchRemainderItin);
                             if (remErr2) throw new Error("Conflict Itinerary Insert Error: " + remErr2.message);
                         }
@@ -1147,31 +1250,50 @@
                 const isPARPOUnit = finalUnit && String(finalUnit).toUpperCase() === "PARPO";
                 const isGovVeh = transport === "GOV'T VEHICLE";
 
-                if (isGovVeh) routeStatus = "PENDING_VEHICLE_APPROVER";
-                else if (isPARPOUnit) routeStatus = "PENDING_PARPO";
-                else if (isPBDD && finalUnit === "NA") routeStatus = "PENDING_CHIEF";
-                else if (isMARPO) routeStatus = "PENDING_CHIEF";
-                else if (finalUnit && finalUnit.trim() !== "" && finalUnit !== "NA") routeStatus = "PENDING_UNIT_HEAD";
-                else routeStatus = "PENDING_CHIEF";
+                // Strict Priority Routing. Saving both divisions in the DB automatically links it to both Chiefs for the Approver Side.
+                if (isGovVeh) {
+                    routeStatus = "PENDING_VEHICLE_APPROVER";
+                } else if (isPARPOUnit) {
+                    routeStatus = "PENDING_PARPO";
+                } else if (isPBDD && finalUnit === "NA") {
+                    routeStatus = "PENDING_CHIEF";
+                } else if (isMARPO) {
+                    routeStatus = "PENDING_CHIEF";
+                } else if (finalUnit && finalUnit.trim() !== "" && finalUnit !== "NA") {
+                    routeStatus = "PENDING_UNIT_HEAD";
+                } else {
+                    routeStatus = "PENDING_CHIEF";
+                }
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
-                    status: routeStatus, transport, report_to: Array.from(reportTos).join(", "), remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
+                    status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
+                    remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
                 }));
+                
                 batchItin.forEach(it => it.to_no = finalToNo);
                 
                 const { error: toError } = await supabase.from('travel_orders').insert(batchPersonnel);
                 if (toError) throw new Error("Travel Order DB Error: " + toError.message);
+                
                 const { error: itinError } = await supabase.from('itinerary').insert(batchItin);
                 if (itinError) throw new Error("Itinerary DB Error: " + itinError.message);
                 
                 alert("Logic Executed. Submitted: " + finalToNo);
-                document.getElementById('itin-from').value = ''; document.getElementById('itin-to').value = '';
-                document.getElementById('dynamic-itin-fields').innerHTML = ''; document.getElementById('to-transport').selectedIndex = 0;
+                
+                document.getElementById('itin-from').value = '';
+                document.getElementById('itin-to').value = '';
+                document.getElementById('dynamic-itin-fields').innerHTML = '';
+                document.getElementById('to-transport').selectedIndex = 0;
                 personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
-                window.renderPersonnel(); itineraryDraft = []; conflictsToProcess = [];
+                window.renderPersonnel();
+                itineraryDraft = [];
+                conflictsToProcess = [];
                 window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
-            } catch(e) { alert("Error: " + e.message); } finally {
+                
+            } catch(e) { 
+                alert("Error: " + e.message); 
+            } finally {
                 isSubmitting = false;
                 if(submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
             }
@@ -1180,7 +1302,12 @@
         window.generateToNo = async function(targetDiv) {
             const year = new Date().getFullYear();
             const div = (targetDiv || currentUser.division || "GEN").split(',')[0].trim().substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders').select('to_no').like('to_no', `${year}-${div}-%`).order('to_no', { ascending: false }).limit(1);
+            const { data } = await supabase.from('travel_orders')
+                .select('to_no')
+                .like('to_no', `${year}-${div}-%`)
+                .order('to_no', { ascending: false })
+                .limit(1);
+            
             let seq = 1;
             if (data && data.length > 0 && data[0].to_no) {
                 const parts = data[0].to_no.split('-');
@@ -1255,7 +1382,9 @@
 
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const savedDivs = to.division.split(',').map(d => d.trim());
-                document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
+                document.querySelectorAll('input[name="special_div"]').forEach(cb => {
+                    cb.checked = savedDivs.includes(cb.value);
+                });
             }
 
             await supabase.from('itinerary').delete().eq('to_no', toNo);
@@ -1263,172 +1392,111 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
-        window.toggleIoTActionBar = function() {
-            const checked = document.querySelectorAll('.iot-checkbox:checked');
-            const bar = document.getElementById('iot-action-bar');
-            bar.style.display = checked.length > 0 ? 'block' : 'none';
-            document.getElementById('iot-sel-count').innerText = checked.length;
-        };
-
-        window.openIoTBuilder = async function() {
-            const checked = Array.from(document.querySelectorAll('.iot-checkbox:checked')).map(cb => cb.value);
-            if (checked.length === 0) return;
-            selectedIoT_TOs = checked;
+        window.openTEVModal = async function(to_no) {
+            currentTevToNo = to_no;
+            document.getElementById('tevModal').style.display = 'flex';
+            document.getElementById('tev-modal-content').innerHTML = '<p style="text-align:center;">Loading itinerary...</p>';
             
-            document.getElementById('iot-modal-content').innerHTML = '<p style="text-align:center;">Loading itineraries...</p>';
-            document.getElementById('iotModal').style.display = 'flex';
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to_no).order('travel_date');
+            tevItinerary = itin || [];
             
-            const { data: itins } = await supabase.from('itinerary').select('*').in('to_no', checked).order('travel_date');
-            const { data: pastTevs } = await supabase.from('tev_entries').select('destination, transpo_cost, means_transpo').eq('emp_id', currentUser.emp_id);
-            
-            const dlDest = document.getElementById('past-dest-list');
-            dlDest.innerHTML = '';
-            const destSet = new Set();
-            pastTevs?.forEach(pt => { if (pt.destination) destSet.add(pt.destination); });
-            destSet.forEach(d => { dlDest.innerHTML += `<option value="${d}">`; });
-            
-            const dateMap = {};
-            itins?.forEach(i => {
-                if(!dateMap[i.travel_date]) {
-                    dateMap[i.travel_date] = { date: i.travel_date, to_no: i.to_no, purpose: i.purpose, rows: [] };
-                }
-            });
-            
-            iotData = Object.values(dateMap).sort((a,b) => a.date.localeCompare(b.date));
-            
-            for (let d of iotData) {
-                const { data: existing } = await supabase.from('tev_entries').select('*').eq('emp_id', currentUser.emp_id).eq('travel_date', d.date).order('sort_order');
-                if (existing && existing.length > 0) {
-                    existing.forEach(ex => {
-                        d.rows.push({ dest: ex.destination, dep: ex.time_dep, arr: ex.time_arr, means: ex.means_transpo, cost: ex.transpo_cost, perdiem: ex.per_diem, others: ex.others });
-                    });
-                } else {
-                    d.rows.push({ dest: '', dep: '', arr: '', means: '', cost: '', perdiem: '', others: '' });
-                }
-            }
-            
-            window.renderIoTRows();
-        };
-
-        window.syncIoTData = function() {
-            iotData.forEach((dDay, dIdx) => {
-                dDay.rows.forEach((r, rIdx) => {
-                    r.dest = document.getElementById(`iot-${dIdx}-${rIdx}-dest`)?.value || '';
-                    r.dep = document.getElementById(`iot-${dIdx}-${rIdx}-dep`)?.value || '';
-                    r.arr = document.getElementById(`iot-${dIdx}-${rIdx}-arr`)?.value || '';
-                    r.means = document.getElementById(`iot-${dIdx}-${rIdx}-means`)?.value || '';
-                    r.cost = document.getElementById(`iot-${dIdx}-${rIdx}-cost`)?.value || '';
-                    r.perdiem = document.getElementById(`iot-${dIdx}-${rIdx}-perdiem`)?.value || '';
-                    r.others = document.getElementById(`iot-${dIdx}-${rIdx}-others`)?.value || '';
-                });
-            });
-        };
-
-        window.addIoTRow = function(dIdx, rIdx) {
-            window.syncIoTData();
-            iotData[dIdx].rows.splice(rIdx + 1, 0, { dest: '', dep: '', arr: '', means: '', cost: '', perdiem: '', others: '' });
-            window.renderIoTRows();
-        };
-
-        window.removeIoTRow = function(dIdx, rIdx) {
-            window.syncIoTData();
-            iotData[dIdx].rows.splice(rIdx, 1);
-            if (iotData[dIdx].rows.length === 0) {
-                iotData[dIdx].rows.push({ dest: '', dep: '', arr: '', means: '', cost: '', perdiem: '', others: '' });
-            }
-            window.renderIoTRows();
-        };
-
-        window.renderIoTRows = function() {
             let html = '';
-            iotData.forEach((dayData, dIdx) => {
-                const fDate = new Date(dayData.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                html += `<div style="margin-bottom: 15px; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
-                            <div style="font-weight:bold; color:var(--dar-green); margin-bottom: 5px;">${fDate} (${dayData.to_no})</div>
-                            <div style="font-size:11px; color:gray; margin-bottom: 10px;">Purpose: ${dayData.purpose}</div>`;
-                
-                dayData.rows.forEach((row, rIdx) => {
-                    html += `
-                        <div class="iot-row">
-                            <input type="text" list="past-dest-list" id="iot-${dIdx}-${rIdx}-dest" value="${row.dest}" placeholder="Destination" style="flex:3;">
-                            <input type="time" id="iot-${dIdx}-${rIdx}-dep" value="${row.dep}" title="Departure" style="flex:1;">
-                            <input type="time" id="iot-${dIdx}-${rIdx}-arr" value="${row.arr}" title="Arrival" style="flex:1;">
-                            <input type="text" list="past-means-list" id="iot-${dIdx}-${rIdx}-means" value="${row.means}" placeholder="Means" style="flex:2;">
-                            <input type="number" step="0.01" id="iot-${dIdx}-${rIdx}-cost" value="${row.cost}" placeholder="Cost" style="flex:1;">
-                            <input type="number" step="0.01" id="iot-${dIdx}-${rIdx}-perdiem" value="${row.perdiem}" placeholder="Per Diem" style="flex:1;">
-                            <input type="number" step="0.01" id="iot-${dIdx}-${rIdx}-others" value="${row.others}" placeholder="Others" style="flex:1;">
-                            <div style="display:flex; gap:2px; flex-direction:column;">
-                                <button class="btn-success" style="padding:4px 8px; border-radius:4px; border:none; color:white; font-size:10px; font-weight:bold;" onclick="window.addIoTRow(${dIdx}, ${rIdx})">+</button>
-                                <button class="btn-danger" style="padding:4px 8px; border-radius:4px; border:none; color:white; font-size:10px; font-weight:bold;" onclick="window.removeIoTRow(${dIdx}, ${rIdx})">x</button>
+            tevItinerary.forEach((it, idx) => {
+                const fDate = new Date(it.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                html += `
+                    <div style="margin-bottom: 15px; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px;">
+                        <div style="font-weight:bold; color:var(--dar-green); margin-bottom: 5px;">${fDate}</div>
+                        <div style="font-size:11px; color:gray; margin-bottom: 10px;">Dest: ${it.destination} | Purp: ${it.purpose}</div>
+                        <div id="tev-rows-${idx}">
+                            <div class="tev-row" style="display:flex; gap:5px; margin-bottom:5px;">
+                                <input type="text" class="tev-part" placeholder="Particular (e.g. DARPO to Terminal)" style="flex:2; margin:0; padding:8px; font-size:12px;">
+                                <input type="number" class="tev-amt" placeholder="Amount" step="0.01" oninput="window.computeTEVTotal()" style="flex:1; margin:0; padding:8px; font-size:12px;">
+                                <button class="btn-success" style="width:35px; margin:0; padding:0; border-radius:8px; font-size:16px;" onclick="window.addTEVRow(${idx}, this)">+</button>
+                                <button class="btn-danger" style="width:35px; margin:0; padding:0; border-radius:8px;" onclick="this.parentElement.remove(); window.computeTEVTotal();">X</button>
                             </div>
-                        </div>`;
-                });
-                html += `</div>`;
+                        </div>
+                        <div style="text-align:right; margin-top:8px; font-size:12px; font-weight:bold; color:var(--dar-green);">
+                            Day Total: ₱<span id="tev-day-total-${idx}">0.00</span>
+                        </div>
+                    </div>
+                `;
             });
-            document.getElementById('iot-modal-content').innerHTML = html;
-        };
+            document.getElementById('tev-modal-content').innerHTML = html;
+            window.computeTEVTotal();
+        }
 
-        window.saveAndPrintIoT = async function() {
-            window.syncIoTData();
-            let totalEntries = 0;
-            const toSave = [];
+        window.closeTEVModal = function() {
+            document.getElementById('tevModal').style.display = 'none';
+        }
+
+        window.addTEVRow = function(idx, btnElement) {
+            const container = document.getElementById(`tev-rows-${idx}`);
+            const row = document.createElement('div');
+            row.className = 'tev-row';
+            row.style.cssText = 'display:flex; gap:5px; margin-bottom:5px;';
+            row.innerHTML = `
+                <input type="text" class="tev-part" placeholder="Particular (e.g. DARPO to Terminal)" style="flex:2; margin:0; padding:8px; font-size:12px;">
+                <input type="number" class="tev-amt" placeholder="Amount" step="0.01" oninput="window.computeTEVTotal()" style="flex:1; margin:0; padding:8px; font-size:12px;">
+                <button class="btn-success" style="width:35px; margin:0; padding:0; border-radius:8px; font-size:16px;" onclick="window.addTEVRow(${idx}, this)">+</button>
+                <button class="btn-danger" style="width:35px; margin:0; padding:0; border-radius:8px;" onclick="this.parentElement.remove(); window.computeTEVTotal();">X</button>
+            `;
             
-            iotData.forEach((d) => {
-                d.rows.forEach((r, idx) => {
-                    if (r.dest.trim() !== '') {
-                        totalEntries++;
-                        toSave.push({
-                            emp_id: currentUser.emp_id,
-                            to_no: d.to_no,
-                            travel_date: d.date,
-                            sort_order: idx,
-                            destination: r.dest.trim(),
-                            time_dep: r.dep,
-                            time_arr: r.arr,
-                            means_transpo: r.means.trim(),
-                            transpo_cost: parseFloat(r.cost) || 0,
-                            per_diem: parseFloat(r.perdiem) || 0,
-                            others: parseFloat(r.others) || 0
-                        });
-                    }
-                });
-            });
-
-            if (totalEntries === 0) return alert("Please enter at least one valid destination/particular.");
-
-            document.querySelector('#iotModal .btn-success').innerText = "Saving Data...";
-            
-            try {
-                // Delete old entries for these TOs so we can replace cleanly
-                for (let to of selectedIoT_TOs) {
-                    await supabase.from('tev_entries').delete().eq('emp_id', currentUser.emp_id).eq('to_no', to);
-                }
-
-                const { error: insertErr } = await supabase.from('tev_entries').insert(toSave);
-                if (insertErr) throw insertErr;
-
-                // Update TO table to flag iot generated
-                const { error: updErr } = await supabase.from('travel_orders').update({ iot_generated: true }).in('to_no', selectedIoT_TOs);
-                if (updErr) throw updErr;
-
-                await window.generateIoTPDF();
-                
-                document.getElementById('iotModal').style.display = 'none';
-                document.querySelector('#iotModal .btn-success').innerText = "💾 SAVE & PRINT IoT (Appx 45)";
-                document.querySelectorAll('.iot-checkbox').forEach(cb => cb.checked = false);
-                window.toggleIoTActionBar();
-                window.loadStatus();
-                
-            } catch(e) {
-                alert("Error saving IoT: " + e.message);
-                document.querySelector('#iotModal .btn-success').innerText = "💾 SAVE & PRINT IoT (Appx 45)";
+            // Insert after the current row's parent container
+            if (btnElement && btnElement.parentElement && btnElement.parentElement.nextSibling) {
+                container.insertBefore(row, btnElement.parentElement.nextSibling);
+            } else {
+                container.appendChild(row);
             }
-        };
+        }
 
-        window.generateIoTPDF = async function() {
+        window.computeTEVTotal = function() {
+            let grandTotal = 0;
+            tevItinerary.forEach((it, idx) => {
+                let dayTotal = 0;
+                const rowsContainer = document.getElementById(`tev-rows-${idx}`);
+                if(rowsContainer) {
+                    rowsContainer.querySelectorAll('.tev-amt').forEach(el => {
+                        const val = parseFloat(el.value);
+                        if (!isNaN(val)) dayTotal += val;
+                    });
+                    const dayTotalEl = document.getElementById(`tev-day-total-${idx}`);
+                    if(dayTotalEl) dayTotalEl.innerText = dayTotal.toFixed(2);
+                    grandTotal += dayTotal;
+                }
+            });
+            const grandTotalEl = document.getElementById('tev-grand-total');
+            if(grandTotalEl) grandTotalEl.innerText = grandTotal.toFixed(2);
+        }
+
+        window.generateTEVPDF = async function() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             
+            let groupedData = [];
+            
+            tevItinerary.forEach((it, idx) => {
+                const fDate = new Date(it.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                const rowsContainer = document.getElementById(`tev-rows-${idx}`);
+                if (!rowsContainer) return;
+                
+                const rows = rowsContainer.querySelectorAll('.tev-row');
+                let dayEntries = [];
+                let dayTotal = 0;
+                rows.forEach(r => {
+                    const part = r.querySelector('.tev-part').value.trim();
+                    const amt = parseFloat(r.querySelector('.tev-amt').value);
+                    if (part && !isNaN(amt)) {
+                        dayEntries.push({ particular: part, amount: amt });
+                        dayTotal += amt;
+                    }
+                });
+                if (dayEntries.length > 0) {
+                    groupedData.push({ date: fDate, purpose: it.purpose, entries: dayEntries, total: dayTotal });
+                }
+            });
+            
+            if (groupedData.length === 0) return alert("Please enter at least one valid expense.");
+
             let chiefName = "_________________________";
             let chiefPos = "DIVISION CHIEF";
             const empDiv = (currentUser.division || "").toUpperCase().trim();
@@ -1448,158 +1516,146 @@
                 chiefPos = "DIVISION CHIEF";
             }
 
-            let grandTotal = 0;
-            let startDate = iotData[0].date;
-            let endDate = iotData[iotData.length - 1].date;
-            
-            const startStr = new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-            const endObj = new Date(endDate);
-            const endStr = new Date(startDate).getMonth() === endObj.getMonth() ? endObj.getDate() : endObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-            const yearStr = endObj.getFullYear();
-            const dateRangeStr = startDate === endDate ? `${startStr}, ${yearStr}` : `${startStr}-${endStr}, ${yearStr}`;
-
-            doc.setDrawColor(0);
-            doc.setLineWidth(0.4);
-            
-            let startY = 15;
-            
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(10);
-            doc.text("Appendix 45", 195, startY, { align: "right" });
-            
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
-            doc.text("ITINERARY OF TRAVEL", 105, startY + 10, { align: "center" });
-
-            doc.setFontSize(8);
-            doc.text("Entity Name: DEPARTMENT OF AGRARIAN REFORM - CAM SUR 1", 10, startY + 20);
-            doc.text("Fund Cluster:", 10, startY + 24);
-            doc.text("No.: _____________", 160, startY + 24);
-
-            let curY = startY + 26;
-            let tableW = 190;
-            
-            // Info Box
-            doc.rect(10, curY, tableW, 10);
-            doc.text(`Name : ${(currentUser.full_name || currentUser.fullName || "").toUpperCase()}`, 12, curY + 4);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Position : ${currentUser.position || ""}`, 12, curY + 8);
-            doc.line(100, curY, 100, curY + 10);
-            doc.setFont("helvetica", "bold");
-            doc.text(`Date of Travel: ${dateRangeStr}`, 102, curY + 4);
-            
-            curY += 10;
-            doc.rect(10, curY, tableW, 6);
-            doc.text(`Official Station : DARPO Cam. Sur I, ${currentUser.division || ""}`, 12, curY + 4);
-            
-            curY += 6;
-            let headerY = curY;
-            doc.rect(10, curY, tableW, 10);
-            
-            // Headers
-            doc.setFontSize(8);
-            doc.text("Date", 17, curY + 6, { align: "center" });
-            doc.text("Places to be visited\n(Destination)", 48, curY + 4, { align: "center" });
-            doc.text("T I M E", 85, curY + 4, { align: "center" });
-            doc.setFontSize(7);
-            doc.text("Departure", 76, curY + 8.5, { align: "center" });
-            doc.text("Arrival", 91, curY + 8.5, { align: "center" });
-            doc.setFontSize(8);
-            doc.text("Means of\nTransportation", 107, curY + 4, { align: "center" });
-            doc.text("Transpor-\ntation", 126, curY + 4, { align: "center" });
-            doc.text("Per\nDiem", 143, curY + 4, { align: "center" });
-            doc.text("Others", 155, curY + 6, { align: "center" });
-            doc.text("Total Amount", 181, curY + 6, { align: "center" });
-
-            // Vertical lines for headers
-            let colX = [25, 70, 83, 98, 117, 135, 150, 161];
-            colX.forEach(x => doc.line(x, headerY, x, headerY + 10));
-            doc.line(70, headerY + 5, 98, headerY + 5);
-
-            curY += 10;
-            let rowsStartY = curY;
-
-            iotData.forEach((dayData) => {
-                let fDate = new Date(dayData.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-                let printedDate = false;
+            groupedData.forEach((dayData, pageIndex) => {
+                if (pageIndex > 0) doc.addPage();
                 
-                dayData.rows.forEach(r => {
-                    if (r.dest.trim() !== '') {
-                        doc.setFont("helvetica", "normal");
-                        doc.setFontSize(7);
-                        if (!printedDate) { doc.text(fDate, 17, curY + 4, { align: "center" }); printedDate = true; }
-                        
-                        let formattedDep = r.dep ? formatTime12PST(new Date(`${dayData.date}T${r.dep}`)) : "";
-                        let formattedArr = r.arr ? formatTime12PST(new Date(`${dayData.date}T${r.arr}`)) : "";
+                doc.setDrawColor(0);
+                doc.setLineWidth(0.4);
+                
+                let startY = 19.05; // 0.75 inch margin
+                let endY = 277.95; // 297 - 19.05
+                let boxH = endY - startY; // 258.9
+                let startX = 25.4; // 1 inch margin
+                let endX = 184.6; // 210 - 25.4
+                
+                doc.rect(startX, startY, endX - startX, boxH); // A4 frame
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(13);
+                doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, startY + 8, { align: "center" });
+                
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, startY + 14, { align: "center" });
 
-                        doc.text(r.dest, 26, curY + 4);
-                        doc.text(formattedDep, 76, curY + 4, { align: "center" });
-                        doc.text(formattedArr, 91, curY + 4, { align: "center" });
-                        doc.text(r.means, 107, curY + 4, { align: "center" });
-                        
-                        let tCost = parseFloat(r.cost) || 0;
-                        let pDiem = parseFloat(r.perdiem) || 0;
-                        let oths = parseFloat(r.others) || 0;
-                        let rTotal = tCost + pDiem + oths;
-                        grandTotal += rTotal;
+                let curY = startY + 20;
+                doc.line(startX, curY, endX, curY); 
+                
+                doc.setFontSize(9);
+                doc.text("Name of Employee", 40.2, curY + 4.5, { align: "center" });
+                doc.line(55, curY, 55, curY + 18); // V-Line 1
+                doc.setFont("helvetica", "bold");
+                doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 57, curY + 4.5);
+                
+                doc.line(135, curY, 135, curY + 6); // V-Line 2
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.text("Employee\nNo", 145, curY + 3, { align: "center" });
+                doc.line(155, curY, 155, curY + 6); // V-Line 3
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9);
+                doc.text(currentUser.emp_id || "", 157, curY + 4.5);
+                
+                curY += 6;
+                doc.line(startX, curY, endX, curY);
+                
+                doc.setFont("helvetica", "normal");
+                doc.text("Office", 40.2, curY + 4.5, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text(empUnit || "OFFICE OF THE PARPO II", 57, curY + 4.5);
+                curY += 6;
+                doc.line(startX, curY, endX, curY);
+                
+                doc.setFont("helvetica", "normal");
+                doc.text("Division", 40.2, curY + 4.5, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text(empDiv || "PARPOs OFFICE", 57, curY + 4.5);
+                curY += 6;
+                doc.line(startX, curY, endX, curY);
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.text("PARTICULARS", 85.2, curY + 4.5, { align: "center" });
+                doc.text("AMOUNT", 164.8, curY + 4.5, { align: "center" });
+                
+                let gridTop = curY;
+                curY += 6;
+                doc.line(startX, curY, endX, curY);
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(8);
+                doc.text(dayData.date, startX + 2, curY + 4);
+                curY += 5.5;
+                doc.line(startX, curY, endX, curY);
+                
+                let vAmtX = 145; // Amount vertical divider
 
-                        if (tCost > 0) doc.text(tCost.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 133, curY + 4, { align: "right" });
-                        if (pDiem > 0) doc.text(pDiem.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 148, curY + 4, { align: "right" });
-                        if (oths > 0) doc.text(oths.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 159, curY + 4, { align: "right" });
-                        if (rTotal > 0) doc.text(rTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 198, curY + 4, { align: "right" });
-
-                        curY += 5;
-                        doc.line(10, curY, 200, curY);
-                    }
+                doc.setFont("helvetica", "normal");
+                dayData.entries.forEach(entry => {
+                    doc.text(entry.particular, vAmtX - 2, curY + 4, { align: "right" });
+                    doc.text(entry.amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), endX - 2, curY + 4, { align: "right" });
+                    curY += 5.5;
+                    doc.line(startX, curY, endX, curY);
                 });
+                
+                doc.line(vAmtX, gridTop, vAmtX, curY + 6.5); 
+                
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(12);
+                doc.text("T O T A L", vAmtX - 2, curY + 4.5, { align: "right" });
+                doc.setFontSize(9);
+                doc.text(dayData.total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), endX - 2, curY + 4.5, { align: "right" });
+                
+                curY += 6.5;
+                doc.line(startX, curY, endX, curY);
+                
+                doc.setFontSize(10);
+                doc.text("PURPOSE", startX + 2, curY + 6);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                const pLines = doc.splitTextToSize(dayData.purpose || "", 155);
+                doc.text(pLines, startX + 2, curY + 12);
+                
+                let sigTop = endY - 43;
+                doc.line(startX, sigTop, endX, sigTop);
+                
+                doc.setFontSize(8.5);
+                const certText = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that above goods and services were acquired from parties not issuing receipts; And that I am fully aware that willful falsification of statements is punishable by law.";
+                const cLines = doc.splitTextToSize(certText, 155);
+                doc.text(cLines, startX + 2, sigTop - 9);
+                doc.line(startX, sigTop - 14, endX, sigTop - 14); 
+                
+                let sigMid = 105;
+
+                doc.text("Certified Correct:", startX + 5, sigTop + 5);
+                doc.text("Noted by:", sigMid + 5, sigTop + 5);
+                doc.line(startX, sigTop + 7, endX, sigTop + 7);
+                
+                doc.text("Signature", 40.2, sigTop + 14, { align: "center" });
+                doc.line(startX, sigTop + 20, endX, sigTop + 20);
+                
+                doc.text("Printed\nName", 40.2, sigTop + 24, { align: "center" });
+                doc.setFont("helvetica", "bold");
+                doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 80, sigTop + 25, { align: "center" });
+                doc.text(chiefName, 144.8, sigTop + 25, { align: "center" });
+                doc.setFont("helvetica", "normal");
+                doc.line(startX, sigTop + 28, endX, sigTop + 28);
+                
+                doc.text("Employee", 80, sigTop + 32, { align: "center" });
+                doc.text("Immediate Supervisor", 144.8, sigTop + 32, { align: "center" });
+                doc.line(startX, sigTop + 34, endX, sigTop + 34);
+                
+                const todayFmt = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                doc.text(`Date: ${todayFmt}`, 80, sigTop + 39, { align: "center" });
+                doc.text(`Date: ${todayFmt}`, 144.8, sigTop + 39, { align: "center" });
+                
+                doc.line(55, sigTop, 55, endY); 
+                doc.line(sigMid, sigTop, sigMid, endY); 
             });
 
-            // Draw vertical lines for the rows
-            colX.forEach(x => doc.line(x, rowsStartY, x, curY));
-            doc.line(10, rowsStartY, 10, curY);
-            doc.line(200, rowsStartY, 200, curY);
-
-            // Total row
-            doc.rect(10, curY, tableW, 6);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(8);
-            doc.text("TOTAL", 100, curY + 4, { align: "center" });
-            doc.line(161, curY, 161, curY + 6);
-            doc.text(grandTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","), 198, curY + 4, { align: "right" });
-
-            curY += 6;
-
-            // Signature block
-            doc.rect(10, curY, tableW, 45);
-            doc.line(105, curY, 105, curY + 45); // middle vertical split
-
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            const certStr = "I certify that : (1) I have reviewed the foregoing itinerary, (2) the travel is necessary to the service, (3) the period covered is reasonable and (4) the expenses claimed are proper.";
-            const certLines = doc.splitTextToSize(certStr, 90);
-            doc.text(certLines, 12, curY + 5);
-
-            doc.setFont("helvetica", "bold");
-            doc.text((currentUser.full_name || currentUser.fullName || "").toUpperCase(), 152.5, curY + 12, { align: "center" });
-            doc.setFont("helvetica", "normal");
-            doc.text("Signature over Printed Name", 152.5, curY + 16, { align: "center" });
-
-            doc.line(105, curY + 20, 200, curY + 20); // Approved by split line
-            doc.text("Approved by:", 107, curY + 24);
-
-            doc.setFont("helvetica", "bold");
-            doc.text(chiefName, 57.5, curY + 38, { align: "center" });
-            doc.text(chiefName, 152.5, curY + 38, { align: "center" });
-
-            doc.setFont("helvetica", "normal");
-            doc.text("Signature over Printed Name", 57.5, curY + 41, { align: "center" });
-            doc.text("Signature over Printed Name", 152.5, curY + 41, { align: "center" });
-            doc.setFontSize(7);
-            doc.text("Immediate Supervisor", 57.5, curY + 44, { align: "center" });
-            doc.text("Agency Head / Authorized Representative", 152.5, curY + 44, { align: "center" });
-
-            doc.save(`Itinerary_Of_Travel_${currentUser.emp_id}.pdf`);
-        };
+            doc.save(`TEV_Claim_${currentTevToNo}.pdf`);
+            window.closeTEVModal();
+        }
 
         window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
@@ -1608,12 +1664,10 @@
                 if (error) throw error;
                 alert("Leave application successfully cancelled and deleted.");
                 window.loadStatus();
-            } catch(e) { alert("Error: " + e.message); }
+            } catch(e) {
+                alert("Error: " + e.message);
+            }
         };
-
-        window.printApprovedIoT = async function(to_no) {
-            alert(`IoT logic fetches saved tev_entries and generates PDF... (Implement specific logic here later to re-print)`);
-        }
 
         window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
@@ -1621,21 +1675,23 @@
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
             
             if(filter === "TO") {
-                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%').not('status', 'ilike', '%DISAPPROVED%').order('created_at', {ascending: false}).limit(30);
+                const { data: tos } = await supabase.from('travel_orders')
+                    .select('*')
+                    .eq('emp_id', currentUser.emp_id)
+                    .not('status', 'ilike', '%CANCELLED%')
+                    .not('status', 'ilike', '%DISAPPROVED%')
+                    .order('created_at', {ascending: false})
+                    .limit(30);
                 
                 let html = '';
                 for(let to of tos || []) {
                     const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
                     const sCls = to.status.includes('APPROVED') ? 'bg-approved' : 'bg-pending';
                     const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
-                    const hasIoT = to.iot_generated === true;
 
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div style="font-weight:bold; font-size: 13px;">
-                                ${isApproved && !hasIoT ? `<input type="checkbox" class="iot-checkbox" value="${to.to_no}" onchange="window.toggleIoTActionBar()" style="width:auto; margin:0; margin-right:5px;">` : ''}
-                                ${to.to_no}
-                            </div>
+                            <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
                             <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
                         </div>
                         <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
@@ -1643,7 +1699,7 @@
                         </div>
                         <div class="action-group" style="margin-top: 0;">
                             ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
-                            ${isApproved ? `<button class="btn btn-blue btn-small" style="background:#3b82f6; color:white;" disabled>${hasIoT ? 'IoT Built' : 'TEV Blocked'}</button> <button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                            ${isApproved ? `<button class="btn btn-blue btn-small" style="background:#3b82f6; color:white;" onclick="window.openTEVModal('${to.to_no}')">TEV Claim</button> <button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
                 }
@@ -1676,16 +1732,17 @@
             }
         };
 
-        // LEAVE LOGIC PRESERVED
         window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
+
             if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 let ctoOption = type === "Vacation Leave" ? `
                     <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
                         <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
                     </label>` : "";
+
                 container.innerHTML = `
                     ${ctoOption}
                     <div class="radio-group">
@@ -1733,15 +1790,20 @@
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
                 const isHoliday = cachedHolidays.some(h => h.date === dateStr);
+                
                 let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
+
                 if (schedOverrides) {
                     const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
                     if (override) {
                         if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && day === 5) {
                             isWorkingDay = false;
-                        } else if (!isHoliday) { isWorkingDay = true; }
+                        } else if (!isHoliday) {
+                            isWorkingDay = true;
+                        }
                     }
                 }
+
                 if (isWorkingDay) count++;
                 cur.setDate(cur.getDate() + 1);
             }
@@ -1764,15 +1826,21 @@
                 
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') { ledgerUsed += parseFloat(l.debit || 0) * 8; }
+                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
+                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                    }
                 });
                 
                 let availableCtoDays = (earned - used - ledgerUsed) / 8;
                 if (availableCtoDays < count) {
                     alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
                     if(submitBtn) submitBtn.disabled = true;
-                } else { if(submitBtn) submitBtn.disabled = false; }
-            } else { if(submitBtn) submitBtn.disabled = false; }
+                } else {
+                    if(submitBtn) submitBtn.disabled = false;
+                }
+            } else {
+                if(submitBtn) submitBtn.disabled = false;
+            }
         };
 
         window.submitLeave = async function() {
@@ -1784,12 +1852,17 @@
             const comm = document.getElementById('leave-commutation').value;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
+
             if (start < todayStr) {
-                if (type.includes("Vacation")) { return alert("Strictly no backdating for Vacation Leave."); }
+                if (type.includes("Vacation")) {
+                    return alert("Strictly no backdating for Vacation Leave.");
+                }
             }
 
+            // CTO CHECK LOGIC
             const ctoCheck = document.getElementById('vl-cto-credit');
             const isCtoCredited = ctoCheck && ctoCheck.checked;
+
             if (isCtoCredited) {
                 const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
                 let earned = 0, used = 0;
@@ -1801,11 +1874,15 @@
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') { ledgerUsed += parseFloat(l.debit || 0) * 8; }
+                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
+                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                    }
                 });
                 
                 let availableCtoDays = (earned - used - ledgerUsed) / 8;
-                if (availableCtoDays < days) return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                if (availableCtoDays < days) {
+                    return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                }
             }
 
             const rDetail = document.querySelector('input[name="ldetail"]:checked');
@@ -1818,9 +1895,14 @@
             const dates_to_check = [];
             let curr = new Date(start);
             const eDate = new Date(end);
-            while (curr <= eDate) { dates_to_check.push(curr.toISOString().split('T')[0]); curr.setDate(curr.getDate() + 1); }
+            while (curr <= eDate) {
+                dates_to_check.push(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
 
-            const { data: toConflicts } = await supabase.from('itinerary').select('to_no, travel_date').gte('travel_date', start).lte('travel_date', end).in('to_no', (await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%')).data.map(t => t.to_no));
+            const { data: toConflicts } = await supabase.from('itinerary').select('to_no, travel_date')
+                .gte('travel_date', start).lte('travel_date', end)
+                .in('to_no', (await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%')).data.map(t => t.to_no));
             
             if(toConflicts && toConflicts.length > 0) {
                 if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will overwrite the TO on the affected dates. Continue?`)) return;
@@ -1831,14 +1913,24 @@
 
                     for (let d of dates_to_check) {
                         await supabase.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
-                        if (toData && toData.transport === "GOV'T VEHICLE") { await supabase.from('vehicle_logs').delete().eq('to_no', to_no).eq('travel_date', d); }
+                        if (toData && toData.transport === "GOV'T VEHICLE") {
+                            await supabase.from('vehicle_logs').delete().eq('to_no', to_no).eq('travel_date', d);
+                        }
                     }
                     const { data: remItin } = await supabase.from('itinerary').select('id').eq('to_no', to_no);
                     if (!remItin || remItin.length === 0) {
                         await supabase.from('travel_orders').update({status: 'CANCELLED', remarks: 'overwritten by leave application'}).eq('to_no', to_no);
                         if (isApproved) {
-                            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${to_no} was cancelled due to a leave application by ${currentUser.full_name}.`, to_no: to_no });
-                            await supabase.from('hr_notifications').insert({ emp_id: 'HR_OFFICE', sender_name: currentUser.full_name || currentUser.fullName, message: `Approved TO ${to_no} was cancelled due to a leave application.` });
+                            await supabase.from('notifications').insert({
+                                recipient_role: 'PARPO',
+                                message: `Approved TO ${to_no} was cancelled due to a leave application by ${currentUser.full_name}.`,
+                                to_no: to_no
+                            });
+                            await supabase.from('hr_notifications').insert({
+                                emp_id: 'HR_OFFICE',
+                                sender_name: currentUser.full_name || currentUser.fullName,
+                                message: `Approved TO ${to_no} was cancelled due to a leave application.`
+                            });
                         }
                     }
                 }
@@ -1846,12 +1938,24 @@
 
             isSubmitting = true;
             document.getElementById('btn-submit-leave').innerText = "Processing...";
+
             try {
-                await supabase.from('leave_ledger').insert({ transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id, start_date: start, end_date: end, type: type, debit: days, transaction_type: "APPLICATION", remarks: fullRemarks });
+                await supabase.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
+                    start_date: start, end_date: end, type: type, debit: days,
+                    transaction_type: "APPLICATION", remarks: fullRemarks
+                });
                 alert("Leave Application Submitted.");
-                document.getElementById('leave-from').value = ''; document.getElementById('leave-to').value = ''; document.getElementById('leave-days-count').innerText = "0";
+                document.getElementById('leave-from').value = '';
+                document.getElementById('leave-to').value = '';
+                document.getElementById('leave-days-count').innerText = "0";
                 window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
-            } catch(e) { alert("Error: " + e.message); } finally { isSubmitting = false; document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION"; }
+            } catch(e) {
+                alert("Error: " + e.message);
+            } finally {
+                isSubmitting = false;
+                document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
+            }
         };
 
         window.printLeaveForm6 = async function(leaveId) {
@@ -1868,6 +1972,7 @@
 
             let vl_base = parseFloat(empData.vl_balance || 0);
             let sl_base = parseFloat(empData.sl_balance || 0);
+
             let app_date_str = app.created_at ? app.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
 
             const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
@@ -1878,7 +1983,11 @@
                 if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
-                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) { vl_deduct += debit_val; } else if (l_type.includes("SICK")) { sl_deduct += debit_val; }
+                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
+                        vl_deduct += debit_val;
+                    } else if (l_type.includes("SICK")) {
+                        sl_deduct += debit_val;
+                    }
                 }
             });
 
@@ -1888,6 +1997,7 @@
             let vl_less = 0.0, sl_less = 0.0;
             const app_type = String(app.type || "").toUpperCase();
             const app_days = parseFloat(app.debit || 0);
+
             if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) vl_less = app_days;
             else if (app_type.includes("SICK")) sl_less = app_days;
 
@@ -1902,7 +2012,9 @@
                 let fname_parts = parts[1].trim().split(' ');
                 fname = fname_parts.length > 1 ? fname_parts.slice(0, -1).join(" ") : parts[1].trim();
                 mname = fname_parts.length > 1 ? fname_parts[fname_parts.length - 1] : "";
-            } else { lname = full_name; }
+            } else {
+                lname = full_name;
+            }
 
             const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
@@ -1971,7 +2083,9 @@
 
             types.forEach(t => {
                 doc.rect(12, tY_left, 3, 3);
-                if(t.name.toLowerCase().includes(s_type) || s_type.includes(t.name.toLowerCase())) { doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal"); }
+                if(t.name.toLowerCase().includes(s_type) || s_type.includes(t.name.toLowerCase())) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+                }
                 doc.setFontSize(7);
                 doc.text(t.name, 16, tY_left + 2.5);
                 let nameWidth = doc.getTextWidth(t.name);
@@ -1981,7 +2095,9 @@
             });
 
             doc.rect(12, tY_left, 3, 3);
-            if(s_type.includes("other") && !s_type.includes("wellness")) { doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal"); }
+            if(s_type.includes("other") && !s_type.includes("wellness")) {
+                doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+            }
             doc.setFontSize(7);
             doc.text("Others:", 16, tY_left + 2.5);
             let remks = app.remarks || "";
@@ -2112,6 +2228,7 @@
             doc.setFont("helvetica", "normal"); doc.setFontSize(8);
             doc.text("PARPO II", 105, ty + 40, {align: 'center'});
 
+            // ADD DETAILS FROM IMAGE FOR COMPLIANCE
             doc.setFont("helvetica", "italic"); doc.setFontSize(7);
             doc.text("Compliance Details: Any falsification of this document shall be dealt with under existing civil service rules.", 10, ty + 50);
 
@@ -2173,7 +2290,9 @@
                     }
                     
                     if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                         if (dayOfWeek === 5) { isWeekend = true; }
+                         if (dayOfWeek === 5) {
+                             isWeekend = true; 
+                         }
                     }
                     
                     const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
@@ -2212,7 +2331,9 @@
                         <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
                     </tr>`;
                 }
-            } catch (error) { document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`; }
+            } catch (error) {
+                document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`;
+            }
         };
 
         window.generateForm48 = async function() {
@@ -2479,22 +2600,32 @@
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value.trim();
             const nw = document.getElementById('pass-new').value.trim();
+            
             if(!curr || !nw) return alert("Please fill out both fields.");
+
             try {
                 const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
                 if(error) throw error;
+
                 const hashedOld = await window.hashPassword(curr);
-                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) { return alert("Wrong current password."); }
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
                 const hashedNew = await window.hashPassword(nw);
                 const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
                 if (updErr) throw updErr;
+
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew;
+                currentUser.pass = hashedNew; // Update session
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
-            } catch(e) { alert("Error updating password: " + e.message); }
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
         };
     </script>
 </body>
