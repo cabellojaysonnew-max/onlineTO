@@ -139,10 +139,10 @@
             <div class="card" style="width: 95%; max-width: 500px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); margin: auto;">
                 <button onclick="window.closeTevModal()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
                 <h3 style="margin-top:0; color:var(--dar-green);">TEV Claim Builder</h3>
-                <div id="tev-multi-day-container" style="max-height: 450px; overflow-y: auto;">
+                <div id="tev-multi-day-container" style="max-height: 450px; overflow-y: auto; margin-bottom: 10px;">
                     <!-- Auto-generated multi-day cards go here -->
                 </div>
-                <button class="btn btn-primary" onclick="window.generateTEVPDF()" style="margin-top:15px;">📄 GENERATE DAILY FORMS</button>
+                <button class="btn btn-primary" onclick="window.generateTEVPDF()">📄 GENERATE DAILY FORMS</button>
             </div>
         </div>
 
@@ -343,6 +343,16 @@
         window.hashPassword = async function(msg) {
             if (!msg) return "";
             return sha256(msg); 
+        };
+
+        // WEBAUTHN UTILS
+        const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const base64ToBuffer = (b64) => {
+            const binary_string = atob(b64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+            return bytes.buffer;
         };
 
         // --- PDF-LIB SECURE SAVE HELPER ---
@@ -581,56 +591,22 @@
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
-            
             if (!id || !pass) return alert("Please enter ID and Password");
-
             try {
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
-                
-                if (error) {
-                    alert("Database connection issue: " + error.message);
-                    return;
-                }
-                if (!data) {
-                    alert("Employee ID not found.");
-                    return;
-                }
-                
+                if (!data) return alert("Employee ID not found.");
                 const hashedPass = await window.hashPassword(pass);
-
-                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
+                if (data.pass === pass || data.pass === hashedPass) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
                     document.getElementById('app-screen').classList.add('active');
-                    document.getElementById('itin-from').min = todayStr;
-                    document.getElementById('itin-to').min = todayStr;
-                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                    window.renderPersonnel();
-
-                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
-                        document.getElementById('special-div-card').style.display = 'block';
-                        const sDivs = (data.division || "").split(',');
-                        let sdHtml = '';
-                        sDivs.forEach(d => {
-                            const val = d.trim();
-                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
-                        });
-                        document.getElementById('special-div-list').innerHTML = sdHtml;
-                    } else {
-                        document.getElementById('special-div-card').style.display = 'none';
-                    }
-
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
-                } else { 
-                    alert("Incorrect Password."); 
-                }
-            } catch (err) {
-                alert("Login Error: " + err.message);
-            }
+                } else { alert("Incorrect Password."); }
+            } catch (err) { alert("Login Error: " + err.message); }
         };
 
         // --- ATTENDANCE LOGIC ---
@@ -1132,125 +1108,6 @@
             }
         };
 
-        window.loadCredits = async function() {
-            const container = document.getElementById('leave-balances-container');
-            const ctoContainer = document.getElementById('cto-posting-container');
-            container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
-
-            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
-            
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
-            
-            let vl_deduct = 0;
-            let sl_deduct = 0;
-            let spl_deduct = 0;
-            let wl_deduct = 0;
-            let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
-                <tr style="background: var(--dar-green); color: white;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Days</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
-                </tr>`;
-            let hasDeductions = false;
-
-            if (ledgers && ledgers.length > 0) {
-                ledgers.forEach(l => {
-                    if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
-
-                    hasDeductions = true;
-                    const l_type = (l.type || '').toUpperCase();
-                    const debit_val = parseFloat(l.debit || 0);
-
-                    if (l_type.includes('SICK')) sl_deduct += debit_val;
-                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_deduct += debit_val;
-                    else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
-                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
-
-                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
-                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
-                    let tSign = isCredit ? '+' : '-';
-                    let displayVal = isCredit ? (l.credit || l.debit || 0) : (l.debit || 0);
-
-                    deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                        <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
-                        <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                    </tr>`;
-                });
-            }
-            deductionsHtml += `</table>`;
-            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No approved deductions found.</p>`;
-
-            let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) - vl_deduct).toFixed(2) : 0;
-            let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) - sl_deduct).toFixed(2) : 0;
-            let currentSPL = emp ? Math.max(0, parseFloat(emp.spl_balance || 0) - spl_deduct).toFixed(2) : 0;
-            let currentWL = emp ? Math.max(0, parseFloat(emp.wl_balance || 0) - wl_deduct).toFixed(2) : 0;
-
-            if(emp) {
-                container.innerHTML = `
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
-                    </div>
-                    <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
-                    ${deductionsHtml}
-                `;
-            }
-
-            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
-            
-            let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
-                <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Hrs</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
-                </tr>`;
-            let hasCto = false;
-            
-            if(cto && cto.length > 0) {
-                cto.forEach(c => {
-                    const ttype = (c.transaction_type || '').toUpperCase();
-                    if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
-                        hasCto = true;
-                        let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
-                        let sign = ttype === 'USED' ? '-' : '+';
-                        ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${c.date}</td>
-                            <td style="padding: 5px;">${ttype}</td>
-                            <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
-                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
-                        </tr>`;
-                    }
-                });
-            }
-            ctoHtml += `</table>`;
-
-            if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
-            
-            ctoContainer.innerHTML = `
-                <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
-                </div>
-                ${ctoHtml}
-            `;
-        };
-
-        window.showEmployeeQR = function() {
-            const container = document.getElementById('my-qr-container');
-            const img = document.getElementById('my-qr-img');
-            const text = document.getElementById('my-qr-text');
-            if (container.style.display === 'none') {
-                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${currentUser.emp_id}`;
-                text.innerText = `EMP ID: ${currentUser.emp_id}`;
-                container.style.display = 'block';
-            } else { container.style.display = 'none'; }
-        };
-
         window.searchEmployees = async function() {
             const term = document.getElementById('emp-search').value;
             if (term.length < 2) return;
@@ -1601,6 +1458,7 @@
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
+        // --- PDF LOGIC (Silent & Signatures) ---
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -1608,77 +1466,962 @@
             try {
                 const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
                 const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+                const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
+                
+                const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
+                
                 const od = group_orders[0];
-                const rawUnits = group_orders.flatMap(o => (o.unit||'').split(',').map(u=>u.trim())).filter(u => u && u !== "PARPO" && u !== "NA");
-                const uniqueUnits = [...new Set(rawUnits)];
-                const uniqueDivs = [...new Set(group_orders.flatMap(o => (o.division||'').split(',').map(d=>d.trim())).filter(d => d))];
+                const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
+                const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
+                const stations = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.station || ""))].join(", ").toUpperCase();
+                
+                const rawType = emp_details?.find(e => e.emp_id === group_orders[0].emp_id)?.type?.toUpperCase();
+                const typeLabel = rawType === 'SPLIT' ? 'SPLIT/COS' : (rawType === 'REGULAR' ? 'REGULAR' : '');
 
-                let uh_list = [], dc_list = [];
-                if (uniqueUnits.length > 0) { const { data } = await supabase.from('users').select('full_name, username').in('unit', uniqueUnits); if (data) uh_list = data; }
-                if (uniqueDivs.length > 0) { const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF'); if (data) dc_list = data; }
+                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+
+                const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
+                const uniqueUnits = [...new Set(rawUnits)];
+                const uniqueDivs = [...new Set(group_orders.flatMap(o => o.division ? o.division.split(',').map(d=>d.trim()) : []).filter(d => d))];
+
+                let uh_list = [];
+                if (!isMARPO && uniqueUnits.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('unit', uniqueUnits);
+                    if (data) uh_list = data;
+                }
+
+                let dc_list = [];
+                if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
+                    const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
+                    if (data) dc_list = data;
+                }
+
                 const { data: parpoData } = await supabase.from('users').select('full_name, username').eq('unit', 'PARPO').maybeSingle();
+                let p_uname = parpoData ? parpoData.username : 'P2';
+                let p_name = parpoData ? parpoData.full_name.toUpperCase() : 'RICARDO C. GARCIA';
 
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
                     urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
-                    urlToBase64(getAssetUrl(`${parpoData?.username || 'P2'}.png`)), 
+                    urlToBase64(getAssetUrl(`${p_uname}.png`)), 
                     ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
                     ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
                 ]);
+                
                 const uh_imgs = sigs.slice(0, uh_list.length);
                 const dc_imgs = sigs.slice(uh_list.length);
 
                 for (let i = 0; i < 3; i++) {
                     if (i > 0) doc.addPage();
-                    if (img_bg) doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297);
+                    if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
                     
-                    if (i > 0) { // Crucial Rule: Signatures only on 2nd and 3rd pages
-                        uh_imgs.forEach((img, idx) => { if(img) doc.addImage(img, 'PNG', 30 + (idx*30), 150, 20, 20); });
-                        dc_imgs.forEach((img, idx) => { if(img) doc.addImage(img, 'PNG', 110 + (idx*30), 150, 20, 20); });
-                        if(img_p2) doc.addImage(img_p2, 'PNG', 115, 182, 30, 30);
+                    if (od.transport === "GOV'T VEHICLE") {
+                        doc.setTextColor(255, 0, 0);
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
+                        doc.setTextColor(0, 0, 0); 
                     }
-                    // Text rendering ... (Existing coordinate logic from your manually mapped format)
-                    doc.setFont("helvetica", "bold"); doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
-                    doc.text("RICARDO C. GARCIA", 114, 202); // Placeholder name if parpoData null
+
+                    if (img_qr) { 
+                        try { 
+                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+                            doc.setFont("helvetica", "normal"); doc.setFontSize(4);
+                            let auditText = [
+                                `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                                `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+                            ];
+                            doc.text(auditText, 190, 36, {align: 'center'});
+                        } catch(e){} 
+                    }
+
+                    if (od.remarks && od.remarks.includes("EXISTING PSO")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                        doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+                    }
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+                    const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                    doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
+
+                    const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
+                        let currentSize = defaultSize;
+                        doc.setFontSize(currentSize);
+                        let lines = doc.splitTextToSize(text || "", maxWidth);
+                        while (lines.length > maxLines && currentSize > 4.5) {
+                            currentSize -= 0.5;
+                            doc.setFontSize(currentSize);
+                            lines = doc.splitTextToSize(text || "", maxWidth);
+                        }
+                        let curY = y;
+                        lines.forEach((line) => {
+                            doc.text(line, x, curY);
+                            doc.line(x, curY + 1, lineEndX, curY + 1);
+                            curY += 4.5;
+                        });
+                        doc.setFontSize(defaultSize);
+                        return lines.length;
+                    };
+
+                    doc.setFontSize(10); 
+                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
+                    doc.setFont("helvetica", "normal");
+                    let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
+
+                    let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
+
+                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let posLinesCount = renderFlexibleText(positions, 40, nextY, 45, 85, 10, 2);
+                    
+                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
+                    doc.setFont("helvetica", "normal"); 
+                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
+
+                    let maxSubLines = Math.max(posLinesCount, statLinesCount);
+                    let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
+
+                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, transY);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    const drawCheck = (label, x, y, isChecked) => {
+                        doc.rect(x, y - 3, 3, 3);
+                        if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
+                        doc.text(label, x + 5, y);
+                    };
+                    drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                    
+                    drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                    if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
+                        doc.text(`Sched: ${vLog.schedule}`, 103, transY + 5);
+                        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+                    }
+
+                    drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
+                    drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
+
+                    doc.setFontSize(10); doc.setFont("helvetica", "bold");
+                    let destLabelY = transY + 17;
+                    doc.text("DESTINATION:", 20, destLabelY);
+                    const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                    let destY = destLabelY;
+                    const destMaxWidth = 110;
+
+                    itin_list.forEach(it => {
+                        const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
+                        const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
+                        wrappedDestLines.forEach((line) => {
+                            doc.text(line, 50, destY);
+                            destY += 3.5;
+                        });
+                    });
+                    
+                    let curY = Math.max(destY, destLabelY + 5);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("DEPARTURE DATE:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
+                    doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
+                    
+                    curY += 6;
+                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
+                    curY += 4;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+                    const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+                    purpLines.forEach((line) => {
+                        doc.text(line, 20, curY);
+                        doc.line(20, curY + 1, 160, curY + 1);
+                        curY += 4.5; 
+                    });
+                    curY += 2;
+                    
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(8);
+                    doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
+                    drawCheck("LIVE IN", 110, curY, false);
+                    drawCheck("LIVE OUT", 135, curY, false);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("Recommended by:", 20, 156);
+                    
+                    const renderSigs = (list, imgs, startX, width) => {
+                        if (list.length === 0) return;
+                        const count = list.length;
+                        const step = width / count;
+                        const imgSize = count > 2 ? 18 : 25;
+                        for (let j = 0; j < count; j++) {
+                            let cx = startX + (step * j) + (step / 2); 
+                            let imgX = cx - (imgSize / 2);
+                            if (i > 0 && imgs[j]) { 
+                                try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
+                            }
+                            let name = list[j].full_name.toUpperCase();
+                            let fontSize = 8;
+                            doc.setFontSize(fontSize);
+                            while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                                fontSize -= 0.5;
+                                doc.setFontSize(fontSize);
+                            }
+                            doc.text(name, cx, 166, { align: 'center' });
+                        }
+                    };
+
+                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                    renderSigs(dc_list, dc_imgs, 95, 60);
+
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+
+                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text(p_name, 129, 202, { align: 'center' });
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.text("PARPO II", 129, 206, { align: 'center' });
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("PDF Error:", e.message); }
         };
 
         window.printLeaveForm6 = async function(leaveId) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4');
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
-            const { data: app } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).maybeSingle();
-            if (!app) return;
             
-            const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            const ty = 145; // Base Y for section 7
-            if(hr_sig && app.transaction_type === 'APPROVED') {
-                doc.addImage(hr_sig, 'PNG', 40, ty + 22, 35, 15); // Fixed Position
-            }
-            // Background and fields ... (Existing coordinate logic preserved)
-            await window.saveSecurePDF(doc, `Form6_${app.id}_Secure.pdf`);
+            try {
+                const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).maybeSingle();
+                if (error || !app) return alert("Application not found");
+
+                const { data: emp } = await supabase.from('employees').select('full_name, unit, position, salary, vl_balance, sl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+                const empData = emp || {};
+
+                let vl_base = parseFloat(empData.vl_balance || 0);
+                let sl_base = parseFloat(empData.sl_balance || 0);
+
+                let app_date_str = app.created_at ? app.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
+
+                const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
+                let vl_deduct = 0.0, sl_deduct = 0.0;
+                (res_ledger || []).forEach(ledg => {
+                    if (ledg.id === app.id) return;
+                    const ttype = String(ledg.transaction_type || "").toUpperCase();
+                    if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
+                        const l_type = String(ledg.type || "").toUpperCase();
+                        const debit_val = parseFloat(ledg.debit || 0);
+                        if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
+                            vl_deduct += debit_val;
+                        } else if (l_type.includes("SICK")) {
+                            sl_deduct += debit_val;
+                        }
+                    }
+                });
+
+                let vl_total_earned = Math.max(0, vl_base - vl_deduct);
+                let sl_total_earned = Math.max(0, sl_base - sl_deduct);
+
+                let vl_less = 0.0, sl_less = 0.0;
+                const app_type = String(app.type || "").toUpperCase();
+                const app_days = parseFloat(app.debit || 0);
+
+                if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) vl_less = app_days;
+                else if (app_type.includes("SICK")) sl_less = app_days;
+
+                let vl_balance = vl_total_earned - vl_less;
+                let sl_balance = sl_total_earned - sl_less;
+
+                let full_name = String(empData.full_name || "").toUpperCase();
+                let parts = full_name.split(',');
+                let lname = "", fname = "", mname = "";
+                if (parts.length > 1) {
+                    lname = parts[0].trim();
+                    let fname_parts = parts[1].trim().split(' ');
+                    fname = fname_parts.length > 1 ? fname_parts.slice(0, -1).join(" ") : parts[1].trim();
+                    mname = fname_parts.length > 1 ? fname_parts[fname_parts.length - 1] : "";
+                } else {
+                    lname = full_name;
+                }
+
+                const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
+                if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+
+                const form6_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${app.transaction_id}`);
+                if (form6_qr) { try { doc.addImage(form6_qr, 'PNG', 180, 15, 20, 20); } catch(e){} }
+
+                doc.setFontSize(14); doc.setFont("helvetica", "bold");
+                doc.text("APPLICATION FOR LEAVE", 105, 45, { align: 'center' });
+
+                let ty = 50;
+                doc.setFontSize(7); doc.setFont("helvetica", "normal");
+                doc.rect(10, ty, 50, 4); doc.text("1. OFFICE/DEPARTMENT", 12, ty + 3);
+                doc.rect(60, ty, 140, 4); doc.text("2. NAME: (Last Name, First Name MI)", 62, ty + 3);
+                
+                ty += 4;
+                doc.setFontSize(8); doc.setFont("helvetica", "bold");
+                doc.rect(10, ty, 50, 6); doc.text(String(empData.unit || "").toUpperCase(), 35, ty + 4, { align: 'center' });
+                let fNameFormatted = parts.length > 1 ? `${lname}, ${fname} ${mname}`.trim() : full_name;
+                doc.rect(60, ty, 140, 6); doc.text(fNameFormatted, 130, ty + 4, { align: 'center' });
+
+                ty += 6;
+                doc.setFontSize(7); doc.setFont("helvetica", "normal");
+                doc.rect(10, ty, 50, 4); doc.text("3. DATE OF FILING", 12, ty + 3);
+                doc.rect(60, ty, 70, 4); doc.text("4. POSITION", 62, ty + 3);
+                doc.rect(130, ty, 70, 4); doc.text("5. SALARY", 132, ty + 3);
+
+                ty += 4;
+                doc.setFontSize(8); doc.setFont("helvetica", "bold");
+                let dFmt = app_date_str;
+                try { dFmt = new Date(app_date_str).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch(e) {}
+                doc.rect(10, ty, 50, 6); doc.text(dFmt, 35, ty + 4, { align: 'center' });
+                doc.rect(60, ty, 70, 6); doc.text(String(empData.position || "").toUpperCase(), 95, ty + 4, { align: 'center' });
+                doc.rect(130, ty, 70, 6); doc.text(String(empData.salary || ""), 165, ty + 4, { align: 'center' });
+
+                ty += 6;
+                doc.setFontSize(9); doc.setFont("helvetica", "bold");
+                doc.rect(10, ty, 190, 6); doc.text("6. DETAILS OF APPLICATION", 105, ty + 4, { align: 'center' });
+
+                ty += 6;
+                let section6Y = ty;
+                doc.rect(10, ty, 95, 85);
+                doc.rect(105, ty, 95, 85);
+
+                doc.setFontSize(7); doc.setFont("helvetica", "normal");
+                doc.text("6.A TYPE OF LEAVE TO BE AVAILED OF", 12, ty + 4);
+
+                let tY_left = ty + 8;
+                const types = [
+                    { name: "Vacation Leave", detail: "(Sec. 51, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "Mandatory/Forced Leave", detail: "(Sec. 25, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "Sick Leave", detail: "(Sec. 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "Maternity Leave", detail: "(R.A. No. 11210 / IRR issued by CSC, DOLE and SSS)" },
+                    { name: "Paternity Leave", detail: "(R.A. No. 8187 / CSC MC No. 71, s. 1998, as amended)" },
+                    { name: "Special Privilege Leave", detail: "(Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "Solo Parent Leave", detail: "(RA No. 8972 / CSC MC No. 8, s. 2004)" },
+                    { name: "Study Leave", detail: "(Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "10-Day VAWC Leave", detail: "(RA No. 9262 / CSC MC No. 15, s. 2005)" },
+                    { name: "Rehabilitation Privilege", detail: "(Sec. 55, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
+                    { name: "Special Leave Benefits for Women", detail: "(RA No. 9710 / CSC MC No. 25, s. 2010)" },
+                    { name: "Special Emergency (Calamity) Leave", detail: "(CSC MC No. 2, s. 2012, as amended)" },
+                    { name: "Adoption Leave", detail: "(R.A. No. 8552)" },
+                    { name: "Wellness Leave", detail: "(CSC Memorandum Circular No. 01, s. 2026)" }
+                ];
+                let s_type = String(app.type || "").toLowerCase();
+
+                types.forEach(t => {
+                    doc.rect(12, tY_left, 3, 3);
+                    if(t.name.toLowerCase().includes(s_type) || s_type.includes(t.name.toLowerCase())) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+                    }
+                    doc.setFontSize(7);
+                    doc.text(t.name, 16, tY_left + 2.5);
+                    let nameWidth = doc.getTextWidth(t.name);
+                    doc.setFontSize(4.5);
+                    doc.text(t.detail, 16 + nameWidth + 1, tY_left + 2.5);
+                    tY_left += 5;
+                });
+
+                doc.rect(12, tY_left, 3, 3);
+                if(s_type.includes("other") && !s_type.includes("wellness")) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.text("X", 12.5, tY_left + 2.5); doc.setFont("helvetica", "normal");
+                }
+                doc.setFontSize(7);
+                doc.text("Others:", 16, tY_left + 2.5);
+                let remks = app.remarks || "";
+                let oth_val = (s_type.includes("other") && !s_type.includes("wellness")) ? (remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : remks.split("|")[0].trim()) : "";
+                doc.setFont("helvetica", "bold"); doc.text(oth_val, 30, tY_left + 2.5); doc.line(30, tY_left + 3, 90, tY_left + 3);
+
+                let tY_right = section6Y + 4;
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.text("6.B DETAILS OF LEAVE", 107, tY_right);
+
+                tY_right += 6;
+                doc.setFont("helvetica", "italic"); doc.text("In case of Vacation/Special Privilege Leave:", 107, tY_right);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Within Philippines")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Within the Philippines", 115, tY_right + 2.5); doc.line(143, tY_right + 2.5, 195, tY_right + 2.5);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Abroad")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Abroad (Specify)", 115, tY_right + 2.5);
+                let abr_val = remks.includes("Abroad") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+                doc.setFont("helvetica", "bold"); doc.text(abr_val, 138, tY_right + 2); doc.line(138, tY_right + 2.5, 195, tY_right + 2.5);
+
+                tY_right += 6;
+                doc.setFont("helvetica", "italic"); doc.text("In case of Sick Leave:", 107, tY_right);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("In Hospital")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("In Hospital (Specify Illness)", 115, tY_right + 2.5);
+                let hosp_val = remks.includes("In Hospital") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+                doc.setFont("helvetica", "bold"); doc.text(hosp_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Out Patient")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Out Patient (Specify Illness)", 115, tY_right + 2.5);
+                let out_val = remks.includes("Out Patient") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+                doc.setFont("helvetica", "bold"); doc.text(out_val, 150, tY_right + 2); doc.line(150, tY_right + 2.5, 195, tY_right + 2.5);
+
+                tY_right += 6;
+                doc.setFont("helvetica", "italic"); doc.text("In case of Special Leave Benefits for Women:", 107, tY_right);
+                tY_right += 4; doc.setFont("helvetica", "normal"); doc.text("(Specify Illness)", 110, tY_right + 2.5);
+                let wom_val = remks.includes("Special Leave Benefits for Women") && remks.includes("-") ? remks.split("-")[1].split("|")[0].trim() : "";
+                doc.setFont("helvetica", "bold"); doc.text(wom_val, 132, tY_right + 2); doc.line(132, tY_right + 2.5, 195, tY_right + 2.5);
+                tY_right += 4; doc.line(110, tY_right + 2.5, 195, tY_right + 2.5);
+
+                tY_right += 6;
+                doc.setFont("helvetica", "italic"); doc.text("In case of Study Leave:", 107, tY_right);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Completion of Master's Degree")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Completion of Master's Degree", 115, tY_right + 2.5);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("BAR/Board Examination Review")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("BAR/Board Examination Review", 115, tY_right + 2.5);
+
+                tY_right += 6;
+                doc.setFont("helvetica", "italic"); doc.text("Other purpose:", 107, tY_right);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Monetization")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Monetization of Leave Credits", 115, tY_right + 2.5);
+                tY_right += 4; doc.rect(110, tY_right, 3, 3); if(remks.includes("Terminal Leave")) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, tY_right + 2.5); } doc.setFont("helvetica", "normal"); doc.text("Terminal Leave", 115, tY_right + 2.5);
+
+                ty = section6Y + 85;
+                doc.rect(10, ty, 95, 25);
+                doc.rect(105, ty, 95, 25);
+
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.text("6.C NUMBER OF WORKING DAYS APPLIED FOR", 12, ty + 4);
+                doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                doc.text(`${app_days} days`, 57.5, ty + 10, { align: 'center' }); doc.line(20, ty + 11, 95, ty + 11);
+                
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.text("INCLUSIVE DATES", 12, ty + 16);
+                let inc_dates = `From ${app.start_date} to ${app.end_date}`;
+                try { inc_dates = `From ${new Date(app.start_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})} to ${new Date(app.end_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`; } catch(e){}
+                doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                doc.text(inc_dates, 57.5, ty + 21, { align: 'center' }); doc.line(20, ty + 22, 95, ty + 22);
+
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.text("6.D COMMUTATION", 107, ty + 4);
+                let req = remks.includes("Requested") && !remks.includes("Not Requested");
+                doc.rect(110, ty + 6, 3, 3); if(!req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 8.5); } doc.setFont("helvetica", "normal"); doc.text("Not Requested", 115, ty + 8.5);
+                doc.rect(110, ty + 10, 3, 3); if(req) { doc.setFont("helvetica", "bold"); doc.text("X", 110.5, ty + 12.5); } doc.setFont("helvetica", "normal"); doc.text("Requested", 115, ty + 12.5);
+                doc.setFontSize(8); doc.setFont("helvetica", "bold");
+                doc.text(full_name, 160, ty + 19, { align: 'center' });
+                doc.line(130, ty + 20, 190, ty + 20); doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.text("(Signature of Applicant)", 160, ty + 23, { align: 'center' });
+
+                ty += 25;
+                doc.setFillColor(220, 220, 220); doc.rect(10, ty, 190, 5, 'F');
+                doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                doc.text("7. DETAILS OF ACTION ON APPLICATION", 105, ty + 3.5, { align: 'center' });
+
+                ty += 5;
+                let section7Y = ty;
+                doc.rect(10, ty, 95, 45);
+                doc.rect(105, ty, 95, 45);
+
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.text("7.A CERTIFICATION OF LEAVE CREDITS", 12, ty + 4);
+                doc.text("As of", 30, ty + 8); doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(app_date_str, 52.5, ty + 8, {align: 'center'}); doc.line(40, ty + 9, 65, ty + 9);
+                
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                doc.rect(20, ty + 10, 30, 5); doc.rect(50, ty + 10, 25, 5); doc.rect(75, ty + 10, 25, 5);
+                doc.text("Vacation Leave", 62.5, ty + 13.5, {align: 'center'}); doc.text("Sick Leave", 87.5, ty + 13.5, {align: 'center'});
+                
+                doc.rect(20, ty + 15, 30, 5); doc.rect(50, ty + 15, 25, 5); doc.rect(75, ty + 15, 25, 5);
+                doc.text("Total Earned", 22, ty + 18.5); doc.setFont("helvetica", "bold"); doc.text(vl_total_earned.toFixed(2), 62.5, ty + 18.5, {align: 'center'}); doc.text(sl_total_earned.toFixed(2), 87.5, ty + 18.5, {align: 'center'});
+                
+                doc.setFont("helvetica", "normal");
+                doc.rect(20, ty + 20, 30, 5); doc.rect(50, ty + 20, 25, 5); doc.rect(75, ty + 20, 25, 5);
+                doc.text("Less this application", 22, ty + 23.5); doc.setFont("helvetica", "bold"); doc.text(vl_less > 0 ? vl_less.toFixed(2) : "", 62.5, ty + 23.5, {align: 'center'}); doc.text(sl_less > 0 ? sl_less.toFixed(2) : "", 87.5, ty + 23.5, {align: 'center'});
+
+                doc.setFont("helvetica", "normal");
+                doc.rect(20, ty + 25, 30, 5); doc.rect(50, ty + 25, 25, 5); doc.rect(75, ty + 25, 25, 5);
+                doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
+
+                const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
+                if(hr_sig && app.transaction_type === 'APPROVED') { 
+                    try { doc.addImage(hr_sig, 'PNG', 40, ty + 18, 35, 15); } catch(e){} 
+                }
+
+                doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
+
+                doc.text("7.B RECOMMENDATION", 107, ty + 4);
+                doc.rect(110, ty + 6, 3, 3); doc.text("For approval", 115, ty + 8.5);
+                doc.rect(110, ty + 10, 3, 3); doc.text("For disapproval due to", 115, ty + 12.5); doc.line(140, ty + 13, 195, ty + 13);
+                doc.line(115, ty + 17, 195, ty + 17);
+                doc.line(115, ty + 21, 195, ty + 21);
+
+                doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("GERRY L. MATAMOROSA", 152.5, ty + 38, {align: 'center'}); doc.line(115, ty + 39, 190, ty + 39);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("Authorized Officer", 152.5, ty + 42, {align: 'center'});
+
+                ty += 45;
+                doc.rect(10, ty, 95, 20); doc.rect(105, ty, 95, 20);
+                doc.rect(10, ty + 20, 190, 25);
+
+                doc.text("7.C APPROVED FOR:", 12, ty + 4);
+                let pay = remks.toLowerCase().includes("without pay") || remks.toLowerCase().includes("no pay") ? `____ days with pay\n_${app_days}_ days without pay` : `_${app_days}_ days with pay\n____ days without pay`;
+                doc.text(pay, 15, ty + 8);
+                doc.text("____ others (Specify)", 15, ty + 16); doc.line(40, ty + 17, 95, ty + 17);
+
+                doc.text("7.D DISAPPROVED DUE TO:", 107, ty + 4); doc.line(140, ty + 5, 195, ty + 5);
+                doc.line(110, ty + 9, 195, ty + 9);
+                doc.line(110, ty + 13, 195, ty + 13);
+
+                doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                doc.text("RICARDO C. GARCIA", 105, ty + 35, {align: 'center'}); doc.line(60, ty + 36, 150, ty + 36);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+                doc.text("PARPO II", 105, ty + 40, {align: 'center'});
+
+                doc.setFont("helvetica", "italic"); doc.setFontSize(7);
+                doc.text("Compliance Details: Any falsification of this document shall be dealt with under existing civil service rules.", 10, ty + 50);
+
+                await window.saveSecurePDF(doc, `Form6_${app.id}_Secure.pdf`);
+            } catch (e) { alert("PDF Error: " + e.message); }
         };
 
-        // Attendance Log Handlers ... (Preserved)
         window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
+            
             if(filter === "TO") {
-                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%').order('created_at', {ascending: false});
-                list.innerHTML = (tos||[]).map(to => `
-                    <div class="card">
-                        <b>${to.to_no}</b> <span class="badge bg-approved">${to.status}</span>
-                        <div class="action-group">
-                            ${to.status === 'APPROVED' ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button>` : ''}
+                const { data: tos } = await supabase.from('travel_orders')
+                    .select('*')
+                    .eq('emp_id', currentUser.emp_id)
+                    .not('status', 'ilike', '%CANCELLED%')
+                    .not('status', 'ilike', '%DISAPPROVED%')
+                    .order('created_at', {ascending: false})
+                    .limit(30);
+                
+                let html = '';
+                for(let to of tos || []) {
+                    const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
+                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : 'bg-pending';
+                    const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
+
+                    html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
+                            <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
                         </div>
-                    </div>`).join('');
+                        <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
+                            ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
+                        </div>
+                        <div class="action-group" style="margin-top: 0;">
+                            ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
+                            ${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                        </div>
+                    </div>`;
+                }
+                list.innerHTML = html || "No Travel Orders found.";
+            } else {
+                const { data: leaves } = await supabase.from('leave_ledger')
+                    .select('*')
+                    .eq('emp_id', currentUser.emp_id)
+                    .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                    .order('created_at', {ascending: false});
+                
+                let html = '';
+                for(let app of leaves || []) {
+                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : 'bg-pending';
+                    const isApp = app.transaction_type === 'APPROVED';
+                    html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
+                            <span class="badge ${sCls}">${app.transaction_type}</span>
+                        </div>
+                        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
+                        <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
+                        <div class="action-group" style="margin-top: 8px;">
+                            ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                            <button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>
+                        </div>
+                    </div>`;
+                }
+                list.innerHTML = html || "No Leave Applications found.";
             }
         };
 
-        // Remaining original logic (renderCalendar, recordAttendance, etc.) is preserved without refinement.
+        window.renderCalendar = async function() {
+            try {
+                const monthEl = document.getElementById('dtr-month');
+                const yearEl = document.getElementById('dtr-year');
+                const month = parseInt(monthEl.value) - 1;
+                const year = parseInt(yearEl.value);
+                
+                const tbody = document.getElementById('cal-table-body');
+                tbody.innerHTML = "<tr><td colspan='6' style='text-align:center; padding: 20px;'>Crunching Logs...</td></tr>";
+
+                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const endDt = new Date(year, month + 1, 0);
+                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
+
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
+                const logsByDate = {};
+                (logs || []).forEach(l => {
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
+                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                    logsByDate[isoStr].push(dateObj);
+                });
+
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                const validTos = tos?.map(t => t.to_no) || [];
+                
+                let itins = [];
+                if(validTos.length > 0) {
+                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                    itins = data || [];
+                }
+
+                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                ]);
+
+                tbody.innerHTML = "";
+                for(let d=1; d<=endDt.getDate(); d++) {
+                    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dateObj = new Date(year, month, d);
+                    const dayOfWeek = dateObj.getDay();
+                    
+                    let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                    let activeOverride = null;
+                    if (schedOverrides) {
+                        activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                    }
+                    
+                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                         if (dayOfWeek === 5) {
+                             isWeekend = true; 
+                         }
+                    }
+                    
+                    const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
+                    const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                    const holiday = (holidays || []).find(h => h.date === dateStr);
+                    const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+
+                    let activityHtml = "";
+                    if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
+                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
+                    if(dayItins?.length) dayItins.forEach(i => activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`);
+                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+
+                    let amIn="", amOut="", pmIn="", pmOut="";
+                    const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                    
+                    if(dayLogs.length > 0) amIn = formatTime12PST(dayLogs[0]);
+                    if(dayLogs.length > 1) amOut = formatTime12PST(dayLogs[1]);
+                    if(dayLogs.length > 2) pmIn = formatTime12PST(dayLogs[2]);
+                    if(dayLogs.length > 3) pmOut = formatTime12PST(dayLogs[3]);
+
+                    if(isWeekend && !activityHtml && !amIn && !pmIn) {
+                        let dayName = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                        if (dayOfWeek === 5) dayName = "NO FRIDAY WORK";
+                        activityHtml = `<div style="color:gray; font-weight:bold; font-size:10px;">${dayName}</div>`;
+                    }
+
+                    let rowStyle = dateStr === todayStr ? 'background:#fffbeb; border-left: 3px solid var(--dar-gold);' : (isWeekend ? 'background:#f9fafb;' : '');
+                    
+                    tbody.innerHTML += `<tr style="${rowStyle}">
+                        <td><span class="day-num">${d}</span> <br> <span style="color:gray;font-size:9px;">${dateObj.toLocaleDateString('en-US', { weekday: 'short' })}</span></td>
+                        <td style="color:#003811; font-weight:bold;">${amIn || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${amOut || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${pmIn || '--'}</td>
+                        <td style="color:#003811; font-weight:bold;">${pmOut || '--'}</td>
+                        <td>${activityHtml || '<span style="color:#ccc;">--</span>'}</td>
+                    </tr>`;
+                }
+            } catch (error) {
+                document.getElementById('cal-table-body').innerHTML = `<tr><td colspan='6' style='color:red; text-align:center;'>Error loading calendar: ${error.message}</td></tr>`;
+            }
+        };
+
+        window.generateForm48 = async function() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const monthEl = document.getElementById('dtr-month');
+                const yearEl = document.getElementById('dtr-year');
+                const month = parseInt(monthEl.value) - 1;
+                const year = parseInt(yearEl.value);
+                
+                const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const endDt = new Date(year, month + 1, 0);
+                const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDt.getDate()).padStart(2,'0')}`;
+
+                const { data: logs } = await supabase.from('attendance_logs').select('log_time').eq('emp_id', currentUser.emp_id).gte('log_time', startDtStr + "T00:00:00+08:00").lte('log_time', endDtStr + "T23:59:59+08:00");
+                const logsByDate = {};
+                (logs || []).forEach(l => {
+                    const dateObj = new Date(l.log_time);
+                    const isoStr = getPSTDateFromDateObj(dateObj);
+                    if(!logsByDate[isoStr]) logsByDate[isoStr] = [];
+                    logsByDate[isoStr].push(dateObj);
+                });
+
+                const { data: tos } = await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).eq('status', 'APPROVED');
+                const validTos = tos?.map(t => t.to_no) || [];
+                
+                let itins = [];
+                if(validTos.length > 0) {
+                    const { data } = await supabase.from('itinerary').select('to_no, travel_date, destination, purpose').in('to_no', validTos);
+                    itins = data || [];
+                }
+
+                const [{ data: psos }, { data: holidays }, { data: leaves }, { data: schedOverrides }] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
+                    supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
+                ]);
+
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const mName = monthNames[month];
+
+                const { data: existingDtr } = await supabase.from('dtr_generations').select('id').eq('emp_id', currentUser.emp_id).eq('month', mName).eq('year', year).maybeSingle();
+                let validationId = crypto.randomUUID();
+                
+                if (existingDtr) {
+                    validationId = existingDtr.id;
+                    await supabase.from('dtr_generations').update({ generated_at: new Date().toISOString() }).eq('id', validationId);
+                } else {
+                    await supabase.from('dtr_generations').insert({ id: validationId, emp_id: currentUser.emp_id, month: mName, year: year, generated_at: new Date().toISOString() });
+                }
+
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${validationId}`;
+                const dtr_qr = await urlToBase64(qrUrl);
+
+                let chiefName = "_________________________";
+                let chiefPos = "DIVISION CHIEF";
+                const empDiv = (currentUser.division || "").toUpperCase().trim();
+                const empUnit = (currentUser.unit || "").toUpperCase().trim();
+                
+                if (empDiv === "PARPO") {
+                    chiefName = "RICARDO C. GARCIA";
+                    chiefPos = "PARPO II";
+                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                    const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
+                    if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                    chiefPos = "MARPO";
+                } else {
+                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                    chiefPos = "DIVISION CHIEF";
+                }
+
+                let grandUndertimeH = 0;
+                let grandUndertimeM = 0;
+
+                const drawForm = (startX, startY) => {
+                    if (dtr_qr) { try { doc.addImage(dtr_qr, 'PNG', startX + 73, startY, 12, 12); } catch(e){} }
+                    
+                    doc.setFont("helvetica", "italic"); doc.setFontSize(6);
+                    doc.text("CIVIL SERVICE FORM 48", startX, startY + 3);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                    doc.text("DAILY TIME RECORD", startX + 42.5, startY + 7, { align: "center" });
+
+                    doc.setFontSize(8);
+                    doc.text(currentUser.full_name, startX + 42.5, startY + 15, { align: "center" });
+                    doc.line(startX, startY + 16, startX + 85, startY + 16);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                    doc.text("Name", startX + 42.5, startY + 19, { align: "center" });
+
+                    doc.text("For the month of", startX, startY + 23);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+                    doc.text(`${mName} ${year}`, startX + 25, startY + 23);
+                    doc.line(startX + 22, startY + 24, startX + 55, startY + 24);
+
+                    let ty = startY + 30;
+                    let cw_day = 8, cw_time = 14, cw_u = 11;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+
+                    doc.rect(startX, ty, cw_day, 8); doc.text("Days", startX + 4, ty + 5, { align: "center" });
+                    doc.rect(startX + cw_day, ty, cw_time * 2, 4); doc.text("A.M.", startX + cw_day + cw_time, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time * 2, 4); doc.text("P.M.", startX + cw_day + (cw_time * 3), ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u * 2, 4); doc.text("UNDERTIME", startX + cw_day + (cw_time * 4) + cw_u, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    doc.rect(startX + cw_day, ty, cw_time, 4); doc.text("Arrival", startX + cw_day + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + cw_time, ty, cw_time, 4); doc.text("Departure", startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, 4); doc.text("Arrival", startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, 4); doc.text("Departure", startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 4); doc.text("Hours", startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 4); doc.text("Min.", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
+
+                    ty += 4;
+                    let row_h = 4.2;
+                    let totalUndertimeMins = 0;
+
+                    for (let d = 1; d <= 31; d++) {
+                        doc.rect(startX, ty, cw_day, row_h);
+                        doc.text(String(d), startX + 4, ty + 3, { align: "center" });
+
+                        if (d <= endDt.getDate()) {
+                            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                            const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
+                            
+                            const dateObj = new Date(year, month, d);
+                            const dayOfWeek = dateObj.getDay();
+                            
+                            let isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+                            let activeSchedule = null;
+                            let schedType = "Flexi";
+                            
+                            if (schedOverrides) {
+                                const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                                if (override) {
+                                    activeSchedule = {
+                                        start_time: override.start_time,
+                                        end_time: override.end_time
+                                    };
+                                    schedType = override.schedule_type || "Fixed";
+                                    
+                                    if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && dayOfWeek === 5) {
+                                        isWeekend = true;
+                                    }
+                                }
+                            }
+
+                            if (!activeSchedule && currentUser.flexi_range_start && currentUser.flexi_range_end) {
+                                activeSchedule = {
+                                    start_time: currentUser.flexi_range_start + ":00", 
+                                    end_time: currentUser.flexi_range_end + ":00"
+                                };
+                                schedType = "Flexi";
+                            }
+
+                            let special = "";
+                            const hol = (holidays || []).find(h => h.date === dateStr);
+                            if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+                            
+                            const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                            if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                            
+                            const to = (itins || []).find(i => i.travel_date === dateStr);
+                            if(to) special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                            
+                            const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
+                            if(leave) special = String(leave.type).toUpperCase();
+
+                            if (isWeekend && !special) {
+                                special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
+                                if (dayOfWeek === 5) special = "NO FRIDAY WORK";
+                            }
+                            
+                            let amIn="", amOut="", pmIn="", pmOut="";
+                            
+                            if(dayLogs.length > 0) amIn = formatTime12PST(dayLogs[0]);
+                            if(dayLogs.length > 1) amOut = formatTime12PST(dayLogs[1]);
+                            if(dayLogs.length > 2) pmIn = formatTime12PST(dayLogs[2]);
+                            if(dayLogs.length > 3) pmOut = formatTime12PST(dayLogs[3]);
+
+                            let udH = "", udM = "";
+                            if (!isWeekend && special === "" && activeSchedule && dayLogs.length > 0) {
+                                const ud = calcUndertime(dayLogs, activeSchedule, schedType);
+                                if (ud.h > 0 || ud.m > 0) {
+                                    totalUndertimeMins += (ud.h * 60) + ud.m;
+                                    if(ud.h > 0) udH = String(ud.h);
+                                    if(ud.m > 0) udM = String(ud.m);
+                                }
+                            }
+
+                            if(dayLogs.length > 0 && (special === "SATURDAY" || special === "SUNDAY" || special === "NO FRIDAY WORK" || special.includes("HOLIDAY"))) {
+                                special = ""; 
+                            }
+
+                            if (special) {
+                                doc.setFont("helvetica", "bold"); doc.setFontSize(6);
+                                doc.rect(startX + cw_day, ty, cw_time * 4, row_h);
+                                doc.text(special.substring(0, 40), startX + cw_day + (cw_time * 2), ty + 3, { align: "center" });
+                                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                            } else {
+                                doc.rect(startX + cw_day, ty, cw_time, row_h); doc.text(amIn, startX + cw_day + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h); doc.text(amOut, startX + cw_day + cw_time + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h); doc.text(pmIn, startX + cw_day + (cw_time * 2) + 7, ty + 3, { align: "center" });
+                                doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h); doc.text(pmOut, startX + cw_day + (cw_time * 3) + 7, ty + 3, { align: "center" });
+                            }
+                            
+                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h); doc.text(udH, startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
+                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h); doc.text(udM, startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
+
+                        } else {
+                            doc.rect(startX + cw_day, ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
+                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
+                        }
+                        ty += row_h;
+                    }
+                    
+                    if (startX === 10) {
+                        grandUndertimeH = Math.floor(totalUndertimeMins / 60);
+                        grandUndertimeM = totalUndertimeMins % 60;
+                    }
+
+                    doc.text("Total", startX + cw_day + (cw_time * 4) - 2, ty + 3, { align: "right" });
+                    doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, 5); doc.text(grandUndertimeH > 0 ? String(grandUndertimeH) : "", startX + cw_day + (cw_time * 4) + 5.5, ty + 3.5, { align: "center" });
+                    doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, 5); doc.text(grandUndertimeM > 0 ? String(grandUndertimeM) : "", startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3.5, { align: "center" });
+
+                    ty += 8;
+                    doc.setFont("helvetica", "italic");
+                    const cert = "I certify on my honor that the above is true and correct report of the hours of work performed, record of which was made daily at the time of arrival and departure from office.";
+                    doc.text(cert, startX, ty, { maxWidth: 85, align: "justify" });
+
+                    ty += 12;
+                    doc.line(startX + 10, ty, startX + 75, ty);
+                    doc.setFont("helvetica", "normal");
+                    doc.text("(Employee's Signature)", startX + 42.5, ty + 3, { align: "center" });
+
+                    ty += 8;
+                    doc.text("Verified as to prescribed office hours:", startX, ty);
+                    
+                    ty += 8;
+                    doc.setFont("helvetica", "bold");
+                    doc.text(chiefName, startX + 42.5, ty, { align: "center" });
+                    doc.line(startX + 10, ty + 1, startX + 75, ty + 1);
+                    doc.setFont("helvetica", "normal");
+                    doc.text(chiefPos, startX + 42.5, ty + 4, { align: "center" });
+                };
+
+                drawForm(10, 10);
+                drawForm(110, 10);
+                
+                await window.saveSecurePDF(doc, `Form48_${mName}_${year}_Secure.pdf`);
+            } catch (err) {
+                alert("PDF Error: " + err.message);
+            }
+        };
+
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
+            
+            if(!curr || !nw) return alert("Please fill out both fields.");
+
+            try {
+                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
+                if(error) throw error;
+
+                const hashedOld = await window.hashPassword(curr);
+                
+                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                    return alert("Wrong current password.");
+                }
+                
+                const hashedNew = await window.hashPassword(nw);
+                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
+                if (updErr) throw updErr;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                currentUser.pass = hashedNew; // Update session
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
+            }
+        };
     </script>
 </body>
 </html>
