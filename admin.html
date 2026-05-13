@@ -867,7 +867,7 @@
                                 const dest = (i.destination || '').toLowerCase();
                                 
                                 const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                                const destParts = dest.split(/[\\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
                                 
                                 const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
                                 
@@ -1137,18 +1137,73 @@
                     else toStats.Pending++;
                 });
 
+                // ENHANCED DESTINATION TRACKING
+                const targetDestinations = ["CABUSAO", "DEL GALLEGO", "LUPI", "RAGAY", "SIPOCOT 1", "SIPOCOT 2", "SIPOCOT 3", "SIPOCOT", "LIBMANAN", "MINALABAC", "PAMPLONA", "PASACAO", "SANMILGAZ", "IRIGA CITY", "BAAO", "BALATAN", "BATO", "BUHI", "BULA", "NABUA", "REGIONAL OFFICE"];
+
                 const monthItineraries = monthItRes.data || [];
                 const destCounts = {};
-                monthItineraries.forEach(i => {
-                    if (i.destination && i.destination.toUpperCase() !== 'N/A') {
-                        const d = i.destination.trim();
-                        destCounts[d] = (destCounts[d] || 0) + 1;
+                const destinationFrequency = {};
+                const employeeDestFrequency = {};
+
+                const validMonthToMap = new Map();
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && t.emp_name) {
+                        validMonthToMap.set(t.to_no, t.emp_name.trim());
                     }
                 });
+
+                monthItineraries.forEach(i => {
+                    if (i.destination && i.destination.toUpperCase() !== 'N/A') {
+                        const rawDest = i.destination.toUpperCase();
+                        destCounts[rawDest] = (destCounts[rawDest] || 0) + 1;
+
+                        const empName = validMonthToMap.get(i.to_no);
+                        if (empName) {
+                            let matchedDest = rawDest;
+                            for (const td of targetDestinations) {
+                                if (rawDest.includes(td)) {
+                                    matchedDest = td;
+                                    break;
+                                }
+                            }
+
+                            if (!destinationFrequency[matchedDest]) {
+                                destinationFrequency[matchedDest] = { count: 0, employees: new Set() };
+                            }
+                            destinationFrequency[matchedDest].count++;
+                            destinationFrequency[matchedDest].employees.add(empName);
+
+                            if (!employeeDestFrequency[empName]) employeeDestFrequency[empName] = {};
+                            employeeDestFrequency[empName][matchedDest] = (employeeDestFrequency[empName][matchedDest] || 0) + 1;
+                        }
+                    }
+                });
+
                 let topDest = { name: 'None', count: 0 };
                 for (const [dest, count] of Object.entries(destCounts)) {
                     if (count > topDest.count) topDest = { name: dest, count };
                 }
+
+                const oversaturatedDests = Object.keys(destinationFrequency)
+                    .map(d => ({
+                        name: d,
+                        count: destinationFrequency[d].count,
+                        uniqueEmployees: destinationFrequency[d].employees.size,
+                        employeeNames: Array.from(destinationFrequency[d].employees)
+                    }))
+                    .filter(d => d.count > 1)
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 10);
+
+                const repetitiveTravelers = [];
+                for (const [emp, dests] of Object.entries(employeeDestFrequency)) {
+                    for (const [dest, count] of Object.entries(dests)) {
+                        if (count >= 3) {
+                            repetitiveTravelers.push({ name: emp, destination: dest, count });
+                        }
+                    }
+                }
+                repetitiveTravelers.sort((a, b) => b.count - a.count);
 
                 const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
                 const travCounts = {};
@@ -1173,7 +1228,7 @@
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
                     anomalies: anomalyCount,
-                    insights: { topDest, topTrav }
+                    insights: { topDest, topTrav, oversaturatedDests, repetitiveTravelers }
                 };
                 
                 renderAnalyticsView();
@@ -1206,7 +1261,37 @@
                 `).join('');
             };
 
+            const renderSaturationList = (arr) => {
+                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
+                return arr.map(item => `
+                    <div class="list-row flex-col items-start !items-stretch">
+                        <div class="flex justify-between w-full mb-1">
+                            <span class="text-xs font-bold text-slate-700 truncate">${item.name}</span>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-rose-100 text-rose-600 shrink-0">${item.count} Visits</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 truncate w-full">By ${item.uniqueEmployees} personnel: ${item.employeeNames.join(', ')}</div>
+                    </div>
+                `).join('');
+            };
+
             const iconUser = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>`;
+
+            const renderRepetitiveList = (arr) => {
+                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
+                return arr.map(item => `
+                    <div class="list-row flex justify-between">
+                        <div class="flex items-center space-x-3 overflow-hidden">
+                            <span class="text-slate-400 w-4 h-4 shrink-0">${iconUser}</span>
+                            <div class="flex flex-col overflow-hidden">
+                                <span class="text-xs font-bold text-slate-700 truncate">${item.name}</span>
+                                <span class="text-[10px] text-slate-500 truncate">📍 ${item.destination}</span>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-600 shrink-0">${item.count} Times</span>
+                    </div>
+                `).join('');
+            };
+
             const iconClock = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
             const iconDoor = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>`;
             const iconSun = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
@@ -1252,6 +1337,21 @@
                             <div class="analytics-header">Approval Queue</div>
                             <div class="p-4 relative h-40"><canvas id="toQueueChart"></canvas></div>
                         </div>
+                    </div>
+
+                    <!-- STRATEGIC DEPLOYMENT TRACKING CARDS -->
+                    <div class="analytics-card border-rose-200">
+                        <div class="analytics-header bg-rose-50 text-rose-800 flex justify-between">
+                            <span>Destination Saturation (All Staff)</span>
+                        </div>
+                        <div class="analytics-list">${renderSaturationList(analyticsData.insights.oversaturatedDests)}</div>
+                    </div>
+
+                    <div class="analytics-card border-orange-200">
+                        <div class="analytics-header bg-orange-50 text-orange-800 flex justify-between">
+                            <span>Repetitive Travel (Same Place/Staff)</span>
+                        </div>
+                        <div class="analytics-list">${renderRepetitiveList(analyticsData.insights.repetitiveTravelers)}</div>
                     </div>
 
                     <!-- NEW DESTINATION TRACKING CARDS -->
