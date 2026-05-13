@@ -1027,7 +1027,7 @@
             doc.text("Signature", 15, gridStart + 15);
             doc.line(10, gridStart + 22, 200, gridStart + 22);
             
-            doc.text("Printed\nName", 15, gridStart + 26);
+            doc.text("Printed\\nName", 15, gridStart + 26);
             doc.setFont("helvetica", "bold");
             doc.text(currentUser.fullName.toUpperCase(), 90, gridStart + 28, { align: "center" });
 
@@ -1105,7 +1105,7 @@
                                 const dest = (i.destination || '').toLowerCase();
                                 
                                 const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                                const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                const destParts = dest.split(/[\\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
                                 
                                 const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
                                 
