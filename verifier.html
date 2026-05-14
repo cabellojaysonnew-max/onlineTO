@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAR CS I - Official Verifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 500px; width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 5px solid #D4AF37; }
+        h2 { color: #003811; text-align: center; margin-bottom: 5px; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+        .result-card { display: none; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e5e7eb; }
+        .legit { border-left: 5px solid #16a34a; background: #f0fdf4; }
+        .invalid { border-left: 5px solid #dc2626; background: #fef2f2; display: block; }
+        .info-label { font-size: 11px; color: #6b7280; font-weight: bold; text-transform: uppercase; }
+        .info-value { font-size: 16px; color: #1f2937; margin-bottom: 10px; font-weight: 500; }
+        .status-stamp { font-weight: bold; color: #16a34a; font-size: 18px; text-align: center; margin-bottom: 15px; display: block; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>DOCUMENT VERIFIER</h2>
+    <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 20px;">Scan QR Code to check legitimacy</p>
+    
+    <div id="reader"></div>
+
+    <div id="result" class="result-card">
+        <span id="status-text" class="status-stamp">✓ LEGITIMATE DOCUMENT</span>
+        
+        <div class="info-label">Document Type</div>
+        <div id="res-type" class="info-value">---</div>
+
+        <div class="info-label">Employee Involved</div>
+        <div id="res-emp" class="info-value">---</div>
+
+        <div class="info-label">Date/Period</div>
+        <div id="res-date" class="info-value">---</div>
+
+        <div class="info-label">Destination / Remarks</div>
+        <div id="res-dest" class="info-value">---</div>
+    </div>
+</div>
+
+<script>
+    const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+    const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo';
+    const supabase = libsupabase.createClient(supabaseUrl, supabaseKey);
+
+    async function onScanSuccess(decodedText) {
+        // Stop scanning once something is found
+        html5QrcodeScanner.clear();
+        const resultDiv = document.getElementById('result');
+        const statusText = document.getElementById('status-text');
+        
+        try {
+            // 1. Try Travel Order (Format: YYYY-DIV-00000)
+            if (decodedText.includes('-')) {
+                const { data: toData } = await supabase.from('travel_orders').select('emp_name, to_no, status').eq('to_no', decodedText).maybeSingle();
+                if (toData) {
+                    const { data: itin } = await supabase.from('itinerary').select('travel_date, destination').eq('to_no', decodedText).order('travel_date');
+                    showResult("TRAVEL ORDER", toData.emp_name, `${itin[0].travel_date} to ${itin[itin.length-1].travel_date}`, itin.map(i => i.destination).join(', '));
+                    return;
+                }
+            }
+
+            // 2. Try Leave Application (UUID)
+            const { data: leaveData } = await supabase.from('leave_ledger').select('emp_id, type, start_date, end_date, remarks').eq('transaction_id', decodedText).maybeSingle();
+            if (leaveData) {
+                const { data: emp } = await supabase.from('employees').select('full_name').eq('emp_id', leaveData.emp_id).maybeSingle();
+                showResult("LEAVE FORM (CS FORM 6)", emp.full_name, `${leaveData.start_date} to ${leaveData.end_date}`, `${leaveData.type}: ${leaveData.remarks}`);
+                return;
+            }
+
+            // 3. Try Form 48 (UUID mapping to dtr_generations)
+            const { data: dtrData } = await supabase.from('dtr_generations').select('emp_id, month, year').eq('id', decodedText).maybeSingle();
+            if (dtrData) {
+                const { data: emp } = await supabase.from('employees').select('full_name').eq('emp_id', dtrData.emp_id).maybeSingle();
+                showResult("DAILY TIME RECORD (FORM 48)", emp.full_name, `${dtrData.month} ${dtrData.year}`, "Official Attendance Record");
+                return;
+            }
+
+            // If nothing found
+            throw new Error("Invalid Record");
+
+        } catch (err) {
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result-card invalid';
+            statusText.innerText = "✖ INVALID DOCUMENT";
+            statusText.style.color = "#dc2626";
+            document.getElementById('res-type').innerText = "Unknown";
+            document.getElementById('res-emp').innerText = "Not Found in Database";
+            document.getElementById('res-date').innerText = "---";
+            document.getElementById('res-dest').innerText = "---";
+        }
+    }
+
+    function showResult(type, emp, date, dest) {
+        const resultDiv = document.getElementById('result');
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'result-card legit';
+        document.getElementById('res-type').innerText = type;
+        document.getElementById('res-emp').innerText = emp;
+        document.getElementById('res-date').innerText = date;
+        document.getElementById('res-dest').innerText = dest;
+    }
+
+    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    html5QrcodeScanner.render(onScanSuccess);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" id="libsupabase"></script>
+</body>
+</html>
