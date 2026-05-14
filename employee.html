@@ -1678,7 +1678,7 @@
 
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '/verifier.html?id=' + toNo)}`),
                     urlToBase64(getAssetUrl("P2.png")), 
                     ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
                     ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
@@ -1701,8 +1701,8 @@
 
                     if (img_qr) { 
                         try { 
-                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
-                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+                            doc.addImage(img_qr, 'PNG', 185, 10, 20, 20); 
+                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 195, 33, {align: 'center'}); } 
 
                             // AUDIT TRAIL TIMESTAMPS
                             doc.setFont("helvetica", "normal");
@@ -1712,7 +1712,7 @@
                                 `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
                                 `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
                             ];
-                            doc.text(auditText, 190, 36, {align: 'center'});
+                            doc.text(auditText, 195, 36, {align: 'center'});
                         } catch(e){} 
                     }
 
@@ -1749,7 +1749,7 @@
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
                     doc.setFont("helvetica", "normal");
-                    let nameLinesCount = renderFlexibleText(names, 40, 48, 145, 185, 10, 4);
+                    let nameLinesCount = renderFlexibleText(names, 40, 48, 165, 205, 10, 4);
 
                     let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
 
@@ -1759,7 +1759,7 @@
                     
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
                     doc.setFont("helvetica", "normal"); 
-                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 75, 185, 10, 2);
+                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 95, 205, 10, 2);
 
                     let maxSubLines = Math.max(posLinesCount, statLinesCount);
                     let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
@@ -1806,18 +1806,18 @@
                     doc.text("DEPARTURE DATE:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
                     doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 185, curY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 205, curY+1);
 
                     curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 185, curY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 205, curY+1);
                     
                     curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
                     
                     const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
-                    let purpLinesCount = renderFlexibleText(uniquePurposes, 20, curY, 165, 185, 8, 3);
+                    let purpLinesCount = renderFlexibleText(uniquePurposes, 20, curY, 185, 205, 8, 3);
                     curY += ((purpLinesCount - 1) * 4.5) + 6;
                     
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
@@ -2244,7 +2244,7 @@
             const leave_bg = await urlToBase64(getAssetUrl("leave_bg.jpg"));
             if (leave_bg) { try { doc.addImage(leave_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
 
-            const form6_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${app.transaction_id}`);
+            const form6_qr = await urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '/verifier.html?id=' + app.transaction_id)}`);
             if (form6_qr) { try { doc.addImage(form6_qr, 'PNG', 180, 15, 20, 20); } catch(e){} }
 
             doc.setFontSize(14); doc.setFont("helvetica", "bold");
