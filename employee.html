@@ -932,12 +932,25 @@
             document.getElementById('tevModal').style.display = 'none';
         };
 
+        window.saveTevState = function() {
+            tevData.forEach((day, dIndex) => {
+                day.items.forEach((item, iIndex) => {
+                    const pEl = document.getElementById(`tev-part-${dIndex}-${iIndex}`);
+                    const aEl = document.getElementById(`tev-amt-${dIndex}-${iIndex}`);
+                    if(pEl) item.particular = pEl.value;
+                    if(aEl) item.amount = aEl.value;
+                });
+            });
+        };
+
         window.addTevItem = function(dIndex) {
+            window.saveTevState();
             tevData[dIndex].items.push({ particular: '', amount: '' });
             window.renderTevItems();
         };
 
         window.removeTevItem = function(dIndex, iIndex) {
+            window.saveTevState();
             if (tevData[dIndex].items.length > 1) {
                 tevData[dIndex].items.splice(iIndex, 1);
                 window.renderTevItems();
@@ -959,8 +972,8 @@
                 day.items.forEach((item, iIndex) => {
                     html += `
                     <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                        <input type="text" placeholder="Particular (e.g. DARPO to Terminal)" value="${(item.particular || '').replace(/"/g, '&quot;')}" oninput="tevData[${dIndex}].items[${iIndex}].particular = this.value" style="flex:2; padding:6px; font-size:11px; margin:0;">
-                        <input type="number" placeholder="0.00" value="${item.amount || ''}" oninput="tevData[${dIndex}].items[${iIndex}].amount = this.value" style="flex:1; padding:6px; font-size:11px; margin:0;">
+                        <input type="text" id="tev-part-${dIndex}-${iIndex}" placeholder="Particular (e.g. DARPO to Terminal)" value="${(item.particular || '').replace(/"/g, '&quot;')}" style="flex:2; padding:6px; font-size:11px; margin:0;">
+                        <input type="number" id="tev-amt-${dIndex}-${iIndex}" placeholder="0.00" value="${item.amount || ''}" style="flex:1; padding:6px; font-size:11px; margin:0;">
                         ${day.items.length > 1 ? `<button class="btn-danger" style="padding:6px; margin:0; width:auto; font-size:10px;" onclick="window.removeTevItem(${dIndex}, ${iIndex})">✕</button>` : ''}
                     </div>
                     `;
@@ -971,6 +984,8 @@
         };
 
         window.generateTEVPDF = async function() {
+            window.saveTevState();
+            
             const purpose = document.getElementById('tev-purpose').value.trim();
             if(!purpose) return alert("Please enter a Purpose.");
             
