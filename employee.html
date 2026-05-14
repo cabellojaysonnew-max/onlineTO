@@ -1749,7 +1749,7 @@
                     doc.setFontSize(10); 
                     doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
                     doc.setFont("helvetica", "normal");
-                    let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
+                    let nameLinesCount = renderFlexibleText(names, 40, 48, 145, 185, 10, 4);
 
                     let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
 
@@ -1759,7 +1759,7 @@
                     
                     doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
                     doc.setFont("helvetica", "normal"); 
-                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
+                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 75, 185, 10, 2);
 
                     let maxSubLines = Math.max(posLinesCount, statLinesCount);
                     let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
@@ -1789,7 +1789,7 @@
                     const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                     doc.setFont("helvetica", "normal"); doc.setFontSize(7);
                     let destY = destLabelY;
-                    const destMaxWidth = 110;
+                    const destMaxWidth = 135;
 
                     itin_list.forEach(it => {
                         const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
@@ -1806,25 +1806,19 @@
                     doc.text("DEPARTURE DATE:", 20, curY);
                     doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
                     doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 185, curY+1);
 
                     curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
+                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 185, curY+1);
                     
                     curY += 6;
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
                     curY += 4;
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-
+                    
                     const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
-                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
-                    purpLines.forEach((line) => {
-                        doc.text(line, 20, curY);
-                        doc.line(20, curY + 1, 160, curY + 1);
-                        curY += 4.5; 
-                    });
-                    curY += 2;
+                    let purpLinesCount = renderFlexibleText(uniquePurposes, 20, curY, 165, 185, 8, 3);
+                    curY += ((purpLinesCount - 1) * 4.5) + 6;
                     
                     doc.setFont("helvetica", "italic"); doc.setFontSize(8);
                     doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
