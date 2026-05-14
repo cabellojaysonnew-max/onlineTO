@@ -956,10 +956,7 @@
             content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
             
             try {
-                const { data: allEmps } = await supabaseClient.from('employees')
-                    .select('*')
-                    .eq('station', 'DARPO-CS1')
-                    .eq('emplyment_type', 'PERMANENT');
+                const { data: allEmps } = await supabaseClient.from('employees').select('*');
                 const validEmps = (allEmps || []).filter(e => checkScope(e.division, e.unit));
                 const validEmpIds = validEmps.map(e => e.emp_id);
                 
@@ -993,7 +990,7 @@
                     isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
                     supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
                     supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
+                    supabaseClient.from('itinerary').select('to_no, travel_date, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
                 ]);
 
                 const tos = toRes.data || [];
@@ -1033,7 +1030,6 @@
                 let listBirthday = [];
                 let listGatePass = [];
                 
-                // Trackers for Field Staff Location matching
                 let listAtDestination = [];
                 let listOutsideDestination = [];
                 let listNoLogsField = [];
@@ -1045,12 +1041,10 @@
                     }
                 });
 
-                // Compute exact destination matches for personnel on travel order
                 empIdsOnTO.forEach(empId => {
                     const emp = validEmps.find(e => e.emp_id === empId);
                     if(!emp) return;
                     
-                    // BUG FIX COMPLETED: Grab ALL approved TOs for the user, then find the specific one happening today.
                     const empActiveTOs = activeTOs.filter(t => t.emp_id === empId);
                     const itinForEmp = itinsToday.find(i => empActiveTOs.some(t => t.to_no === i.to_no));
                     
@@ -1140,73 +1134,18 @@
                     else toStats.Pending++;
                 });
 
-                // ENHANCED DESTINATION TRACKING
-                const targetDestinations = ["CABUSAO", "DEL GALLEGO", "LUPI", "RAGAY", "SIPOCOT 1", "SIPOCOT 2", "SIPOCOT 3", "SIPOCOT", "LIBMANAN", "MINALABAC", "PAMPLONA", "PASACAO", "SANMILGAZ", "IRIGA CITY", "BAAO", "BALATAN", "BATO", "BUHI", "BULA", "NABUA", "REGIONAL OFFICE"];
-
                 const monthItineraries = monthItRes.data || [];
                 const destCounts = {};
-                const destinationFrequency = {};
-                const employeeDestFrequency = {};
-
-                const validMonthToMap = new Map();
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED' && t.emp_name) {
-                        validMonthToMap.set(t.to_no, t.emp_name.trim());
-                    }
-                });
-
                 monthItineraries.forEach(i => {
                     if (i.destination && i.destination.toUpperCase() !== 'N/A') {
-                        const rawDest = i.destination.toUpperCase();
-                        destCounts[rawDest] = (destCounts[rawDest] || 0) + 1;
-
-                        const empName = validMonthToMap.get(i.to_no);
-                        if (empName) {
-                            let matchedDest = rawDest;
-                            for (const td of targetDestinations) {
-                                if (rawDest.includes(td)) {
-                                    matchedDest = td;
-                                    break;
-                                }
-                            }
-
-                            if (!destinationFrequency[matchedDest]) {
-                                destinationFrequency[matchedDest] = { count: 0, employees: new Set() };
-                            }
-                            destinationFrequency[matchedDest].count++;
-                            destinationFrequency[matchedDest].employees.add(empName);
-
-                            if (!employeeDestFrequency[empName]) employeeDestFrequency[empName] = {};
-                            employeeDestFrequency[empName][matchedDest] = (employeeDestFrequency[empName][matchedDest] || 0) + 1;
-                        }
+                        const d = i.destination.trim();
+                        destCounts[d] = (destCounts[d] || 0) + 1;
                     }
                 });
-
                 let topDest = { name: 'None', count: 0 };
                 for (const [dest, count] of Object.entries(destCounts)) {
                     if (count > topDest.count) topDest = { name: dest, count };
                 }
-
-                const oversaturatedDests = Object.keys(destinationFrequency)
-                    .map(d => ({
-                        name: d,
-                        count: destinationFrequency[d].count,
-                        uniqueEmployees: destinationFrequency[d].employees.size,
-                        employeeNames: Array.from(destinationFrequency[d].employees)
-                    }))
-                    .filter(d => d.count > 1)
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 10);
-
-                const repetitiveTravelers = [];
-                for (const [emp, dests] of Object.entries(employeeDestFrequency)) {
-                    for (const [dest, count] of Object.entries(dests)) {
-                        if (count >= 3) {
-                            repetitiveTravelers.push({ name: emp, destination: dest, count });
-                        }
-                    }
-                }
-                repetitiveTravelers.sort((a, b) => b.count - a.count);
 
                 const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
                 const travCounts = {};
@@ -1225,13 +1164,54 @@
                 const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
                 const deskStaff = logsMap.size - fieldStaff; 
 
-                // BUG FIX COMPLETED: listOutsideDestination variable assignment corrected.
+                // --- DEPLOYMENT OPTIMIZER LOGIC ---
+                const permCS1Emps = validEmps.filter(e => e.employment_type && e.employment_type.toUpperCase() === 'PERMANENT' && e.station && e.station.toUpperCase() === 'DARPO-CS1');
+                const permCS1EmpIds = permCS1Emps.map(e => e.emp_id);
+
+                const targetDestinations = ['Iriga City/Buhi', 'Baao', 'BaNaBa', 'Bula', 'Libmanan I, II, III, and IV', 'Minalabac', 'Pamplona', 'Pasacao', 'SanMilGaz', 'Cabusao', 'Del Gallego', 'Lupi', 'Ragay', 'Sipocot I, II and II', 'Regional Office'];
+
+                const currDayDt = nowManilaObj.getDay();
+                const diffToMonDt = nowManilaObj.getDate() - currDayDt + (currDayDt === 0 ? -6 : 1);
+                const thisMondayDt = new Date(nowManilaObj);
+                thisMondayDt.setDate(diffToMonDt);
+
+                const weekDatesOpt = [];
+                for(let i=0; i<5; i++) {
+                    let d = new Date(thisMondayDt);
+                    d.setDate(d.getDate() + i);
+                    weekDatesOpt.push(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d));
+                }
+
+                const optActiveTOs = activeTOs.filter(t => permCS1EmpIds.includes(t.emp_id));
+                const optActiveToNos = optActiveTOs.map(t => t.to_no);
+
+                const optMatrix = {};
+                targetDestinations.forEach(d => {
+                    optMatrix[d] = {};
+                    weekDatesOpt.forEach(wd => optMatrix[d][wd] = 0);
+                });
+
+                monthItineraries.forEach(i => {
+                    if(optActiveToNos.includes(i.to_no) && weekDatesOpt.includes(i.travel_date)) {
+                        const itinDest = (i.destination || '').toLowerCase();
+                        const matchedDest = targetDestinations.find(td => itinDest.includes(td.toLowerCase()) || td.toLowerCase().includes(itinDest));
+                        if(matchedDest) {
+                            optMatrix[matchedDest][i.travel_date]++;
+                        } else {
+                            const parts = itinDest.split(/[\s,/-]+/);
+                            const partialMatch = targetDestinations.find(td => parts.some(p => p.length > 3 && td.toLowerCase().includes(p)));
+                            if(partialMatch) optMatrix[partialMatch][i.travel_date]++;
+                        }
+                    }
+                });
+
                 analyticsData = { 
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
                     anomalies: anomalyCount,
-                    insights: { topDest, topTrav, oversaturatedDests, repetitiveTravelers }
+                    insights: { topDest, topTrav },
+                    optimizer: { matrix: optMatrix, dates: weekDatesOpt, targets: targetDestinations }
                 };
                 
                 renderAnalyticsView();
@@ -1247,7 +1227,7 @@
             let availabilityRate = Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.workforce.onLeave) / Math.max(1, analyticsData.workforce.total)) * 100);
             
             let aiText = `<strong>MANAGEMENT BRIEF:</strong> Daily operational capacity stands at ${capacity}%. `;
-            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. `;
+            if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. Refer to the Deployment Optimizer below to ensure balanced field coverage. `;
             if (analyticsData.anomalies > 0) aiText += `<span class="text-rose-600 font-bold">Action Required: ${analyticsData.anomalies} attendance log(s) flagged for potential compliance review.</span> `;
             if (analyticsData.lists.absent.length > 0) aiText += `Unaccounted personnel stands at ${analyticsData.lists.absent.length}. `;
 
@@ -1264,37 +1244,7 @@
                 `).join('');
             };
 
-            const renderSaturationList = (arr) => {
-                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
-                return arr.map(item => `
-                    <div class="list-row flex-col items-start !items-stretch">
-                        <div class="flex justify-between w-full mb-1">
-                            <span class="text-xs font-bold text-slate-700 truncate">${item.name}</span>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-rose-100 text-rose-600 shrink-0">${item.count} Visits</span>
-                        </div>
-                        <div class="text-[10px] text-slate-500 truncate w-full">By ${item.uniqueEmployees} personnel: ${item.employeeNames.join(', ')}</div>
-                    </div>
-                `).join('');
-            };
-
             const iconUser = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>`;
-
-            const renderRepetitiveList = (arr) => {
-                if (arr.length === 0) return `<div class="p-4 text-center text-xs text-slate-400 font-bold tracking-widest uppercase">No Records Found</div>`;
-                return arr.map(item => `
-                    <div class="list-row flex justify-between">
-                        <div class="flex items-center space-x-3 overflow-hidden">
-                            <span class="text-slate-400 w-4 h-4 shrink-0">${iconUser}</span>
-                            <div class="flex flex-col overflow-hidden">
-                                <span class="text-xs font-bold text-slate-700 truncate">${item.name}</span>
-                                <span class="text-[10px] text-slate-500 truncate">📍 ${item.destination}</span>
-                            </div>
-                        </div>
-                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-600 shrink-0">${item.count} Times</span>
-                    </div>
-                `).join('');
-            };
-
             const iconClock = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
             const iconDoor = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>`;
             const iconSun = `<svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
@@ -1306,6 +1256,48 @@
                     <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
                         ${aiText}
                     </p>
+
+                    <!-- STRATEGIC DEPLOYMENT OPTIMIZER -->
+                    <div class="analytics-card overflow-hidden border-dar-green/30 border-2">
+                        <div class="analytics-header bg-dar-green text-white flex justify-between items-center px-4 py-3">
+                            <span class="font-bold text-xs uppercase tracking-wider">Weekly Optimizer (DARPO-CS1)</span>
+                            <span class="text-[9px] bg-white/20 px-2 py-1 rounded font-bold uppercase tracking-widest">Permanent</span>
+                        </div>
+                        <div class="p-4 overflow-x-auto bg-white">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th class="p-2 border-b-2 border-slate-200 font-bold text-slate-500 uppercase tracking-wider text-[10px]">Location</th>
+                                        ${analyticsData.optimizer.dates.map(d => `<th class="p-2 border-b-2 border-slate-200 font-bold text-slate-500 text-center uppercase tracking-wider text-[10px]">${new Date(d).toLocaleDateString('en-US', {weekday:'short'})}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    ${analyticsData.optimizer.targets.map(dest => {
+                                        return `
+                                        <tr class="hover:bg-slate-50 transition-colors">
+                                            <td class="p-2 text-slate-700 font-medium truncate max-w-[120px]" title="${dest}">${dest}</td>
+                                            ${analyticsData.optimizer.dates.map(d => {
+                                                const c = analyticsData.optimizer.matrix[dest][d];
+                                                let bg = c === 0 ? '' : c <= 2 ? 'bg-emerald-100 text-emerald-700' : c <= 4 ? 'bg-yellow-100 text-yellow-700' : 'bg-rose-100 text-rose-700 font-bold ring-1 ring-rose-300';
+                                                return `<td class="p-1 text-center">
+                                                    <span class="inline-block w-6 h-6 leading-6 text-[11px] rounded ${bg}">${c > 0 ? c : '<span class="text-slate-300">-</span>'}</span>
+                                                </td>`;
+                                            }).join('')}
+                                        </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                            <div class="mt-4 flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Capacity Guide</span>
+                                <div class="flex space-x-3 text-[10px] font-medium text-slate-600">
+                                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-100 mr-1.5 border border-emerald-200"></span> Optimal (1-2)</span>
+                                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-sm bg-yellow-100 mr-1.5 border border-yellow-200"></span> Heavy (3-4)</span>
+                                    <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-sm bg-rose-100 mr-1.5 border border-rose-300"></span> Overcrowded (5+)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
@@ -1342,22 +1334,6 @@
                         </div>
                     </div>
 
-                    <!-- STRATEGIC DEPLOYMENT TRACKING CARDS -->
-                    <div class="analytics-card border-rose-200">
-                        <div class="analytics-header bg-rose-50 text-rose-800 flex justify-between">
-                            <span>Destination Saturation (All Staff)</span>
-                        </div>
-                        <div class="analytics-list">${renderSaturationList(analyticsData.insights.oversaturatedDests)}</div>
-                    </div>
-
-                    <div class="analytics-card border-orange-200">
-                        <div class="analytics-header bg-orange-50 text-orange-800 flex justify-between">
-                            <span>Repetitive Travel (Same Place/Staff)</span>
-                        </div>
-                        <div class="analytics-list">${renderRepetitiveList(analyticsData.insights.repetitiveTravelers)}</div>
-                    </div>
-
-                    <!-- NEW DESTINATION TRACKING CARDS -->
                     <div class="analytics-card">
                         <div class="analytics-header flex justify-between"><span>At Actual Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.atDestination.length}</span></div>
                         <div class="analytics-list">${renderListRows(analyticsData.lists.atDestination, 'location', iconLocation)}</div>
