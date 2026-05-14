@@ -972,8 +972,8 @@
                 day.items.forEach((item, iIndex) => {
                     html += `
                     <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                        <input type="text" id="tev-part-${dIndex}-${iIndex}" placeholder="Particular (e.g. DARPO to Terminal)" value="${(item.particular || '').replace(/"/g, '&quot;')}" style="flex:2; padding:6px; font-size:11px; margin:0;">
-                        <input type="number" id="tev-amt-${dIndex}-${iIndex}" placeholder="0.00" value="${item.amount || ''}" style="flex:1; padding:6px; font-size:11px; margin:0;">
+                        <input type="text" id="tev-part-${dIndex}-${iIndex}" placeholder="Particular (e.g. DARPO to Terminal)" value="${(item.particular || '').replace(/"/g, '&quot;')}" oninput="tevData[${dIndex}].items[${iIndex}].particular = this.value" style="flex:2; padding:6px; font-size:11px; margin:0;">
+                        <input type="number" id="tev-amt-${dIndex}-${iIndex}" placeholder="0.00" value="${item.amount || ''}" oninput="tevData[${dIndex}].items[${iIndex}].amount = this.value" style="flex:1; padding:6px; font-size:11px; margin:0;">
                         ${day.items.length > 1 ? `<button class="btn-danger" style="padding:6px; margin:0; width:auto; font-size:10px;" onclick="window.removeTevItem(${dIndex}, ${iIndex})">✕</button>` : ''}
                     </div>
                     `;
@@ -1021,142 +1021,128 @@
                     chiefPos = "DIVISION CHIEF";
                 }
 
-                // Document Formatting
-                let curY = 15;
-                doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+                // Document Formatting EXACTLY like image
+                let curY = 20;
+                doc.setFont("helvetica", "normal"); doc.setFontSize(12);
                 doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, curY, {align: "center"});
                 
-                curY += 8;
-                doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                curY += 6;
+                doc.setFontSize(9);
                 doc.text("Pursuant to COA Circular No. 2017-001 dated June 19,2017", 105, curY, {align: "center"});
 
-                curY += 10;
-                // Main Header Table
-                doc.rect(15, curY, 180, 21);
-                doc.line(15, curY+7, 195, curY+7);
-                doc.line(15, curY+14, 195, curY+14);
+                curY += 8;
+                let startY = curY;
                 
-                doc.line(55, curY, 55, curY+21);
-                doc.line(115, curY, 115, curY+7);
-                doc.line(145, curY, 145, curY+7);
+                doc.rect(15, curY, 180, 15);
+                doc.line(15, curY+5, 195, curY+5);
+                doc.line(15, curY+10, 195, curY+10);
+                doc.line(55, curY, 55, curY+15);
+                doc.line(125, curY, 125, curY+5);
+                doc.line(155, curY, 155, curY+5);
 
-                doc.setFontSize(9);
-                doc.text("Name of Employee", 35, curY + 4.5, {align: "center"});
-                doc.setFont("helvetica", "bold");
-                doc.text(currentUser.full_name.toUpperCase(), 58, curY + 4.5);
-                doc.setFont("helvetica", "normal");
-                doc.text("Employee", 130, curY + 3.5, {align: "center"});
-                doc.text("No", 130, curY + 6.5, {align: "center"});
+                doc.text("Name of Employee", 35, curY + 3.5, {align: "center"});
+                doc.setFont("helvetica", "bold"); doc.text(currentUser.full_name.toUpperCase(), 57, curY + 3.5);
+                doc.setFont("helvetica", "normal"); doc.text("Employee", 140, curY + 2.5, {align: "center"}); doc.text("No", 140, curY + 4.5, {align: "center"});
                 
-                doc.text("Office", 35, curY + 11.5, {align: "center"});
-                doc.setFont("helvetica", "bold");
+                doc.text("Office", 35, curY + 8.5, {align: "center"});
                 let officeName = empUnit === "PARPO" || empDiv === "PARPO" ? "OFFICE OF THE PARPO II" : empUnit;
-                doc.text(officeName.toUpperCase(), 58, curY + 11.5);
+                doc.setFont("helvetica", "bold"); doc.text(officeName.toUpperCase(), 57, curY + 8.5);
                 
-                doc.setFont("helvetica", "normal");
-                doc.text("Division", 35, curY + 18.5, {align: "center"});
-                doc.setFont("helvetica", "bold");
-                doc.text(empDiv, 58, curY + 18.5);
-
-                curY += 21;
+                doc.setFont("helvetica", "normal"); doc.text("Division", 35, curY + 13.5, {align: "center"});
+                doc.setFont("helvetica", "bold"); doc.text(empDiv, 57, curY + 13.5);
+                
+                curY += 15;
                 // Particulars Header
-                doc.rect(15, curY, 180, 6);
-                doc.line(145, curY, 145, curY+6);
-                doc.text("PARTICULARS", 80, curY + 4, {align: "center"});
-                doc.text("AMOUNT", 170, curY + 4, {align: "center"});
+                doc.rect(15, curY, 180, 5);
+                doc.line(145, curY, 145, curY+5);
+                doc.text("PARTICULARS", 80, curY + 3.5, {align: "center"});
+                doc.text("AMOUNT", 170, curY + 3.5, {align: "center"});
+                curY += 5;
 
-                curY += 6;
                 // Dynamic Dates and Items Loop
                 let totalAmount = 0;
-                
                 for (let day of tevData) {
-                    // Date Subheader
-                    doc.rect(15, curY, 180, 6);
-                    doc.line(145, curY, 145, curY+6);
+                    doc.rect(15, curY, 180, 5);
+                    doc.line(145, curY, 145, curY+5);
                     doc.setFont("helvetica", "bold");
                     const formatDestDate = new Date(day.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.text(formatDestDate, 17, curY + 4);
-                    curY += 6;
+                    doc.text(formatDestDate, 17, curY + 3.5);
+                    curY += 5;
 
                     doc.setFont("helvetica", "normal");
                     for (let item of day.items) {
                         doc.rect(15, curY, 180, 5);
                         doc.line(145, curY, 145, curY+5);
                         doc.text(item.particular.toUpperCase(), 143, curY + 3.5, {align: "right"});
-                        let amt = parseFloat(item.amount).toFixed(2);
-                        totalAmount += parseFloat(item.amount);
-                        doc.text(amt, 193, curY + 3.5, {align: "right"});
+                        let amt = parseFloat(item.amount) || 0;
+                        totalAmount += amt;
+                        doc.text(amt.toFixed(2), 193, curY + 3.5, {align: "right"});
                         curY += 5;
                     }
                 }
 
                 // Total Row
-                doc.rect(15, curY, 180, 6);
-                doc.line(145, curY, 145, curY+6);
+                doc.rect(15, curY, 180, 5);
+                doc.line(145, curY, 145, curY+5);
                 doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                doc.text("T O T A L", 125, curY + 4.5, {align: "center"});
+                doc.text("T O T A L", 140, curY + 3.8, {align: "right"});
                 doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                doc.text(totalAmount.toFixed(2), 193, curY + 4.5, {align: "right"});
+                doc.text(totalAmount.toFixed(2), 193, curY + 3.8, {align: "right"});
+                curY += 5;
 
-                curY += 6;
-                let purposeBoxY = curY;
-                doc.rect(15, curY, 180, 40);
-                doc.setFont("helvetica", "bold");
-                doc.text("PURPOSE", 17, curY + 5);
+                // Purpose
+                doc.rect(15, curY, 180, 30);
+                doc.setFont("helvetica", "bold"); doc.text("PURPOSE", 17, curY + 5);
                 doc.setFont("helvetica", "normal");
                 
-                let pLines = doc.splitTextToSize(purpose, 170);
-                let py = curY + 15;
+                let pLines = doc.splitTextToSize(purpose, 175);
+                let py = curY + 12;
                 for(let line of pLines) {
                     doc.text(line, 17, py);
                     py += 4.5;
                 }
+                curY += 30;
 
-                curY += 40;
-                doc.rect(15, curY, 180, 20);
+                // Cert
+                doc.rect(15, curY, 180, 15);
                 doc.setFontSize(8);
                 const certStr = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited\npurpose; that above goods and services were acquired from parties not issuing receipts; And\nthat I am fully aware that willful falsification of statements is punishable by law.";
-                doc.text(certStr, 17, curY + 6);
+                doc.text(certStr, 17, curY + 5);
+                curY += 15;
 
-                curY += 20;
-                // Signature Block
+                // Signature Block exactly like image
                 doc.rect(15, curY, 180, 25);
-                doc.line(15, curY+6, 195, curY+6); // horiz
-                doc.line(15, curY+15, 195, curY+15); // horiz
-                doc.line(15, curY+20, 195, curY+20); // horiz
+                doc.line(15, curY+6, 195, curY+6); 
+                doc.line(15, curY+16, 195, curY+16);
+                doc.line(15, curY+20, 195, curY+20); 
 
-                doc.line(45, curY, 45, curY+25); // vert 1
-                doc.line(120, curY, 120, curY+25); // vert 2
+                doc.line(35, curY, 35, curY+25); // Signature label col
+                doc.line(115, curY, 115, curY+25); // Mid divider
 
-                doc.setFont("helvetica", "normal");
-                doc.text("Certified Correct:", 47, curY + 4.5);
-                doc.text("Noted by:", 122, curY + 4.5);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                doc.text("Certified Correct:", 37, curY + 4);
+                doc.text("Noted by:", 117, curY + 4);
 
-                doc.text("Signature", 30, curY + 11.5, {align: "center"});
-                
-                doc.text("Printed", 30, curY + 17.5, {align: "center"});
-                doc.text("Name", 30, curY + 19.5, {align: "center"});
+                doc.text("Signature", 25, curY + 12, {align: "center"});
+                doc.text("Printed", 25, curY + 17, {align: "center"});
+                doc.text("Name", 25, curY + 19, {align: "center"});
 
                 doc.setFont("helvetica", "bold");
-                doc.text(currentUser.full_name.toUpperCase(), 82.5, curY + 18.5, {align: "center"});
-                doc.text(chiefName.toUpperCase(), 157.5, curY + 18.5, {align: "center"});
+                doc.text(currentUser.full_name.toUpperCase(), 75, curY + 15, {align: "center"});
+                doc.text(chiefName.toUpperCase(), 155, curY + 15, {align: "center"});
 
-                doc.setFont("helvetica", "normal");
-                doc.text("Employee", 82.5, curY + 23.5, {align: "center"});
-                doc.text("Immediate Supervisor", 157.5, curY + 23.5, {align: "center"});
+                doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+                doc.text("Employee", 75, curY + 19, {align: "center"});
+                doc.text("Immediate Supervisor", 155, curY + 19, {align: "center"});
 
-                curY += 25;
-                doc.rect(15, curY, 180, 5);
-                doc.line(120, curY, 120, curY+5);
-                
                 const trDate = getPSTDate(); 
                 const finalSigDate = new Date(trDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-                doc.text(`Date: ${finalSigDate}`, 82.5, curY + 3.5, {align: "center"});
-                doc.text(`Date: ${finalSigDate}`, 157.5, curY + 3.5, {align: "center"});
+                doc.text(`Date: ${finalSigDate}`, 75, curY + 23.5, {align: "center"});
+                doc.text(`Date: ${finalSigDate}`, 155, curY + 23.5, {align: "center"});
 
                 // Big Outer frame correction
-                doc.rect(15, 15, 180, curY + 5 - 15);
+                doc.rect(15, startY, 180, (curY + 25) - startY);
 
                 window.closeTevModal();
                 await window.saveSecurePDF(doc, `TEV_Claim_${currentTevToNo}_Combined.pdf`);
@@ -1326,6 +1312,22 @@
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
+            
+            // SAVE EXISTING STATE BEFORE REDRAWING TO PREVENT DATA LOSS
+            const savedState = {};
+            itineraryDraft.forEach(it => {
+                const destEl = document.getElementById(it.destId);
+                const purpEl = document.getElementById(it.purpId);
+                const repEl = document.getElementById(it.repId);
+                const unitEl = it.unitId ? document.getElementById(it.unitId) : null;
+                savedState[it.date] = {
+                    dest: destEl ? destEl.value : '',
+                    purp: purpEl ? purpEl.value : '',
+                    rep: repEl ? repEl.value : '',
+                    unit: unitEl ? unitEl.value : ''
+                };
+            });
+
             container.innerHTML = ''; itineraryDraft = []; conflictsToProcess = []; 
             
             if (!fromDate || !toDate) return;
@@ -1346,6 +1348,7 @@
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
+                const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
@@ -1373,10 +1376,10 @@
                 const cardId = `card-${i}`;
                 const pbddSelect = isPBDD ? `
                     <select id="unit-${i}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        <option value="SIB/SMEDSS">SIB/SMEDSS</option>
-                        <option value="EDES">EDES</option>
-                        <option value="CRFPS">CRFPS</option>
-                        <option value="NA">NA (Direct to Chief)</option>
+                        <option value="SIB/SMEDSS" ${prev.unit === 'SIB/SMEDSS' ? 'selected' : ''}>SIB/SMEDSS</option>
+                        <option value="EDES" ${prev.unit === 'EDES' ? 'selected' : ''}>EDES</option>
+                        <option value="CRFPS" ${prev.unit === 'CRFPS' ? 'selected' : ''}>CRFPS</option>
+                        <option value="NA" ${prev.unit === 'NA' ? 'selected' : ''}>NA (Direct to Chief)</option>
                     </select>
                 ` : '';
 
@@ -1386,11 +1389,11 @@
                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
                             <button onclick="window.removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
                         </div>
-                        <input type="text" id="dest-${i}" placeholder="Destination">
+                        <input type="text" id="dest-${i}" placeholder="Destination" value="${prev.dest.replace(/"/g, '&quot;')}">
                         ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose"></textarea>
+                        <textarea id="purp-${i}" rows="2" placeholder="Purpose">${prev.purp}</textarea>
                         ${pbddSelect}
-                        <input type="text" id="rep-${i}" placeholder="Report To">
+                        <input type="text" id="rep-${i}" placeholder="Report To" value="${prev.rep.replace(/"/g, '&quot;')}">
                     </div>`;
                 itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, unitId: isPBDD ? `unit-${i}` : null, cardId, hasPSO });
                 currentDt.setDate(currentDt.getDate() + 1);
