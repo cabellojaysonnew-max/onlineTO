@@ -990,7 +990,7 @@
                     isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
                     supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
                     supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth),
+                    supabaseClient.from('itinerary').select('to_no, destination, travel_date').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth),
                     supabaseClient.from('travel_orders').select('to_no, emp_id').eq('status', 'APPROVED'),
                     supabaseClient.from('itinerary').select('to_no, destination, travel_date')
                 ]);
@@ -1049,7 +1049,6 @@
                     const emp = validEmps.find(e => e.emp_id === empId);
                     if(!emp) return;
                     
-                    // BUG FIX COMPLETED: Grab ALL approved TOs for the user, then find the specific one happening today.
                     const empActiveTOs = activeTOs.filter(t => t.emp_id === empId);
                     const itinForEmp = itinsToday.find(i => empActiveTOs.some(t => t.to_no === i.to_no));
                     
@@ -1180,10 +1179,24 @@
                 );
                 const stratEmpIds = stratEmps.map(e => e.emp_id);
                 
+                // NEW: Calculate percentage traveled this month
+                const validMonthToNos = new Set(monthItineraries.map(i => i.to_no));
+                const traveledThisMonthIds = new Set();
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && validMonthToNos.has(t.to_no) && stratEmpIds.includes(t.emp_id)) {
+                        traveledThisMonthIds.add(t.emp_id);
+                    }
+                });
+                const percentTraveled = stratEmpIds.length > 0 ? Math.round((traveledThisMonthIds.size / stratEmpIds.length) * 100) : 0;
+
                 const allowedPlaces = ["Iriga City/Buhi", "Baao", "BaNaBa", "Bula", "Libmanan I, II, III, and IV", "Minalabac", "Pamplona", "Pasacao", "SanMilGaz", "Cabusao", "Del Gallego", "Lupi", "Ragay", "Sipocot I, II and II", "Regional Office"];
                 
                 let placeFrequencyCounts = {};
-                allowedPlaces.forEach(p => placeFrequencyCounts[p] = 0);
+                let monthPlaceFrequencyCounts = {}; 
+                allowedPlaces.forEach(p => {
+                    placeFrequencyCounts[p] = 0;
+                    monthPlaceFrequencyCounts[p] = 0;
+                });
                 let currentWeekOverlaps = {};
                 
                 const sWeek = new Date(nowManilaObj);
@@ -1198,19 +1211,35 @@
                         const matchedPlace = allowedPlaces.find(ap => i.destination.toLowerCase().includes(ap.toLowerCase()) || ap.toLowerCase().includes(i.destination.toLowerCase()));
                         if (matchedPlace) {
                             placeFrequencyCounts[matchedPlace]++;
+                            
                             const iDate = new Date(i.travel_date);
                             if (iDate >= sWeek && iDate <= eWeek) {
                                 if (!currentWeekOverlaps[matchedPlace]) currentWeekOverlaps[matchedPlace] = 0;
                                 currentWeekOverlaps[matchedPlace]++;
                             }
+
+                            // Track strictly this month
+                            const iDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(iDate);
+                            if (iDateStr >= firstDayOfMonth && iDateStr <= lastDayOfMonth) {
+                                monthPlaceFrequencyCounts[matchedPlace]++;
+                            }
                         }
                     }
                 });
                 
-                let sortedPlaces = Object.entries(placeFrequencyCounts).sort((a, b) => b[1] - a[1]);
-                let topStratPlaces = sortedPlaces.slice(0, 3).filter(p => p[1] > 0).map(p => p[0]);
-                let leastStratPlaces = sortedPlaces.slice(-4).map(p => p[0]);
+                let sortedPlacesMonth = Object.entries(monthPlaceFrequencyCounts).sort((a, b) => b[1] - a[1]);
+                let topStratPlacesMonth = sortedPlacesMonth.slice(0, 3).filter(p => p[1] > 0).map(p => p[0]);
+                let unvisitedPlacesMonth = sortedPlacesMonth.filter(p => p[1] === 0).map(p => p[0]);
+                
                 let overlapWarnings = Object.entries(currentWeekOverlaps).filter(p => p[1] >= 3).map(p => `${p[0]} (${p[1]} personnel)`);
+
+                let unvisitedText = unvisitedPlacesMonth.length > 0 
+                    ? `Critical monitoring gaps remain, with <strong>ZERO deployments</strong> this month to: <strong class="text-rose-600 font-black">${unvisitedPlacesMonth.join(', ')}</strong>.` 
+                    : `All designated municipalities have been visited at least once this month.`;
+
+                let deploymentSuggestion = unvisitedPlacesMonth.length > 0
+                    ? `Mandate upcoming travel orders to prioritize the unvisited areas (${unvisitedPlacesMonth.slice(0, 3).join(', ')}). Limit further non-essential deployments to ${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(' and ') : 'high-frequency zones'}.`
+                    : `Maintain current balanced deployment patterns while ensuring follow-up visits to low-frequency areas.`;
 
                 let strategyHtml = `
                 <div class="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5 rounded-2xl shadow-[0_4px_12px_rgba(79,70,229,0.06)] mt-6 mb-4 relative overflow-hidden">
@@ -1218,19 +1247,21 @@
                         <span class="text-2xl drop-shadow-sm">🧠</span>
                         <h3 class="font-black text-indigo-900 text-sm uppercase tracking-widest leading-none">AI Routing Strategy</h3>
                     </div>
-                    <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider border-b border-indigo-100 pb-2 mb-3">Target: Permanent | CS1 | Active</p>
+                    <div class="flex justify-between items-center border-b border-indigo-100 pb-2 mb-3">
+                        <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Target: Permanent | CS1 | Active</p>
+                        <span class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">${percentTraveled}% Traveled This Month</span>
+                    </div>
                     <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-3 opacity-90">
-                        Historical analysis of all travel data indicates skewed regional deployment. High-frequency visitation zones include <strong class="text-indigo-600 font-black">${topStratPlaces.length > 0 ? topStratPlaces.join(', ') : 'no significant data'}</strong>. Conversely, critical monitoring gaps remain in <strong class="text-indigo-600 font-black">${leastStratPlaces.join(', ')}</strong>.
+                        Monthly analysis indicates that <strong>${percentTraveled}%</strong> of the target personnel (${traveledThisMonthIds.size} out of ${stratEmpIds.length}) have traveled. High-frequency visitation zones include <strong class="text-indigo-600 font-black">${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(', ') : 'no significant data'}</strong>. ${unvisitedText}
                     </p>
                     <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-4 opacity-90">
-                        <strong>Management Action:</strong> Mandate a staggered weekly travel schedule. Disperse personnel targeting the same geographic clusters to ensure comprehensive regional coverage and optimal constituent support simultaneously.
+                        <strong>Management Action:</strong> ${deploymentSuggestion} Disperse personnel targeting the same geographic clusters to ensure comprehensive regional coverage and optimal constituent support simultaneously.
                     </p>
                     ${overlapWarnings.length > 0 
                         ? `<div class="bg-white border-l-4 border-rose-500 p-3 rounded-lg shadow-sm text-[10px] text-rose-700 font-bold leading-tight">⚠️ OVERLAP DETECTED THIS WEEK: Intense personnel concentration in ${overlapWarnings.join(', ')}. Recommend rescheduling select itineraries to balance area presence.</div>` 
                         : `<div class="bg-white border-l-4 border-emerald-500 p-3 rounded-lg shadow-sm text-[10px] text-emerald-700 font-bold leading-tight">✅ Excellent distribution detected for the current week. No severe overlaps in targeted municipalities.</div>`}
                 </div>`;
 
-                // BUG FIX COMPLETED: listOutsideDestination variable assignment corrected.
                 analyticsData = { 
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
