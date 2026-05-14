@@ -2,115 +2,418 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DAR CS I - Official Verifier</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Document Verification - DAR CS I</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { max-width: 500px; width: 100%; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-top: 5px solid #D4AF37; }
-        h2 { color: #003811; text-align: center; margin-bottom: 5px; }
-        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
-        .result-card { display: none; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e5e7eb; }
-        .legit { border-left: 5px solid #16a34a; background: #f0fdf4; }
-        .invalid { border-left: 5px solid #dc2626; background: #fef2f2; display: block; }
-        .info-label { font-size: 11px; color: #6b7280; font-weight: bold; text-transform: uppercase; }
-        .info-value { font-size: 16px; color: #1f2937; margin-bottom: 10px; font-weight: 500; }
-        .status-stamp { font-weight: bold; color: #16a34a; font-size: 18px; text-align: center; margin-bottom: 15px; display: block; }
+        :root {
+            --dar-green: #003811;
+            --dar-light: #006400;
+            --dar-gold: #D4AF37;
+            --bg-main: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { 
+            margin: 0; 
+            background-color: var(--bg-main); 
+            color: var(--text-main); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .card { 
+            background: var(--card-bg); 
+            width: 100%; 
+            max-width: 450px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            border-top: 6px solid var(--dar-gold);
+            overflow: hidden;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header {
+            background: var(--dar-green);
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 11px;
+            color: var(--dar-gold);
+            font-weight: bold;
+        }
+
+        .content {
+            padding: 30px 25px;
+        }
+
+        .status-container {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .icon-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px auto;
+        }
+
+        .icon-success { background: #dcfce7; color: #166534; }
+        .icon-warning { background: #fef9c3; color: #854d0e; }
+        .icon-danger { background: #fee2e2; color: #991b1b; }
+        .icon-loading { background: #e5e7eb; color: #4b5563; }
+
+        .badge { 
+            font-size: 12px; 
+            padding: 6px 14px; 
+            border-radius: 50px; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            display: inline-block;
+        }
+        
+        .bg-approved { background: #ecfdf5; color: #166534; border: 1px solid #a7f3d0; }
+        .bg-pending { background: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
+        .bg-cancelled { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+        .doc-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--dar-green);
+            margin-bottom: 5px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .info-item {
+            background: #f9fafb;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--dar-green);
+        }
+
+        .info-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            word-wrap: break-word;
+        }
+
+        .destination-list {
+            margin: 5px 0 0 0;
+            padding-left: 15px;
+            font-size: 13px;
+            color: var(--text-main);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 15px;
+            background: #f3f4f6;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            border: 3px solid rgba(0,0,0,0.1);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border-left-color: var(--dar-green);
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #error-msg { display: none; color: var(--danger); font-weight: bold; text-align: center; }
+        #doc-details { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>DOCUMENT VERIFIER</h2>
-    <p style="text-align: center; font-size: 12px; color: gray; margin-bottom: 20px;">Scan QR Code to check legitimacy</p>
-    
-    <div id="reader"></div>
+    <div class="card">
+        <div class="header">
+            <h1>Department of Agrarian Reform</h1>
+            <p>CAMARINES SUR I - VERIFICATION PORTAL</p>
+        </div>
 
-    <div id="result" class="result-card">
-        <span id="status-text" class="status-stamp">✓ LEGITIMATE DOCUMENT</span>
+        <div class="content">
+            <div id="loading-state" class="status-container" style="border-bottom: none;">
+                <div class="icon-circle icon-loading">
+                    <div class="spinner"></div>
+                </div>
+                <div class="doc-title" style="color: var(--text-muted);">Verifying Document...</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">Please wait while we securely retrieve the records from the DAR database.</div>
+            </div>
+
+            <div id="error-state" class="status-container" style="display: none; border-bottom: none;">
+                <div class="icon-circle icon-danger">
+                    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </div>
+                <div class="doc-title" style="color: var(--danger);">Verification Failed</div>
+                <div id="error-text" style="font-size: 13px; color: var(--text-muted); margin-top: 10px;">Document not found or has been invalidated.</div>
+            </div>
+
+            <div id="doc-details">
+                <div class="status-container">
+                    <div id="status-icon" class="icon-circle icon-success">
+                        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <div class="doc-title" id="display-title">Document Title</div>
+                    <div id="display-doc-no" style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; font-family: monospace;"></div>
+                    <span id="display-status" class="badge bg-approved">APPROVED</span>
+                </div>
+
+                <div class="info-grid" id="info-grid">
+                    <!-- Dynamic Details Injected Here -->
+                </div>
+            </div>
+        </div>
         
-        <div class="info-label">Document Type</div>
-        <div id="res-type" class="info-value">---</div>
-
-        <div class="info-label">Employee Involved</div>
-        <div id="res-emp" class="info-value">---</div>
-
-        <div class="info-label">Date/Period</div>
-        <div id="res-date" class="info-value">---</div>
-
-        <div class="info-label">Destination / Remarks</div>
-        <div id="res-dest" class="info-value">---</div>
+        <div class="footer">
+            Official E-Signature & QR Verification System<br>
+            © <script>document.write(new Date().getFullYear())</script> DAR Camarines Sur I
+        </div>
     </div>
-</div>
 
-<script>
-    const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-    const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo';
-    const supabase = libsupabase.createClient(supabaseUrl, supabaseKey);
+    <script>
+        // SUPABASE CONFIGURATION
+        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    async function onScanSuccess(decodedText) {
-        // Stop scanning once something is found
-        html5QrcodeScanner.clear();
-        const resultDiv = document.getElementById('result');
-        const statusText = document.getElementById('status-text');
-        
-        try {
-            // 1. Try Travel Order (Format: YYYY-DIV-00000)
-            if (decodedText.includes('-')) {
-                const { data: toData } = await supabase.from('travel_orders').select('emp_name, to_no, status').eq('to_no', decodedText).maybeSingle();
-                if (toData) {
-                    const { data: itin } = await supabase.from('itinerary').select('travel_date, destination').eq('to_no', decodedText).order('travel_date');
-                    showResult("TRAVEL ORDER", toData.emp_name, `${itin[0].travel_date} to ${itin[itin.length-1].travel_date}`, itin.map(i => i.destination).join(', '));
-                    return;
+        document.addEventListener("DOMContentLoaded", () => {
+            verifyDocument();
+        });
+
+        const formatDate = (dateStr) => {
+            if (!dateStr) return "N/A";
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            return new Date(dateStr).toLocaleDateString('en-US', options);
+        };
+
+        const showError = (message) => {
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('doc-details').style.display = 'none';
+            document.getElementById('error-state').style.display = 'block';
+            document.getElementById('error-text').innerText = message;
+        };
+
+        const updateStatusUI = (status) => {
+            const badge = document.getElementById('display-status');
+            const iconWrap = document.getElementById('status-icon');
+            
+            badge.innerText = status.replace(/_/g, ' ');
+            
+            if (status.includes('APPROVED') || status.includes('PROCESSED')) {
+                badge.className = 'badge bg-approved';
+                iconWrap.className = 'icon-circle icon-success';
+                iconWrap.innerHTML = `<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>`;
+            } else if (status.includes('CANCELLED') || status.includes('DISAPPROVED')) {
+                badge.className = 'badge bg-cancelled';
+                iconWrap.className = 'icon-circle icon-danger';
+                iconWrap.innerHTML = `<svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+            } else {
+                badge.className = 'badge bg-pending';
+                iconWrap.className = 'icon-circle icon-warning';
+                iconWrap.innerHTML = `<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+            }
+        };
+
+        async function verifyDocument() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const docId = urlParams.get('id');
+            
+            if (!docId) {
+                return showError("Invalid or missing Document ID.");
+            }
+
+            // UUID pattern for Leave Forms and DTR Forms
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docId);
+
+            try {
+                if (isUUID) {
+                    // 1. Check Leave Ledger
+                    const { data: leave, error: leaveErr } = await supabase.from('leave_ledger').select('*').eq('transaction_id', docId).maybeSingle();
+                    
+                    if (leave) {
+                        const { data: emp } = await supabase.from('employees').select('full_name, division, position').eq('emp_id', leave.emp_id).maybeSingle();
+                        renderLeave(leave, emp);
+                        return;
+                    }
+
+                    // 2. Fallback check for CS Form 48 (DTR)
+                    const { data: dtr, error: dtrErr } = await supabase.from('dtr_generations').select('*').eq('id', docId).maybeSingle();
+                    
+                    if (dtr) {
+                        const { data: emp } = await supabase.from('employees').select('full_name, division').eq('emp_id', dtr.emp_id).maybeSingle();
+                        renderDTR(dtr, emp);
+                        return;
+                    }
+
+                    showError("Document not found in the official records.");
+
+                } else {
+                    // 3. Assume Travel Order (TO Format: YYYY-DIV-XXXXX)
+                    const { data: toData, error: toErr } = await supabase.from('travel_orders').select('*').eq('to_no', docId);
+                    
+                    if (toData && toData.length > 0) {
+                        const { data: itinData } = await supabase.from('itinerary').select('*').eq('to_no', docId).order('travel_date');
+                        renderTO(toData, itinData);
+                    } else {
+                        showError("Travel Order not found or has been deleted.");
+                    }
                 }
+            } catch (e) {
+                showError("An error occurred during verification. Please try again.");
+                console.error(e);
             }
-
-            // 2. Try Leave Application (UUID)
-            const { data: leaveData } = await supabase.from('leave_ledger').select('emp_id, type, start_date, end_date, remarks').eq('transaction_id', decodedText).maybeSingle();
-            if (leaveData) {
-                const { data: emp } = await supabase.from('employees').select('full_name').eq('emp_id', leaveData.emp_id).maybeSingle();
-                showResult("LEAVE FORM (CS FORM 6)", emp.full_name, `${leaveData.start_date} to ${leaveData.end_date}`, `${leaveData.type}: ${leaveData.remarks}`);
-                return;
-            }
-
-            // 3. Try Form 48 (UUID mapping to dtr_generations)
-            const { data: dtrData } = await supabase.from('dtr_generations').select('emp_id, month, year').eq('id', decodedText).maybeSingle();
-            if (dtrData) {
-                const { data: emp } = await supabase.from('employees').select('full_name').eq('emp_id', dtrData.emp_id).maybeSingle();
-                showResult("DAILY TIME RECORD (FORM 48)", emp.full_name, `${dtrData.month} ${dtrData.year}`, "Official Attendance Record");
-                return;
-            }
-
-            // If nothing found
-            throw new Error("Invalid Record");
-
-        } catch (err) {
-            resultDiv.style.display = 'block';
-            resultDiv.className = 'result-card invalid';
-            statusText.innerText = "✖ INVALID DOCUMENT";
-            statusText.style.color = "#dc2626";
-            document.getElementById('res-type').innerText = "Unknown";
-            document.getElementById('res-emp').innerText = "Not Found in Database";
-            document.getElementById('res-date').innerText = "---";
-            document.getElementById('res-dest').innerText = "---";
         }
-    }
 
-    function showResult(type, emp, date, dest) {
-        const resultDiv = document.getElementById('result');
-        resultDiv.style.display = 'block';
-        resultDiv.className = 'result-card legit';
-        document.getElementById('res-type').innerText = type;
-        document.getElementById('res-emp').innerText = emp;
-        document.getElementById('res-date').innerText = date;
-        document.getElementById('res-dest').innerText = dest;
-    }
+        function renderTO(toData, itinData) {
+            const to = toData[0]; // Reference record
+            const names = toData.map(t => t.emp_name.toUpperCase()).join('<br>');
+            
+            document.getElementById('display-title').innerText = "Official Travel Order";
+            document.getElementById('display-doc-no').innerText = `TO No: ${to.to_no}`;
+            updateStatusUI(to.status);
 
-    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess);
-</script>
+            let itinHtml = '<ul class="destination-list">';
+            if (itinData && itinData.length > 0) {
+                itinData.forEach(it => {
+                    itinHtml += `<li><strong>${formatDate(it.travel_date)}:</strong> ${it.destination}</li>`;
+                });
+            } else {
+                itinHtml += `<li>No itinerary details found.</li>`;
+            }
+            itinHtml += '</ul>';
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" id="libsupabase"></script>
+            const grid = document.getElementById('info-grid');
+            grid.innerHTML = `
+                <div class="info-item">
+                    <div class="info-label">Personnel</div>
+                    <div class="info-value">${names}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Destination & Itinerary</div>
+                    <div class="info-value">${itinHtml}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Means of Transport</div>
+                    <div class="info-value">${to.transport || 'Not Specified'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Date Issued</div>
+                    <div class="info-value">${formatDate(to.created_at)}</div>
+                </div>
+            `;
+
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('doc-details').style.display = 'block';
+        }
+
+        function renderLeave(leave, emp) {
+            document.getElementById('display-title').innerText = "Application for Leave";
+            document.getElementById('display-doc-no').innerText = `ID: ${leave.transaction_id.substring(0, 8).toUpperCase()}`;
+            updateStatusUI(leave.transaction_type);
+
+            const grid = document.getElementById('info-grid');
+            grid.innerHTML = `
+                <div class="info-item">
+                    <div class="info-label">Applicant Name</div>
+                    <div class="info-value">${emp ? emp.full_name.toUpperCase() : 'Unknown Personnel'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Type of Leave</div>
+                    <div class="info-value" style="color: var(--dar-green);">${leave.type}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Inclusive Dates</div>
+                    <div class="info-value">${formatDate(leave.start_date)} to ${formatDate(leave.end_date)}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Days Applied</div>
+                    <div class="info-value">${leave.debit} Working Day(s)</div>
+                </div>
+                <div class="info-item" style="border-left-color: var(--dar-gold);">
+                    <div class="info-label">Details / Remarks</div>
+                    <div class="info-value" style="font-size: 13px;">${leave.remarks || 'None'}</div>
+                </div>
+            `;
+
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('doc-details').style.display = 'block';
+        }
+
+        function renderDTR(dtr, emp) {
+            document.getElementById('display-title').innerText = "CS Form 48 (DTR)";
+            document.getElementById('display-doc-no').innerText = `Val ID: ${dtr.id.substring(0, 8).toUpperCase()}`;
+            updateStatusUI('AUTHENTICATED'); // DTRs are considered authentic if they exist in the DB
+
+            const grid = document.getElementById('info-grid');
+            grid.innerHTML = `
+                <div class="info-item">
+                    <div class="info-label">Employee Name</div>
+                    <div class="info-value">${emp ? emp.full_name.toUpperCase() : 'Unknown Personnel'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Period Covered</div>
+                    <div class="info-value">${dtr.month} ${dtr.year}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Division</div>
+                    <div class="info-value">${emp ? emp.division : 'N/A'}</div>
+                </div>
+                <div class="info-item" style="border-left-color: var(--dar-gold);">
+                    <div class="info-label">Generated On</div>
+                    <div class="info-value">${formatDate(dtr.generated_at)}</div>
+                </div>
+            `;
+
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('doc-details').style.display = 'block';
+        }
+    </script>
 </body>
 </html>
