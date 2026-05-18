@@ -67,7 +67,9 @@
 
 
 <xmp id="employee_portal" style="display: none;">
-<!DOCTYPE html>
+
+    
+    <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -203,7 +205,6 @@
             </div>
         </div>
 
-        <!-- NEW COMBINED TEV BUILDER MODAL -->
         <div id="tevModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 1000; justify-content:center; align-items:center; overflow-y: auto; padding: 20px 0;">
             <div class="card" style="width: 95%; max-width: 600px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); margin: auto;">
                 <button onclick="window.closeTevModal()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
@@ -217,8 +218,7 @@
                 <label style="margin: 0; margin-bottom: 5px;">Dynamic Itinerary / Particulars</label>
                 
                 <div id="tev-items-container" style="background: #f9fafb; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb; max-height: 450px; overflow-y: auto; margin-bottom: 15px;">
-                    <!-- Dynamic Items Go Here grouped by Date -->
-                </div>
+                    </div>
                 
                 <button class="btn btn-primary" onclick="window.generateTEVPDF()">📄 GENERATE COMBINED TEV FORM</button>
             </div>
@@ -234,7 +234,7 @@
                 <span id="btn-clock-text">→] Clock In</span>
             </button>
 
-            <div style="font-size: 12px; font-weight: bold; color: #6b7280; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; padding-left: 5px;">RECENT HISTORY</div>
+            <div style="font-size: 12px; font-weight: bold; color: #6b7280; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; padding-left: 5px;">TODAY'S LOG</div>
             <div class="card" id="att-history-card" style="padding: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                     <div style="font-weight: bold; font-size: 16px; color: var(--text-main);" id="att-emp-name"></div>
@@ -268,7 +268,10 @@
             </div>
 
             <div class="card">
-                <h4>2. Logistics</h4>
+                <h4>2. Logistics & Scope</h4>
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 10px; font-size: 12px; color: var(--danger);">
+                    <input type="checkbox" id="to-outside-bicol" style="width: auto; margin: 0; padding: 0;"> OUTSIDE BICOL REGION
+                </label>
                 <label>Means of Transportation</label>
                 <select id="to-transport">
                     <option value="LAND">Public Utility (LAND)</option>
@@ -759,6 +762,7 @@
                 btn.disabled = false;
                 btn.style.background = "var(--success)";
                 btnText.innerText = "→] Clock In";
+                container.innerHTML = '<div style="font-size:11px; color:gray; text-align:center;">No data to show</div>';
             } else if (logCount >= 4) {
                 statusBadge.innerText = "Max Reached";
                 statusBadge.style.background = "#f3f4f6"; statusBadge.style.color = "#374151";
@@ -1079,7 +1083,7 @@
                 if (empDiv === "PARPO") {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                } else if (empUnit.includes("DARMO")) {
                     const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
                     if (mData) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
@@ -1228,10 +1232,10 @@
             
             const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
             
-            let vl_deduct = 0;
-            let sl_deduct = 0;
-            let spl_deduct = 0;
-            let wl_deduct = 0;
+            let vl_net = 0;
+            let sl_net = 0;
+            let spl_net = 0;
+            let wl_net = 0;
             let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
                 <tr style="background: var(--dar-green); color: white;">
                     <th style="padding: 5px; text-align: left;">Date</th>
@@ -1247,33 +1251,35 @@
 
                     hasDeductions = true;
                     const l_type = (l.type || '').toUpperCase();
-                    const debit_val = parseFloat(l.debit || 0);
-
-                    if (l_type.includes('SICK')) sl_deduct += debit_val;
-                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_deduct += debit_val;
-                    else if (l_type.includes('WELLNESS')) wl_deduct += debit_val;
-                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_deduct += debit_val;
-
                     let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    
+                    let rawVal = isCredit ? (l.credit || l.debit || "0") : (l.debit || "0");
+                    let val = parseFloat(String(rawVal).trim()) || 0;
+                    let multiplier = isCredit ? 1 : -1;
+
+                    if (l_type.includes('SICK')) sl_net += (val * multiplier);
+                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net += (val * multiplier);
+                    else if (l_type.includes('WELLNESS')) wl_net += (val * multiplier);
+                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_net += (val * multiplier);
+
                     let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
                     let tSign = isCredit ? '+' : '-';
-                    let displayVal = isCredit ? (l.credit || l.debit || 0) : (l.debit || 0);
 
                     deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                         <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                         <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
+                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${val}</td>
                         <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                     </tr>`;
                 });
             }
             deductionsHtml += `</table>`;
-            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No approved deductions found.</p>`;
+            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) - vl_deduct).toFixed(2) : 0;
-            let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) - sl_deduct).toFixed(2) : 0;
-            let currentSPL = emp ? Math.max(0, parseFloat(emp.spl_balance || 0) - spl_deduct).toFixed(2) : 0;
-            let currentWL = emp ? Math.max(0, parseFloat(emp.wl_balance || 0) - wl_deduct).toFixed(2) : 0;
+            let currentVL = emp ? Math.max(0, (parseFloat(String(emp.vl_balance || "0").trim()) || 0) + vl_net).toFixed(2) : 0;
+            let currentSL = emp ? Math.max(0, (parseFloat(String(emp.sl_balance || "0").trim()) || 0) + sl_net).toFixed(2) : 0;
+            let currentSPL = emp ? Math.max(0, (parseFloat(String(emp.spl_balance || "0").trim()) || 0) + spl_net).toFixed(2) : 0;
+            let currentWL = emp ? Math.max(0, (parseFloat(String(emp.wl_balance || "0").trim()) || 0) + wl_net).toFixed(2) : 0;
 
             if(emp) {
                 container.innerHTML = `
@@ -1412,6 +1418,17 @@
             let hasPSO = false;
 
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
+            const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+
+            let pbddOptions = '';
+            if (userUnit) {
+                pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
+            }
+            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
+                if (u !== userUnit) {
+                    pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
+                }
+            });
 
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
@@ -1444,10 +1461,7 @@
                 const cardId = `card-${i}`;
                 const pbddSelect = isPBDD ? `
                     <select id="unit-${i}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        <option value="SIB/SMEDSS" ${prev.unit === 'SIB/SMEDSS' ? 'selected' : ''}>SIB/SMEDSS</option>
-                        <option value="EDES" ${prev.unit === 'EDES' ? 'selected' : ''}>EDES</option>
-                        <option value="CRFPS" ${prev.unit === 'CRFPS' ? 'selected' : ''}>CRFPS</option>
-                        <option value="NA" ${prev.unit === 'NA' ? 'selected' : ''}>NA (Direct to Chief)</option>
+                        ${pbddOptions.replace(`value="${prev.unit}"`, `value="${prev.unit}" selected`)}
                     </select>
                 ` : '';
 
@@ -1578,10 +1592,14 @@
                     routeStatus = "PENDING_CHIEF";
                 }
 
+                let baseRemarks = [];
+                if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
+                if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
+
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
                     status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
-                    remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
+                    remarks: baseRemarks.join(" | ")
                 }));
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
@@ -1598,6 +1616,7 @@
                 document.getElementById('itin-to').value = '';
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
                 document.getElementById('to-transport').selectedIndex = 0;
+                document.getElementById('to-outside-bicol').checked = false;
                 personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
                 window.renderPersonnel();
                 itineraryDraft = [];
@@ -1654,6 +1673,7 @@
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
             
             document.getElementById('to-transport').value = to.transport;
+            document.getElementById('to-outside-bicol').checked = to.remarks && to.remarks.includes("OUTSIDE BICOL");
             if (itin.length > 0) {
                 document.getElementById('itin-from').value = itin[0].travel_date;
                 document.getElementById('itin-to').value = itin[itin.length - 1].travel_date;
@@ -1662,15 +1682,23 @@
             const container = document.getElementById('dynamic-itin-fields');
             container.innerHTML = ''; itineraryDraft = [];
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
+            const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+            
+            let pbddOptions = '';
+            if (userUnit) {
+                pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
+            }
+            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
+                if (u !== userUnit) {
+                    pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
+                }
+            });
 
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
                 const pbddSelect = isPBDD ? `
                     <select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        <option value="SIB/SMEDSS">SIB/SMEDSS</option>
-                        <option value="EDES">EDES</option>
-                        <option value="CRFPS">CRFPS</option>
-                        <option value="NA">NA (Direct to Chief)</option>
+                        ${pbddOptions}
                     </select>
                 ` : '';
 
@@ -1900,9 +1928,6 @@
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("Recommended by:", 20, 156);
-                    
                     const renderSigs = (list, imgs, startX, width) => {
                         if (list.length === 0) return;
                         const count = list.length;
@@ -1929,17 +1954,40 @@
                         }
                     };
 
-                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
-                    renderSigs(dc_list, dc_imgs, 95, 60);
+                    if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                        doc.text("Recommending Approval:", 20, 156);
+                        
+                        // Division Chief Signature
+                        renderSigs(dc_list, dc_imgs, 20, 60);
+                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("DIVISION CHIEF", 52, 172, {align: 'center'});
+                        
+                        // PARPO II Signature
+                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 142, 30, 30); } catch(e){} }
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                        doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
+                        doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
+                        
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+                        doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                        doc.text("Regional Director", 128, 206);
+                    } else {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                        doc.text("Recommended by:", 20, 156);
+                        
+                        if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                        renderSigs(dc_list, dc_imgs, 95, 60);
 
-                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
-                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
+                        doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 114, 202);
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 128, 206);
+                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                        doc.text("RICARDO C. GARCIA", 114, 202);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                        doc.text("PARPO II", 128, 206);
+                    }
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -1966,7 +2014,6 @@
                 const { data: tos } = await supabase.from('travel_orders')
                     .select('*')
                     .eq('emp_id', currentUser.emp_id)
-                    .not('status', 'ilike', '%CANCELLED%')
                     .not('status', 'ilike', '%DISAPPROVED%')
                     .order('created_at', {ascending: false})
                     .limit(30);
@@ -1974,7 +2021,7 @@
                 let html = '';
                 for(let to of tos || []) {
                     const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
-                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : 'bg-pending';
+                    const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCELLED') ? 'bg-cancelled' : 'bg-pending');
                     const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
 
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
@@ -2108,14 +2155,14 @@
 
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
-                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
                     if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
                     }
                 });
                 
@@ -2149,15 +2196,15 @@
                 const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
-                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
                     if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
                     }
                 });
                 
@@ -2700,7 +2747,7 @@
                 if (empDiv === "PARPO") {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                } else if (empUnit.includes("DARMO")) {
                     const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
                     if (mData) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
@@ -2929,7 +2976,9 @@
         };
     </script>
 </body>
-</html>   
+</html>
+    
+    
 </xmp>
 
 
