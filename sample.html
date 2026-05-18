@@ -1151,15 +1151,16 @@
                 alert("PDF Gen Error: " + e.message);
             }
         };
-            window.loadCredits = async function() {
+
+        window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             
-            // Added 'MANUAL INPUT' to ensure HR updates from the transition period are fetched
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT']);
+            // Manual input is considered the base balance from February 2026, so we disregard 'MANUAL INPUT' data in ledger movements.
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
             
             let vl_net = 0;
             let sl_net = 0;
@@ -1176,7 +1177,6 @@
 
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
-                    // Removed the guard clause that was blocking MANUAL INPUTs from processing
                     hasDeductions = true;
                     const l_type = (l.type || '').toUpperCase();
                     
@@ -1266,7 +1266,9 @@
                 ${ctoHtml}
             `;
         };
-      
+
+
+        
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
             const img = document.getElementById('my-qr-img');
