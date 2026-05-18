@@ -197,7 +197,10 @@
             </div>
 
             <div class="card">
-                <h4>2. Logistics</h4>
+                <h4>2. Logistics & Scope</h4>
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 10px; font-size: 12px; color: var(--danger);">
+                    <input type="checkbox" id="to-outside-bicol" style="width: auto; margin: 0; padding: 0;"> OUTSIDE BICOL REGION
+                </label>
                 <label>Means of Transportation</label>
                 <select id="to-transport">
                     <option value="LAND">Public Utility (LAND)</option>
@@ -1009,7 +1012,7 @@
                 if (empDiv === "PARPO") {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                } else if (empUnit.includes("DARMO")) {
                     const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
                     if (mData) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
@@ -1517,10 +1520,14 @@
                     routeStatus = "PENDING_CHIEF";
                 }
 
+                let baseRemarks = [];
+                if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
+                if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
+
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
                     status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
-                    remarks: itineraryDraft.some(it => it.hasPSO) ? "EXISTING PSO" : ""
+                    remarks: baseRemarks.join(" | ")
                 }));
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
@@ -1537,6 +1544,7 @@
                 document.getElementById('itin-to').value = '';
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
                 document.getElementById('to-transport').selectedIndex = 0;
+                document.getElementById('to-outside-bicol').checked = false;
                 personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
                 window.renderPersonnel();
                 itineraryDraft = [];
@@ -1593,6 +1601,7 @@
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
             
             document.getElementById('to-transport').value = to.transport;
+            document.getElementById('to-outside-bicol').checked = to.remarks && to.remarks.includes("OUTSIDE BICOL");
             if (itin.length > 0) {
                 document.getElementById('itin-from').value = itin[0].travel_date;
                 document.getElementById('itin-to').value = itin[itin.length - 1].travel_date;
@@ -1847,9 +1856,6 @@
                     drawCheck("LIVE IN", 110, curY, false);
                     drawCheck("LIVE OUT", 135, curY, false);
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("Recommended by:", 20, 156);
-                    
                     const renderSigs = (list, imgs, startX, width) => {
                         if (list.length === 0) return;
                         const count = list.length;
@@ -1876,17 +1882,43 @@
                         }
                     };
 
-                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
-                    renderSigs(dc_list, dc_imgs, 95, 60);
+                    if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                        doc.text("Recommending Approval:", 20, 156);
+                        
+                        // Division Chief Signature
+                        renderSigs(dc_list, dc_imgs, 20, 60);
+                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("DIVISION CHIEF", 52, 172, {align: 'center'});
+                        
+                        // PARPO II Signature
+                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 142, 30, 30); } catch(e){} }
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                        doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
+                        doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
+                        
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                        doc.text("Approved:", 20, 186);
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                        doc.text("RODRIGO O. REUALIBIT, CESO VI", 105, 202, {align: 'center'});
+                        doc.line(70, 204, 140, 204);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                        doc.text("Regional Director", 105, 208, {align: 'center'});
+                    } else {
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                        doc.text("Recommended by:", 20, 156);
+                        
+                        if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                        renderSigs(dc_list, dc_imgs, 95, 60);
 
-                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
-                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
+                        doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
 
-                    if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                    doc.text("RICARDO C. GARCIA", 114, 202);
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("PARPO II", 128, 206);
+                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                        doc.text("RICARDO C. GARCIA", 114, 202);
+                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                        doc.text("PARPO II", 128, 206);
+                    }
                 }
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
@@ -2646,7 +2678,7 @@
                 if (empDiv === "PARPO") {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empDiv === "LTSP" && empUnit.startsWith("DARMO")) {
+                } else if (empUnit.includes("DARMO")) {
                     const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
                     if (mData) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
