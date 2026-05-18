@@ -1151,15 +1151,15 @@
                 alert("PDF Gen Error: " + e.message);
             }
         };
-
-        window.loadCredits = async function() {
+            window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
+            // Added 'MANUAL INPUT' to ensure HR updates from the transition period are fetched
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT']);
             
             let vl_net = 0;
             let sl_net = 0;
@@ -1176,14 +1176,18 @@
 
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
-                    if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
-
+                    // Removed the guard clause that was blocking MANUAL INPUTs from processing
                     hasDeductions = true;
                     const l_type = (l.type || '').toUpperCase();
-                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
                     
-                    let rawVal = isCredit ? (l.credit || l.debit || "0") : (l.debit || "0");
-                    let val = parseFloat(String(rawVal).trim()) || 0;
+                    // Convert DB text strings to numbers for accurate math
+                    let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
+                    let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
+
+                    // Dynamically determine if this is an addition or deduction based on the tag or column value
+                    let isCredit = creditVal > 0 || String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    
+                    let val = isCredit ? creditVal : debitVal;
                     let multiplier = isCredit ? 1 : -1;
 
                     if (l_type.includes('SICK')) sl_net += (val * multiplier);
@@ -1205,6 +1209,7 @@
             deductionsHtml += `</table>`;
             if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
+            // Final safety net converting base employee credits from text to floats before math
             let currentVL = emp ? Math.max(0, (parseFloat(String(emp.vl_balance || "0").trim()) || 0) + vl_net).toFixed(2) : 0;
             let currentSL = emp ? Math.max(0, (parseFloat(String(emp.sl_balance || "0").trim()) || 0) + sl_net).toFixed(2) : 0;
             let currentSPL = emp ? Math.max(0, (parseFloat(String(emp.spl_balance || "0").trim()) || 0) + spl_net).toFixed(2) : 0;
@@ -1261,7 +1266,7 @@
                 ${ctoHtml}
             `;
         };
-
+      
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
             const img = document.getElementById('my-qr-img');
