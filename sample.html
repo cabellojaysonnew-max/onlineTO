@@ -1185,7 +1185,7 @@
 
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
-                    const l_type = (l.type || '').toUpperCase();
+                    const l_type = String(l.type || '').toUpperCase();
                     const transType = String(l.transaction_type || '').toUpperCase();
                     
                     let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
@@ -1196,17 +1196,17 @@
                     let multiplier = isCredit ? 1 : -1;
 
                     if (transType === 'MANUAL INPUT') {
-                        if (l_type.includes('SICK')) sl_net = creditVal;
+                        if (l_type.includes('SICK') || l_type.includes('SL')) sl_net = creditVal;
                         else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net = creditVal;
-                        else if (l_type.includes('WELLNESS')) wl_net = creditVal;
-                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_net = creditVal;
+                        else if (l_type.includes('WELLNESS') || l_type.includes('WL')) wl_net = creditVal;
+                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME", "VL"].some(x => l_type.includes(x))) vl_net = creditVal;
                     } else {
-                        if (l_type.includes('SICK')) sl_net += (val * multiplier);
+                        if (l_type.includes('SICK') || l_type.includes('SL')) sl_net += (val * multiplier);
                         else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net += (val * multiplier);
-                        else if (l_type.includes('WELLNESS')) wl_net += (val * multiplier);
-                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_net += (val * multiplier);
+                        else if (l_type.includes('WELLNESS') || l_type.includes('WL')) wl_net += (val * multiplier);
+                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME", "VL"].some(x => l_type.includes(x))) vl_net += (val * multiplier);
 
-                        if (transType === 'CREDIT' || transType === 'APPROVED') {
+                        if (transType === 'CREDIT' || transType === 'APPROVED' || transType === 'DEDUCTION') {
                             hasDeductions = true;
                             let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
                             let tSign = isCredit ? '+' : '-';
@@ -1731,10 +1731,9 @@
                     if (data) dc_list = data;
                 }
 
-                const qrUrl = encodeURIComponent(`${window.location.origin}/verifier.html?to=${toNo}`);
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}`),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
                     urlToBase64(getAssetUrl("P2.png")), 
                     ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
                     ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
