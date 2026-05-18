@@ -1152,15 +1152,17 @@
             }
         };
 
-        window.loadCredits = async function() {
+
+
+window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             
-            // Manual input is considered the base balance from February 2026, so we disregard 'MANUAL INPUT' data in ledger movements.
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
+            // Included 'MANUAL INPUT' so its values are fetched for the mathematical calculation
+            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT']);
             
             let vl_net = 0;
             let sl_net = 0;
@@ -1177,33 +1179,38 @@
 
             if (ledgers && ledgers.length > 0) {
                 ledgers.forEach(l => {
-                    hasDeductions = true;
                     const l_type = (l.type || '').toUpperCase();
+                    const transType = String(l.transaction_type || '').toUpperCase();
                     
                     // Convert DB text strings to numbers for accurate math
                     let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
                     let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
 
                     // Dynamically determine if this is an addition or deduction based on the tag or column value
-                    let isCredit = creditVal > 0 || String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    let isCredit = creditVal > 0 || transType === 'CREDIT';
                     
                     let val = isCredit ? creditVal : debitVal;
                     let multiplier = isCredit ? 1 : -1;
 
+                    // Mathematics apply to ALL fetched transactions to determine current credits, including 'MANUAL INPUT'
                     if (l_type.includes('SICK')) sl_net += (val * multiplier);
                     else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net += (val * multiplier);
                     else if (l_type.includes('WELLNESS')) wl_net += (val * multiplier);
                     else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_net += (val * multiplier);
 
-                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
-                    let tSign = isCredit ? '+' : '-';
+                    // Strictly hide 'MANUAL INPUT' from the visual HTML history table
+                    if (transType !== 'MANUAL INPUT') {
+                        hasDeductions = true;
+                        let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
+                        let tSign = isCredit ? '+' : '-';
 
-                    deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                        <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${val}</td>
-                        <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                    </tr>`;
+                        deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                            <td style="padding: 5px;">${l.type}</td>
+                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${val}</td>
+                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                        </tr>`;
+                    }
                 });
             }
             deductionsHtml += `</table>`;
@@ -1267,6 +1274,7 @@
             `;
         };
 
+        
 
         
         window.showEmployeeQR = function() {
