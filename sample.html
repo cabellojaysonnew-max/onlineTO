@@ -1182,7 +1182,8 @@
                     const l_type = (l.type || '').toUpperCase();
                     let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
                     
-                    let val = parseFloat(isCredit ? (l.credit || l.debit || 0) : (l.debit || 0));
+                    let rawVal = isCredit ? (l.credit || l.debit || "0") : (l.debit || "0");
+                    let val = parseFloat(String(rawVal).trim()) || 0;
                     let multiplier = isCredit ? 1 : -1;
 
                     if (l_type.includes('SICK')) sl_net += (val * multiplier);
@@ -1204,10 +1205,10 @@
             deductionsHtml += `</table>`;
             if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = emp ? Math.max(0, parseFloat(emp.vl_balance || 0) + vl_net).toFixed(2) : 0;
-            let currentSL = emp ? Math.max(0, parseFloat(emp.sl_balance || 0) + sl_net).toFixed(2) : 0;
-            let currentSPL = emp ? Math.max(0, parseFloat(emp.spl_balance || 0) + spl_net).toFixed(2) : 0;
-            let currentWL = emp ? Math.max(0, parseFloat(emp.wl_balance || 0) + wl_net).toFixed(2) : 0;
+            let currentVL = emp ? Math.max(0, (parseFloat(String(emp.vl_balance || "0").trim()) || 0) + vl_net).toFixed(2) : 0;
+            let currentSL = emp ? Math.max(0, (parseFloat(String(emp.sl_balance || "0").trim()) || 0) + sl_net).toFixed(2) : 0;
+            let currentSPL = emp ? Math.max(0, (parseFloat(String(emp.spl_balance || "0").trim()) || 0) + spl_net).toFixed(2) : 0;
+            let currentWL = emp ? Math.max(0, (parseFloat(String(emp.wl_balance || "0").trim()) || 0) + wl_net).toFixed(2) : 0;
 
             if(emp) {
                 container.innerHTML = `
@@ -1896,13 +1897,10 @@
                         doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
                         doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
                         
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                        doc.text("Approved:", 20, 186);
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                        doc.text("RODRIGO O. REUALIBIT, CESO VI", 105, 202, {align: 'center'});
-                        doc.line(70, 204, 140, 204);
+                        doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+                        doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
                         doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                        doc.text("Regional Director", 105, 208, {align: 'center'});
+                        doc.text("Regional Director", 128, 206);
                     } else {
                         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                         doc.text("Recommended by:", 20, 156);
@@ -2086,14 +2084,14 @@
 
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
-                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
                     if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
                     }
                 });
                 
@@ -2127,15 +2125,15 @@
                 const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(r.calculated_hours || 0);
-                    if (r.transaction_type === 'USED') used += parseFloat(r.calculated_hours || 0);
+                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
                 let ledgerUsed = 0;
                 (ledgerData || []).forEach(l => {
                     if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += parseFloat(l.debit || 0) * 8; 
+                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
                     }
                 });
                 
