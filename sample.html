@@ -2176,14 +2176,19 @@
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
-                const { data: empData } = await supabase.from('employees').select('cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
-                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
 
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    const rem = String(r.remarks || "").toUpperCase();
+                    const ttype = String(r.transaction_type || "").toUpperCase();
+                    if (rem === 'PROCESSED' || ttype === 'PROCESSED') {
+                        earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    }
+                    if (ttype === 'USED' || rem.includes('USED') || rem.includes('AVAILED')) {
+                        used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    }
                 });
                 
                 let ledgerUsed = 0;
@@ -2195,8 +2200,9 @@
                 
                 let availableCtoDays = (earned - used - ledgerUsed) / 8;
                 if (availableCtoDays < count) {
-                    alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
-                    if(submitBtn) submitBtn.disabled = true;
+                    alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days processed, but applied for ${count} days. Please uncheck 'Credit to CTO' to proceed with normal Vacation Leave.`);
+                    ctoCheck.checked = false;
+                    if(submitBtn) submitBtn.disabled = false;
                 } else {
                     if(submitBtn) submitBtn.disabled = false;
                 }
@@ -2220,11 +2226,17 @@
             const isCtoCredited = ctoCheck && ctoCheck.checked;
 
             if (isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    const rem = String(r.remarks || "").toUpperCase();
+                    const ttype = String(r.transaction_type || "").toUpperCase();
+                    if (rem === 'PROCESSED' || ttype === 'PROCESSED') {
+                        earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    }
+                    if (ttype === 'USED' || rem.includes('USED') || rem.includes('AVAILED')) {
+                        used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    }
                 });
                 
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
@@ -2237,7 +2249,8 @@
                 
                 let availableCtoDays = (earned - used - ledgerUsed) / 8;
                 if (availableCtoDays < days) {
-                    return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                    document.getElementById('vl-cto-credit').checked = false;
+                    return alert("Insufficient CTO Credits available. 'Credit to CTO' has been automatically unchecked. Please review and resubmit.");
                 }
             }
 
