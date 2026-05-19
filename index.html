@@ -3420,9 +3420,10 @@
                 </nav>
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
-                    <div class="space-x-2">
-                        <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
-                        <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
+                    <div class="space-x-2 flex">
+                        <button onclick="processBatch('DISAPPROVED')" class="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
+                        <button onclick="processBatch('OFFICIAL_TIME')" class="px-3 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-xs font-bold leading-tight">Official Time</button>
+                        <button onclick="processBatch('APPROVE')" class="px-3 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
                 
@@ -3619,9 +3620,13 @@
                         
                         if (Object.keys(p).length === 0) return null; 
 
+                        if (action === 'OFFICIAL_TIME') {
+                            p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                        }
+
                         const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(updError) throw updError;
-                        await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                        await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
                         return true;
                     });
 
@@ -3651,6 +3656,10 @@
                     const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
+                    
+                    if (action === 'OFFICIAL_TIME') {
+                        p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                    }
                 }
                 
                 // Guard against blank payload if role mapping failed
@@ -3668,7 +3677,7 @@
                 if (action === 'DISAPPROVED') {
                     await window.logActivity(to_no, 'DISAPPROVED', `Disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
                 } else {
-                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
                 }
                 
                 loadPendingTab();
@@ -3821,8 +3830,9 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'OFFICIAL_TIME')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
