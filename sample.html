@@ -1732,7 +1732,7 @@
                     if (data) dc_list = data;
                 }
 
-                const qrUrl = encodeURIComponent(`${window.location.origin}/verifier.html?to=${toNo}`);
+                const qrUrl = encodeURIComponent(`${window.location.origin}/verifier.html?to_no=${toNo}`);
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
                     urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}`),
