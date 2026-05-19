@@ -134,6 +134,7 @@
         .personnel-list {
             display: grid;
             gap: 10px;
+            margin-bottom: 30px;
         }
 
         .personnel-row {
@@ -157,13 +158,36 @@
             color: var(--text-muted);
         }
 
-        .secondary-details {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px dashed var(--border-color);
-            font-size: 11px;
+        /* Highlight Section 4: Activity Log */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .activity-row {
+            padding: 10px 15px;
+            background: #fafafa;
+            border-left: 3px solid var(--dar-green);
+            border-radius: 0 6px 6px 0;
+        }
+
+        .activity-action {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--dar-green);
+            margin-bottom: 3px;
+        }
+
+        .activity-details {
+            font-size: 13px;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .activity-time {
+            font-size: 10px;
             color: var(--text-muted);
-            text-align: center;
         }
 
         .state-message { text-align: center; padding: 50px 20px; font-size: 14px; color: var(--text-muted); }
@@ -208,7 +232,10 @@
                 <div class="personnel-list" id="disp-personnel"></div>
             </div>
 
-            <div class="secondary-details" id="disp-secondary"></div>
+            <div>
+                <div class="section-title">Activity Log</div>
+                <div class="activity-list" id="disp-activity"></div>
+            </div>
 
         </div>
     </div>
@@ -249,14 +276,22 @@
 
                 if (itinError) throw itinError;
 
-                renderData(toNo, orders, itinerary);
+                const { data: activities, error: actError } = await supabase
+                    .from('activity_log')
+                    .select('*')
+                    .eq('to_no', toNo)
+                    .order('created_at', { ascending: false });
+
+                if (actError) throw actError;
+
+                renderData(toNo, orders, itinerary, activities);
 
             } catch (err) {
                 showError("Connection Error: " + err.message);
             }
         }
 
-        function renderData(toNo, orders, itinerary) {
+        function renderData(toNo, orders, itinerary, activities) {
             const baseOrder = orders[0]; 
 
             // 1. TO Number & Status
@@ -298,12 +333,19 @@
                 </div>
             `).join('');
 
-            // 4. Secondary Details (Quietly appended to the bottom)
-            const transport = baseOrder.transport || "N/A";
-            const remarks = baseOrder.remarks || "None";
-            document.getElementById('disp-secondary').innerHTML = `
-                Transport: ${transport} | Remarks: ${remarks}
-            `;
+            // 4. Activity Log
+            const actContainer = document.getElementById('disp-activity');
+            if (activities && activities.length > 0) {
+                actContainer.innerHTML = activities.map(act => `
+                    <div class="activity-row">
+                        <div class="activity-action">${act.action.toUpperCase()}</div>
+                        <div class="activity-details">${act.details}</div>
+                        <div class="activity-time">${new Date(act.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                    </div>
+                `).join('');
+            } else {
+                actContainer.innerHTML = `<div style="text-align:center; font-size: 12px; color: var(--text-muted); padding: 15px;">No activity logs found.</div>`;
+            }
 
             // Reveal Content
             document.getElementById('loading').style.display = 'none';
