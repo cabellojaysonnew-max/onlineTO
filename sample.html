@@ -340,6 +340,20 @@
         let tevData = []; // Combined Grouped TEV Items
         let currentTevToNo = null;
 
+        // ACTIVITY LOG HELPER
+        window.logActivity = async function(toNo, action, details) {
+            try {
+                if(!toNo) return;
+                await supabase.from('activity_log').insert({
+                    to_no: toNo,
+                    emp_id: currentUser ? currentUser.emp_id : 'SYSTEM',
+                    action: action,
+                    details: details,
+                    created_at: new Date().toISOString()
+                });
+            } catch(e) { console.error("Log error", e); }
+        };
+
         // STRICT PHILIPPINE TIME (PST) FORMATTERS
         const getPSTDateFromDateObj = (dateObj) => {
             const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
@@ -1158,155 +1172,163 @@
 
 
 
-window.loadCredits = async function() {
-            const container = document.getElementById('leave-balances-container');
-            const ctoContainer = document.getElementById('cto-posting-container');
-            container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
+        window.loadCredits = async function() {
+    const container = document.getElementById('leave-balances-container');
+    const ctoContainer = document.getElementById('cto-posting-container');
+    container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
-            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+    const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+    
+    const { data: ledgers } = await supabase.from('leave_ledger')
+        .select('*')
+        .eq('emp_id', currentUser.emp_id)
+        .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION'])
+        .order('created_at', { ascending: true });
+    
+    // Default to Employee table if no ledger history exists
+    let vl_net = emp && emp.vl_balance ? parseFloat(emp.vl_balance) : 0;
+    let sl_net = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
+    let spl_net = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
+    let wl_net = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
+
+    if (isNaN(vl_net)) vl_net = 0;
+    if (isNaN(sl_net)) sl_net = 0;
+    if (isNaN(spl_net)) spl_net = 0;
+    if (isNaN(wl_net)) wl_net = 0;
+    
+    let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
+        <tr style="background: var(--dar-green); color: white;">
+            <th style="padding: 5px; text-align: left;">Date</th>
+            <th style="padding: 5px; text-align: left;">Type</th>
+            <th style="padding: 5px; text-align: center;">Days</th>
+            <th style="padding: 5px; text-align: left;">Remarks</th>
+        </tr>`;
+    let hasDeductions = false;
+
+    if (ledgers && ledgers.length > 0) {
+        // If ledger history exists, wipe and calculate chronologically
+        vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
+
+        ledgers.forEach(l => {
+            const l_type = String(l.type || '').toUpperCase();
+            const transType = String(l.transaction_type || '').toUpperCase();
+            const remarks = String(l.remarks || '').toUpperCase();
+            const idStr = (l_type + " " + transType + " " + remarks);
             
-            const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('*')
-                .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION'])
-                .order('created_at', { ascending: true });
-            
-            // Default to Employee table if no ledger history exists
-            let vl_net = emp ? parseFloat(String(emp.vl_balance || "0").trim()) || 0 : 0;
-            let sl_net = emp ? parseFloat(String(emp.sl_balance || "0").trim()) || 0 : 0;
-            let spl_net = emp ? parseFloat(String(emp.spl_balance || "0").trim()) || 0 : 0;
-            let wl_net = emp ? parseFloat(String(emp.wl_balance || "0").trim()) || 0 : 0;
-            
-            let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
-                <tr style="background: var(--dar-green); color: white;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Days</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
-                </tr>`;
-            let hasDeductions = false;
-
-            if (ledgers && ledgers.length > 0) {
-                // If ledger history exists, reset to 0 and calculate from the ground up chronologically
-                vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
-
-                ledgers.forEach(l => {
-                    const l_type = String(l.type || '').toUpperCase();
-                    const transType = String(l.transaction_type || '').toUpperCase();
-                    const remarks = String(l.remarks || '').toUpperCase();
-                    
-                    // 1. STRICT MANUAL INPUT RESET 
-                    // Overwrite the running total up to this date based on the Manual Input String
-                    if (remarks.includes('MANUAL BALANCE SETTING')) {
-                        const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
-                        const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
-                        const splMatch = remarks.match(/SPL:\s*([0-9.-]+)/i);
-                        const wlMatch = remarks.match(/WL:\s*([0-9.-]+)/i);
-                        
-                        if (vlMatch) vl_net = parseFloat(vlMatch[1]);
-                        if (slMatch) sl_net = parseFloat(slMatch[1]);
-                        if (splMatch) spl_net = parseFloat(splMatch[1]);
-                        if (wlMatch) wl_net = parseFloat(wlMatch[1]);
-                        return; // Move to the next row, do not apply arithmetic to this reset row
-                    }
-
-                    // 2. STANDARD ADDITIONS & DEDUCTIONS
-                    let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
-                    let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
-
-                    let val = creditVal > 0 ? creditVal : (debitVal > 0 ? -debitVal : 0);
-                    let displayVal = Math.abs(val);
-                    let tSign = val >= 0 ? '+' : '-';
-
-                    // Combine fields to ensure SL/VL remarks are caught even if type is NULL
-                    const idStr = (l_type + " " + transType + " " + remarks);
-
-                    // Strictly route the value to the correct distinct Leave Type
-                    if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
-                        sl_net += val;
-                    }
-                    else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
-                        spl_net += val;
-                    }
-                    else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
-                        wl_net += val;
-                    }
-                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
-                        vl_net += val;
-                    }
-
-                    // Log the visible transaction in the UI history table
-                    if (val !== 0 && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
-                        hasDeductions = true;
-                        let tColor = val >= 0 ? 'var(--success)' : 'var(--danger)';
-                        let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
-
-                        deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                            <td style="padding: 5px;">${displayType}</td>
-                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
-                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                        </tr>`;
-                    }
-                });
+            // 1. STRICT MANUAL INPUT RESET (Sets Baseline, Overwrites previous history)
+            if (remarks.includes('MANUAL BALANCE SETTING')) {
+                const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
+                const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
+                const splMatch = remarks.match(/SPL:\s*([0-9.-]+)/i);
+                const wlMatch = remarks.match(/WL:\s*([0-9.-]+)/i);
+                
+                if (vlMatch) vl_net = parseFloat(vlMatch[1]) || 0;
+                if (slMatch) sl_net = parseFloat(slMatch[1]) || 0;
+                if (splMatch) spl_net = parseFloat(splMatch[1]) || 0;
+                if (wlMatch) wl_net = parseFloat(wlMatch[1]) || 0;
+                return; // Skip arithmetic for this reset row
             }
-            deductionsHtml += `</table>`;
-            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = Math.max(0, vl_net).toFixed(3);
-            let currentSL = Math.max(0, sl_net).toFixed(3);
-            let currentSPL = Math.max(0, spl_net).toFixed(3);
-            let currentWL = Math.max(0, wl_net).toFixed(3);
+            // 2. ADD ALL CREDITS and DEDUCT ALL AVAILMENTS
+            let cVal = parseFloat(l.credit) || 0;
+            let dVal = parseFloat(l.debit) || 0;
 
-            container.innerHTML = `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
-                </div>
-                <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
-                ${deductionsHtml}
-            `;
+            // Ensure pure positive magnitudes to prevent negative-string parsing bugs
+            cVal = Math.abs(cVal);
+            dVal = Math.abs(dVal);
 
-            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
-            
-            let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
-                <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Hrs</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
-                </tr>`;
-            let hasCto = false;
-            
-            if(cto && cto.length > 0) {
-                cto.forEach(c => {
-                    const ttype = (c.transaction_type || '').toUpperCase();
-                    if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
-                        hasCto = true;
-                        let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
-                        let sign = ttype === 'USED' ? '-' : '+';
-                        ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${c.date}</td>
-                            <td style="padding: 5px;">${ttype}</td>
-                            <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
-                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
-                        </tr>`;
-                    }
-                });
+            let netChange = cVal - dVal;
+
+            // Strictly route to the correct distinct Leave Type bucket
+            if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
+                sl_net += netChange;
             }
-            ctoHtml += `</table>`;
+            else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
+                spl_net += netChange;
+            }
+            else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
+                wl_net += netChange;
+            }
+            else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
+                vl_net += netChange;
+            }
 
-            if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
-            
-            ctoContainer.innerHTML = `
-                <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
-                </div>
-                ${ctoHtml}
-            `;
-        };
+            // 3. UI Tracker Table Logging
+            if ((cVal > 0 || dVal > 0) && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
+                hasDeductions = true;
+                let valStr = cVal > 0 ? `+${cVal}` : `-${dVal}`;
+                let tColor = cVal > 0 ? 'var(--success)' : 'var(--danger)';
+                let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
+
+                deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                    <td style="padding: 5px;">${displayType}</td>
+                    <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${valStr}</td>
+                    <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                </tr>`;
+            }
+        });
+    }
+    deductionsHtml += `</table>`;
+    if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
+
+    let currentVL = Math.max(0, vl_net).toFixed(3);
+    let currentSL = Math.max(0, sl_net).toFixed(3);
+    let currentSPL = Math.max(0, spl_net).toFixed(3);
+    let currentWL = Math.max(0, wl_net).toFixed(3);
+
+    container.innerHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
+        </div>
+        <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
+        ${deductionsHtml}
+    `;
+
+    const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
+    
+    let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
+        <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
+            <th style="padding: 5px; text-align: left;">Date</th>
+            <th style="padding: 5px; text-align: left;">Type</th>
+            <th style="padding: 5px; text-align: center;">Hrs</th>
+            <th style="padding: 5px; text-align: left;">Remarks</th>
+        </tr>`;
+    let hasCto = false;
+    
+    if(cto && cto.length > 0) {
+        cto.forEach(c => {
+            const ttype = (c.transaction_type || '').toUpperCase();
+            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
+                hasCto = true;
+                let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
+                let sign = ttype === 'USED' ? '-' : '+';
+                ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 5px;">${c.date}</td>
+                    <td style="padding: 5px;">${ttype}</td>
+                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
+                    <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                </tr>`;
+            }
+        });
+    }
+    ctoHtml += `</table>`;
+
+    if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
+    
+    ctoContainer.innerHTML = `
+        <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
+            <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
+        </div>
+        ${ctoHtml}
+    `;
+};
+
+
+
         
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
@@ -1515,11 +1537,13 @@ window.loadCredits = async function() {
                     if (conflict.status.includes("PENDING")) {
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
                         await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
+                        await window.logActivity(conflict.to_no, 'OVERWRITTEN_PENDING', `Pending Travel Order overwritten by ${currentUser.full_name}`);
                     } else if (conflict.status === "APPROVED") {
                         const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
                         const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
                         
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
+                        await window.logActivity(conflict.to_no, 'SPLIT_CANCELLED', `Approved TO split/overwritten on ${conflict.affected_date}`);
 
                         await supabase.from('notifications').insert({ 
                             emp_id: currentUser.emp_id, 
@@ -1540,6 +1564,8 @@ window.loadCredits = async function() {
                             
                             const { error: remErr2 } = await supabase.from('itinerary').insert(batchRemainderItin);
                             if (remErr2) throw new Error("Conflict Itinerary Insert Error: " + remErr2.message);
+                            
+                            await window.logActivity(remainderToNo, 'SPLIT_CREATED', `Created from split of ${conflict.to_no}`);
                         }
                     }
                 }
@@ -1594,6 +1620,8 @@ window.loadCredits = async function() {
                 const { error: itinError } = await supabase.from('itinerary').insert(batchItin);
                 if (itinError) throw new Error("Itinerary DB Error: " + itinError.message);
                 
+                await window.logActivity(finalToNo, 'SUBMITTED', 'Travel Order Request Submitted');
+                
                 alert("Logic Executed. Submitted: " + finalToNo);
                 
                 document.getElementById('itin-from').value = '';
@@ -1641,13 +1669,15 @@ window.loadCredits = async function() {
             if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            await window.logActivity(toNo, 'DELETED', 'Pending Travel Order Deleted');
             window.loadStatus();
         };
 
         window.cancelApprovedTO = async function(toNo) {
             if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
             await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}` });
+            await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by User');
             window.loadStatus();
         };
 
@@ -1717,6 +1747,8 @@ window.loadCredits = async function() {
 
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            await window.logActivity(toNo, 'MODIFIED', 'Pending Travel Order Modified/Drafted');
+            
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
@@ -2238,8 +2270,10 @@ window.loadCredits = async function() {
 
                     if (!remaining || remaining.length === 0) {
                         await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
+                        await window.logActivity(to_no, 'CANCELLED', 'Cancelled due to overlapping Leave Application');
                     } else {
                         if (toData.status === 'APPROVED') {
+                            await window.logActivity(to_no, 'SPLIT_MODIFIED', 'Approved TO modified/split due to overlapping Leave Application');
                             await supabase.from('notifications').insert({
                                 emp_id: currentUser.emp_id,
                                 message: `Approved TO ${to_no} was modified due to a Leave Application. Overlapping days were removed.`,
@@ -2258,6 +2292,7 @@ window.loadCredits = async function() {
                                 routeStatus = "PENDING_UNIT_HEAD";
                             }
 
+                            await window.logActivity(to_no, 'MODIFIED_ROUTED_BACK', 'Pending TO modified and routed back due to Leave Application overlap');
                             await supabase.from('travel_orders').update({
                                 status: routeStatus,
                                 unithead_signed: null,
