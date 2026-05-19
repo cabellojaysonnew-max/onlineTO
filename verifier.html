@@ -25,14 +25,13 @@
             justify-content: center;
         }
 
-        /* The "Document" Look */
         .document-wrapper {
             background: #ffffff;
             width: 100%;
             max-width: 600px;
             border-radius: 8px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-            border-top: 6px solid var(--dar-green);
+            border-top: 8px solid var(--dar-green);
             overflow: hidden;
         }
 
@@ -44,133 +43,130 @@
 
         .header h1 {
             margin: 0;
-            font-size: 16px;
-            letter-spacing: 1px;
-            color: var(--dar-green);
+            font-size: 15px;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
             text-transform: uppercase;
         }
 
-        .header p {
-            margin: 5px 0 0;
-            font-size: 13px;
-            color: var(--text-muted);
+        .header .agency {
+            margin: 8px 0 0;
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--dar-green);
         }
 
         .content-body {
-            padding: 0 25px 30px;
+            padding: 30px;
         }
 
-        /* Top Meta Section */
-        .doc-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            border-bottom: 2px solid var(--dar-green);
-            margin-bottom: 20px;
+        /* Highlight Section 1: TO Number */
+        .to-header {
+            text-align: center;
+            margin-bottom: 30px;
         }
-
-        .meta-col {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .meta-label {
+        
+        .to-label {
             font-size: 11px;
             color: var(--text-muted);
             text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 4px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
         }
 
         .to-number {
-            font-size: 22px;
-            font-weight: 700;
+            font-size: 26px;
+            font-weight: 800;
             color: var(--dar-green);
-        }
-
-        /* Sections */
-        .section {
-            margin-bottom: 25px;
-        }
-
-        .section h3 {
-            font-size: 13px;
-            text-transform: uppercase;
-            color: var(--dar-gold);
-            margin: 0 0 12px 0;
             letter-spacing: 0.5px;
+            margin-bottom: 10px;
         }
 
-        /* Grid Details */
-        .detail-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            background: #fafafa;
-            padding: 15px;
-            border-radius: 6px;
-            border: 1px solid var(--border-color);
-        }
-
-        .detail-item.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .detail-value {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-main);
-        }
-
-        /* Lists */
-        .list-container {
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            overflow: hidden;
-        }
-
-        .list-row {
-            padding: 12px 15px;
-            border-bottom: 1px solid var(--border-color);
-            background: #ffffff;
-        }
-
-        .list-row:last-child {
-            border-bottom: none;
-        }
-
-        .primary-text {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-main);
-        }
-
-        .secondary-text {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 4px;
-        }
-
-        /* Badges */
+        /* Badge Styling */
         .badge {
-            padding: 5px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1px;
         }
         .status-APPROVED { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
         .status-CANCELLED { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .status-PENDING { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 
-        /* States */
-        .state-message {
-            text-align: center;
-            padding: 50px 20px;
+        /* Highlight Section 2: Core Details */
+        .highlight-box {
+            background: #fafafa;
+            border-left: 4px solid var(--dar-gold);
+            padding: 20px;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 30px;
+        }
+
+        .highlight-item {
+            margin-bottom: 15px;
+        }
+        .highlight-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .highlight-data {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-top: 4px;
+        }
+
+        /* Highlight Section 3: Personnel */
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--dar-green);
+            font-weight: 700;
+            letter-spacing: 1px;
+            border-bottom: 2px solid #f3f4f6;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+
+        .personnel-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .personnel-row {
+            padding: 12px 15px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .emp-name {
             font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .emp-meta {
+            font-size: 11px;
             color: var(--text-muted);
         }
+
+        .secondary-details {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px dashed var(--border-color);
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .state-message { text-align: center; padding: 50px 20px; font-size: 14px; color: var(--text-muted); }
         .error { color: var(--danger); font-weight: 600; }
         #content { display: none; }
     </style>
@@ -179,8 +175,8 @@
 
     <div class="document-wrapper">
         <div class="header">
-            <h1>Document Verification</h1>
-            <p>Department of Agrarian Reform - Camarines Sur I</p>
+            <h1>Official Document Verification</h1>
+            <div class="agency">DAR Camarines Sur I</div>
         </div>
 
         <div id="loading" class="state-message">
@@ -190,44 +186,29 @@
 
         <div id="content" class="content-body">
             
-            <div class="doc-meta">
-                <div class="meta-col">
-                    <span class="meta-label">Travel Order No.</span>
-                    <span class="to-number" id="disp-to-no"></span>
-                </div>
-                <div class="meta-col" style="align-items: flex-end;">
-                    <span class="meta-label">Current Status</span>
-                    <span id="disp-status" class="badge"></span>
-                </div>
+            <div class="to-header">
+                <div class="to-label">Travel Order No.</div>
+                <div class="to-number" id="disp-to-no"></div>
+                <div id="disp-status" class="badge"></div>
             </div>
 
-            <div class="section">
-                <h3>Logistics & Details</h3>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <div class="meta-label">Transportation</div>
-                        <div class="detail-value" id="disp-transport"></div>
-                    </div>
-                    <div class="detail-item">
-                        <div class="meta-label">Report To</div>
-                        <div class="detail-value" id="disp-report"></div>
-                    </div>
-                    <div class="detail-item full-width">
-                        <div class="meta-label">Remarks</div>
-                        <div class="detail-value" id="disp-remarks"></div>
-                    </div>
+            <div class="highlight-box">
+                <div class="highlight-item">
+                    <div class="to-label">Date of Travel</div>
+                    <div class="highlight-data" id="disp-date"></div>
+                </div>
+                <div class="highlight-item">
+                    <div class="to-label">Destination</div>
+                    <div class="highlight-data" id="disp-dest"></div>
                 </div>
             </div>
 
-            <div class="section">
-                <h3>Authorized Personnel</h3>
-                <div class="list-container" id="disp-personnel"></div>
+            <div>
+                <div class="section-title">Authorized Personnel</div>
+                <div class="personnel-list" id="disp-personnel"></div>
             </div>
 
-            <div class="section">
-                <h3>Approved Itinerary</h3>
-                <div class="list-container" id="disp-itinerary"></div>
-            </div>
+            <div class="secondary-details" id="disp-secondary"></div>
 
         </div>
     </div>
@@ -248,7 +229,6 @@
             }
 
             try {
-                // Fetch Travel Order Details
                 const { data: orders, error: toError } = await supabase
                     .from('travel_orders')
                     .select('*')
@@ -261,7 +241,6 @@
                     return;
                 }
 
-                // Fetch Itinerary
                 const { data: itinerary, error: itinError } = await supabase
                     .from('itinerary')
                     .select('*')
@@ -280,13 +259,8 @@
         function renderData(toNo, orders, itinerary) {
             const baseOrder = orders[0]; 
 
-            // Headers
+            // 1. TO Number & Status
             document.getElementById('disp-to-no').innerText = toNo;
-            document.getElementById('disp-transport').innerText = baseOrder.transport || "N/A";
-            document.getElementById('disp-report').innerText = baseOrder.report_to || "N/A";
-            document.getElementById('disp-remarks').innerText = baseOrder.remarks || "None";
-
-            // Status Badge
             const statusEl = document.getElementById('disp-status');
             const statusText = baseOrder.status.toUpperCase();
             statusEl.innerText = statusText.replace(/_/g, ' ');
@@ -299,29 +273,37 @@
                 statusEl.className = "badge status-PENDING";
             }
 
-            // Personnel List
+            // 2. Date & Destination Processing
+            let travelDates = "N/A";
+            let dests = "N/A";
+            
+            if (itinerary && itinerary.length > 0) {
+                // Get Date Range
+                const startDate = new Date(itinerary[0].travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                const endDate = new Date(itinerary[itinerary.length - 1].travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                travelDates = startDate === endDate ? startDate : `${startDate} — ${endDate}`;
+                
+                // Get Unique Destinations
+                dests = [...new Set(itinerary.map(i => i.destination))].join(' • ');
+            }
+            
+            document.getElementById('disp-date').innerText = travelDates;
+            document.getElementById('disp-dest').innerText = dests;
+
+            // 3. Personnel List
             document.getElementById('disp-personnel').innerHTML = orders.map(p => `
-                <div class="list-row">
-                    <div class="primary-text">${p.emp_name.toUpperCase()}</div>
-                    <div class="secondary-text">ID: ${p.emp_id} &nbsp;&bull;&nbsp; Unit: ${p.unit || 'N/A'}</div>
+                <div class="personnel-row">
+                    <div class="emp-name">${p.emp_name.toUpperCase()}</div>
+                    <div class="emp-meta">ID: ${p.emp_id}</div>
                 </div>
             `).join('');
 
-            // Itinerary List
-            const itinContainer = document.getElementById('disp-itinerary');
-            if (itinerary && itinerary.length > 0) {
-                itinContainer.innerHTML = itinerary.map(i => {
-                    const fDate = new Date(i.travel_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-                    return `
-                    <div class="list-row">
-                        <div class="primary-text">${i.destination}</div>
-                        <div class="secondary-text">${fDate} &nbsp;&bull;&nbsp; <i>"${i.purpose}"</i></div>
-                    </div>
-                    `;
-                }).join('');
-            } else {
-                itinContainer.innerHTML = '<div class="list-row" style="color: gray; font-size: 13px;">No itinerary records found.</div>';
-            }
+            // 4. Secondary Details (Quietly appended to the bottom)
+            const transport = baseOrder.transport || "N/A";
+            const remarks = baseOrder.remarks || "None";
+            document.getElementById('disp-secondary').innerHTML = `
+                Transport: ${transport} | Remarks: ${remarks}
+            `;
 
             // Reveal Content
             document.getElementById('loading').style.display = 'none';
