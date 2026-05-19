@@ -3062,8 +3062,6 @@
 
     
 <xmp id="admin_console" style="display: none;">
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3207,6 +3205,20 @@
         let analyticsData = {};
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
+
+        // ACTIVITY LOG HELPER
+        window.logActivity = async function(toNo, action, details) {
+            try {
+                if(!toNo) return;
+                await supabaseClient.from('activity_log').insert({
+                    to_no: toNo,
+                    emp_id: currentUser ? currentUser.emp_id : 'SYSTEM',
+                    action: action,
+                    details: details,
+                    created_at: new Date().toISOString()
+                });
+            } catch(e) { console.error("Log error", e); }
+        };
 
         // PASSWORD HASHING UTILITY
         async function hashPassword(msg) {
@@ -3477,6 +3489,7 @@
                 for (let d of selectedDates) {
                     await supabaseClient.from('itinerary').delete().eq('to_no', targetToNo).eq('travel_date', d);
                 }
+                await window.logActivity(targetToNo, 'SPLIT_CANCELLED', `Dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`);
                 await supabaseClient.from('notifications').insert({
                     recipient_role: 'PARPO',
                     message: `Approved TO ${targetToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
@@ -3490,6 +3503,7 @@
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Cancelling TO...</p>`;
             await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', to_no);
+            await window.logActivity(to_no, 'CANCELLED', `Entire TO cancelled by ${currentUser.fullName}`);
             await supabaseClient.from('notifications').insert({
                 recipient_role: 'PARPO',
                 message: `Approved TO ${to_no} was entirely cancelled by ${currentUser.fullName}`,
@@ -3563,6 +3577,7 @@
                     const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
                         const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(error) throw error;
+                        await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
                     });
                     await Promise.all(updatePromises);
 
@@ -3582,6 +3597,7 @@
 
                         const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(updError) throw updError;
+                        await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
                         return true;
                     });
 
@@ -3624,6 +3640,12 @@
                 
                 const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                 if (updErr) throw updErr;
+                
+                if (action === 'DISAPPROVED') {
+                    await window.logActivity(to_no, 'DISAPPROVED', `Disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
+                } else {
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                }
                 
                 loadPendingTab();
             } catch (err) {
@@ -4567,9 +4589,6 @@
     </script>
 </body>
 </html>
-
-    
-    
 </xmp>
 </body>
 </html>
