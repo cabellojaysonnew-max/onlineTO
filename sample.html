@@ -1195,11 +1195,12 @@
                     let val = isCredit ? creditVal : debitVal;
                     let multiplier = isCredit ? 1 : -1;
 
-                    if (transType === 'MANUAL INPUT') {
-                        if (l_type.includes('SICK') || l_type.includes('SL')) sl_net = creditVal;
-                        else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net = creditVal;
-                        else if (l_type.includes('WELLNESS') || l_type.includes('WL')) wl_net = creditVal;
-                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME", "VL"].some(x => l_type.includes(x))) vl_net = creditVal;
+                    if (transType === 'MANUAL INPUT' || l_type === 'MANUAL INPUT') {
+                        const idStr = (l_type + " " + transType + " " + String(l.remarks || '')).toUpperCase();
+                        if (idStr.includes('SICK') || idStr.includes('SL')) sl_net = creditVal;
+                        else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.includes('SPL')) spl_net = creditVal;
+                        else if (idStr.includes('WELLNESS') || idStr.includes('WL')) wl_net = creditVal;
+                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME", "VL"].some(x => idStr.includes(x))) vl_net = creditVal;
                     } else {
                         if (l_type.includes('SICK') || l_type.includes('SL')) sl_net += (val * multiplier);
                         else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net += (val * multiplier);
@@ -1731,9 +1732,10 @@
                     if (data) dc_list = data;
                 }
 
+                const qrUrl = encodeURIComponent(`${window.location.origin}/verifier.html?to=${toNo}`);
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}`),
                     urlToBase64(getAssetUrl("P2.png")), 
                     ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
                     ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
