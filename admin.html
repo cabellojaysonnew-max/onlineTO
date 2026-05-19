@@ -981,7 +981,7 @@
                 const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
 
                 const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes, allHistToRes, allHistItinRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name, unit').in('emp_id', validEmpIds),
                     supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no, destination').eq('travel_date', todayStr),
@@ -1032,7 +1032,6 @@
                 let listBirthday = [];
                 let listGatePass = [];
                 
-                // Trackers for Field Staff Location matching
                 let listAtDestination = [];
                 let listOutsideDestination = [];
                 let listNoLogsField = [];
@@ -1044,7 +1043,6 @@
                     }
                 });
 
-                // Compute exact destination matches for personnel on travel order
                 empIdsOnTO.forEach(empId => {
                     const emp = validEmps.find(e => e.emp_id === empId);
                     if(!emp) return;
@@ -1080,11 +1078,17 @@
                 });
 
                 validEmps.forEach(emp => {
+                    // STRICT YYYY-MM-DD Parsing to prevent timezone offsets
                     if (emp.dob) {
                         try {
-                            const dobDate = new Date(emp.dob);
-                            if (dobDate.getMonth() + 1 === currentMonth) {
-                                listBirthday.push({ name: emp.full_name, date: dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+                            const parts = emp.dob.split('-');
+                            if (parts.length >= 3) {
+                                const dobM = parseInt(parts[1], 10);
+                                const dobD = parseInt(parts[2].substring(0, 2), 10);
+                                if (dobM === currentMonth) {
+                                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                    listBirthday.push({ name: emp.full_name, date: `${monthNames[dobM - 1]} ${dobD}` });
+                                }
                             }
                         } catch(e){}
                     }
@@ -1179,7 +1183,6 @@
                 );
                 const stratEmpIds = stratEmps.map(e => e.emp_id);
                 
-                // NEW: Calculate percentage traveled this month
                 const validMonthToNos = new Set(monthItineraries.map(i => i.to_no));
                 const traveledThisMonthIds = new Set();
                 tos.forEach(t => {
@@ -1200,9 +1203,9 @@
                 let currentWeekOverlaps = {};
                 
                 const sWeek = new Date(nowManilaObj);
-                sWeek.setDate(nowManilaObj.getDate() - nowManilaObj.getDay() + 1); // Get Monday
+                sWeek.setDate(nowManilaObj.getDate() - nowManilaObj.getDay() + 1); 
                 const eWeek = new Date(sWeek);
-                eWeek.setDate(sWeek.getDate() + 4); // Get Friday
+                eWeek.setDate(sWeek.getDate() + 4); 
                 
                 const validHistToNos = new Set(allHistTOs.filter(t => stratEmpIds.includes(t.emp_id)).map(t => t.to_no));
                 
@@ -1218,7 +1221,6 @@
                                 currentWeekOverlaps[matchedPlace]++;
                             }
 
-                            // Track strictly this month
                             const iDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(iDate);
                             if (iDateStr >= firstDayOfMonth && iDateStr <= lastDayOfMonth) {
                                 monthPlaceFrequencyCounts[matchedPlace]++;
@@ -1262,13 +1264,65 @@
                         : `<div class="bg-white border-l-4 border-emerald-500 p-3 rounded-lg shadow-sm text-[10px] text-emerald-700 font-bold leading-tight">✅ Excellent distribution detected for the current week. No severe overlaps in targeted municipalities.</div>`}
                 </div>`;
 
+                // --- NEW: PROVINCIAL DEEP DIVE LOGIC ---
+                const activeUnits = {};
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.unit && t.unit !== 'NA' && t.unit !== 'N/A') {
+                        const unt = t.unit.trim().toUpperCase();
+                        activeUnits[unt] = (activeUnits[unt] || 0) + 1;
+                    }
+                });
+                const topUnits = Object.entries(activeUnits).sort((a,b) => b[1] - a[1]).slice(0,3);
+
+                const highlyVisitedHtml = topStratPlacesMonth.map(p => `<div class="flex justify-between text-xs border-b border-indigo-100/30 py-1.5"><span class="text-indigo-200">${p}</span><span class="font-bold text-white">${monthPlaceFrequencyCounts[p]} deployments</span></div>`).join('');
+                const neglectedHtml = unvisitedPlacesMonth.map(p => `<span class="inline-block px-2 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded text-[9px] font-bold mr-1 mb-1 shadow-sm">${p}</span>`).join('');
+
+                let monthNameStr = new Date(nowManilaObj).toLocaleString('default', { month: 'long' });
+
+                let provincialDeepDiveHtml = `
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-xl mt-8 mb-4 border border-slate-700 relative overflow-hidden">
+                        <div class="flex items-center space-x-2 mb-4 relative z-10">
+                            <span class="text-2xl drop-shadow-md">🗺️</span>
+                            <div>
+                                <h3 class="font-black text-white text-sm uppercase tracking-widest leading-none">Provincial Deep Dive</h3>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">Macro-level Management Analysis (${monthNameStr} ${tY})</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 gap-4 relative z-10">
+                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
+                                <h4 class="text-[10px] text-indigo-300 font-black uppercase tracking-wider mb-2 flex justify-between"><span>Coverage Concentration</span> <span>Top 3 Areas</span></h4>
+                                <div class="space-y-1 mb-4">
+                                    ${highlyVisitedHtml || '<p class="text-xs text-slate-400">No data</p>'}
+                                </div>
+                                <h4 class="text-[10px] text-rose-300 font-black uppercase tracking-wider mb-2">Neglected Zones (Zero Deployments)</h4>
+                                <div class="flex flex-wrap gap-1">
+                                    ${neglectedHtml || '<p class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded">100% Province Coverage Achieved</p>'}
+                                </div>
+                            </div>
+
+                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
+                                <h4 class="text-[10px] text-emerald-300 font-black uppercase tracking-wider mb-2">Unit Mobility Efficiency</h4>
+                                <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                                    The most active operational units generating deployments this month are: <br>
+                                    <span class="text-white font-bold inline-block mt-1">${topUnits.map(u => `• ${u[0]} (${u[1]} TOs)`).join('<br>') || 'None'}</span>
+                                </p>
+                                <div class="mt-2 text-[9px] text-slate-400 border-t border-white/10 pt-2 uppercase tracking-wider font-bold">
+                                    *High mobility units must be cross-referenced with deliverables to ensure travel correlates with field output.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
                 analyticsData = { 
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
                     anomalies: anomalyCount,
                     insights: { topDest, topTrav },
-                    strategyHtml: strategyHtml
+                    strategyHtml: strategyHtml,
+                    provincialDeepDiveHtml: provincialDeepDiveHtml
                 };
                 
                 renderAnalyticsView();
@@ -1349,7 +1403,6 @@
                         </div>
                     </div>
 
-                    <!-- NEW DESTINATION TRACKING CARDS -->
                     <div class="analytics-card">
                         <div class="analytics-header flex justify-between"><span>At Actual Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.atDestination.length}</span></div>
                         <div class="analytics-list">${renderListRows(analyticsData.lists.atDestination, 'location', iconLocation)}</div>
@@ -1391,6 +1444,8 @@
                     </div>
 
                     ${analyticsData.strategyHtml || ''}
+                    
+                    ${analyticsData.provincialDeepDiveHtml || ''}
                 </div>
             `;
 
