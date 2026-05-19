@@ -1158,7 +1158,7 @@
 
 
 
-        window.loadCredits = async function() {
+window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
@@ -1168,9 +1168,10 @@
             const { data: ledgers } = await supabase.from('leave_ledger')
                 .select('*')
                 .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT'])
+                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION'])
                 .order('created_at', { ascending: true });
             
+            // Default to Employee table if no ledger history exists
             let vl_net = emp ? parseFloat(String(emp.vl_balance || "0").trim()) || 0 : 0;
             let sl_net = emp ? parseFloat(String(emp.sl_balance || "0").trim()) || 0 : 0;
             let spl_net = emp ? parseFloat(String(emp.spl_balance || "0").trim()) || 0 : 0;
@@ -1186,64 +1187,76 @@
             let hasDeductions = false;
 
             if (ledgers && ledgers.length > 0) {
+                // If ledger history exists, reset to 0 and calculate from the ground up chronologically
+                vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
+
                 ledgers.forEach(l => {
                     const l_type = String(l.type || '').toUpperCase();
                     const transType = String(l.transaction_type || '').toUpperCase();
                     const remarks = String(l.remarks || '').toUpperCase();
                     
+                    // 1. STRICT MANUAL INPUT RESET 
+                    // Overwrite the running total up to this date based on the Manual Input String
+                    if (remarks.includes('MANUAL BALANCE SETTING')) {
+                        const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
+                        const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
+                        const splMatch = remarks.match(/SPL:\s*([0-9.-]+)/i);
+                        const wlMatch = remarks.match(/WL:\s*([0-9.-]+)/i);
+                        
+                        if (vlMatch) vl_net = parseFloat(vlMatch[1]);
+                        if (slMatch) sl_net = parseFloat(slMatch[1]);
+                        if (splMatch) spl_net = parseFloat(splMatch[1]);
+                        if (wlMatch) wl_net = parseFloat(wlMatch[1]);
+                        return; // Move to the next row, do not apply arithmetic to this reset row
+                    }
+
+                    // 2. STANDARD ADDITIONS & DEDUCTIONS
                     let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
                     let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
 
-                    let isCredit = creditVal > 0 || transType === 'CREDIT';
-                    let val = isCredit ? creditVal : debitVal;
-                    let multiplier = isCredit ? 1 : -1;
+                    let val = creditVal > 0 ? creditVal : (debitVal > 0 ? -debitVal : 0);
+                    let displayVal = Math.abs(val);
+                    let tSign = val >= 0 ? '+' : '-';
 
                     // Combine fields to ensure SL/VL remarks are caught even if type is NULL
-                    const idStr = (l_type + " " + transType + " " + remarks).toUpperCase();
+                    const idStr = (l_type + " " + transType + " " + remarks);
 
-                    if (transType === 'MANUAL INPUT' || l_type === 'MANUAL INPUT') {
-                        if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) sl_net = creditVal;
-                        else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) spl_net = creditVal;
-                        else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) wl_net = creditVal;
-                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) vl_net = creditVal;
-                    } else {
-                        // Strict separation for incrementing/decrementing balances
-                        if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
-                            sl_net += (val * multiplier);
-                        }
-                        else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
-                            spl_net += (val * multiplier);
-                        }
-                        else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
-                            wl_net += (val * multiplier);
-                        }
-                        else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
-                            vl_net += (val * multiplier);
-                        }
+                    // Strictly route the value to the correct distinct Leave Type
+                    if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
+                        sl_net += val;
+                    }
+                    else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
+                        spl_net += val;
+                    }
+                    else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
+                        wl_net += val;
+                    }
+                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
+                        vl_net += val;
+                    }
 
-                        if (transType === 'CREDIT' || transType === 'APPROVED' || transType === 'DEDUCTION') {
-                            hasDeductions = true;
-                            let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
-                            let tSign = isCredit ? '+' : '-';
-                            let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : '');
+                    // Log the visible transaction in the UI history table
+                    if (val !== 0 && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
+                        hasDeductions = true;
+                        let tColor = val >= 0 ? 'var(--success)' : 'var(--danger)';
+                        let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
 
-                            deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                                <td style="padding: 5px;">${displayType}</td>
-                                <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${val}</td>
-                                <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                            </tr>`;
-                        }
+                        deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                            <td style="padding: 5px;">${displayType}</td>
+                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
+                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                        </tr>`;
                     }
                 });
             }
             deductionsHtml += `</table>`;
             if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = Math.max(0, vl_net).toFixed(2);
-            let currentSL = Math.max(0, sl_net).toFixed(2);
-            let currentSPL = Math.max(0, spl_net).toFixed(2);
-            let currentWL = Math.max(0, wl_net).toFixed(2);
+            let currentVL = Math.max(0, vl_net).toFixed(3);
+            let currentSL = Math.max(0, sl_net).toFixed(3);
+            let currentSPL = Math.max(0, spl_net).toFixed(3);
+            let currentWL = Math.max(0, wl_net).toFixed(3);
 
             container.innerHTML = `
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
@@ -1294,7 +1307,6 @@
                 ${ctoHtml}
             `;
         };
-
         
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
