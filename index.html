@@ -1226,8 +1226,6 @@
             }
         };
 
-
-
 window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
@@ -1257,16 +1255,16 @@ window.loadCredits = async function() {
             let hasDeductions = false;
 
             if (ledgers && ledgers.length > 0) {
-                // If ledger history exists, reset to 0 and calculate from the ground up chronologically
+                // If ledger history exists, wipe and calculate chronologically
                 vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
 
                 ledgers.forEach(l => {
                     const l_type = String(l.type || '').toUpperCase();
                     const transType = String(l.transaction_type || '').toUpperCase();
                     const remarks = String(l.remarks || '').toUpperCase();
+                    const idStr = (l_type + " " + transType + " " + remarks);
                     
-                    // 1. STRICT MANUAL INPUT RESET 
-                    // Overwrite the running total up to this date based on the Manual Input String
+                    // 1. STRICT MANUAL INPUT RESET (Sets Baseline)
                     if (remarks.includes('MANUAL BALANCE SETTING')) {
                         const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
                         const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
@@ -1277,44 +1275,38 @@ window.loadCredits = async function() {
                         if (slMatch) sl_net = parseFloat(slMatch[1]);
                         if (splMatch) spl_net = parseFloat(splMatch[1]);
                         if (wlMatch) wl_net = parseFloat(wlMatch[1]);
-                        return; // Move to the next row, do not apply arithmetic to this reset row
+                        return; // Move to next row, skip math for this row
                     }
 
-                    // 2. STANDARD ADDITIONS & DEDUCTIONS
-                    let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
-                    let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
+                    // 2. ADD ALL CREDITS and DEDUCT ALL AVAILMENTS
+                    let cVal = parseFloat(String(l.credit || "0").trim()) || 0;
+                    let dVal = parseFloat(String(l.debit || "0").trim()) || 0;
 
-                    let val = creditVal > 0 ? creditVal : (debitVal > 0 ? -debitVal : 0);
-                    let displayVal = Math.abs(val);
-                    let tSign = val >= 0 ? '+' : '-';
-
-                    // Combine fields to ensure SL/VL remarks are caught even if type is NULL
-                    const idStr = (l_type + " " + transType + " " + remarks);
-
-                    // Strictly route the value to the correct distinct Leave Type
+                    // Strictly isolate tracking
                     if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
-                        sl_net += val;
+                        sl_net = sl_net + cVal - dVal;
                     }
                     else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
-                        spl_net += val;
+                        spl_net = spl_net + cVal - dVal;
                     }
                     else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
-                        wl_net += val;
+                        wl_net = wl_net + cVal - dVal;
                     }
                     else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
-                        vl_net += val;
+                        vl_net = vl_net + cVal - dVal;
                     }
 
-                    // Log the visible transaction in the UI history table
-                    if (val !== 0 && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
+                    // 3. UI Tracker Table Logging
+                    if ((cVal > 0 || dVal > 0) && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
                         hasDeductions = true;
-                        let tColor = val >= 0 ? 'var(--success)' : 'var(--danger)';
+                        let valStr = cVal > 0 ? `+${cVal}` : `-${dVal}`;
+                        let tColor = cVal > 0 ? 'var(--success)' : 'var(--danger)';
                         let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
 
                         deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                             <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
                             <td style="padding: 5px;">${displayType}</td>
-                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
+                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${valStr}</td>
                             <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
                         </tr>`;
                     }
@@ -1377,6 +1369,10 @@ window.loadCredits = async function() {
                 ${ctoHtml}
             `;
         };
+
+
+
+
         
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
