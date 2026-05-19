@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAR CS I - TO Verifier</title>
+    <title>DAR CS I - Travel Order Verifier</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -13,192 +13,242 @@
             --card-bg: #ffffff;
             --text-main: #1f2937;
             --text-muted: #6b7280;
-            --danger: #dc2626;
             --success: #16a34a;
             --warning: #f59e0b;
+            --danger: #dc2626;
         }
 
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); padding: 15px; display: flex; flex-direction: column; align-items: center; }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); }
 
-        .header { background: var(--dar-green); color: white; padding: 20px; text-align: center; border-radius: 12px; width: 100%; max-width: 600px; margin-bottom: 15px; border-bottom: 4px solid var(--dar-gold); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header h2 { margin: 0; font-size: 18px; letter-spacing: 1px; }
-        .header p { margin: 5px 0 0 0; font-size: 11px; color: #d1d5db; }
+        .header { 
+            background: var(--dar-green); 
+            color: white; 
+            padding: 20px; 
+            text-align: center; 
+            border-bottom: 4px solid var(--dar-gold); 
+        }
+        
+        .header h1 { margin: 0; font-size: 18px; }
+        .header p { margin: 5px 0 0 0; font-size: 12px; color: #d1d5db; }
 
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); width: 100%; max-width: 600px; margin-bottom: 15px; border: 1px solid #e5e7eb; }
+        .container { padding: 20px; max-width: 600px; margin: auto; }
         
-        .status-banner { padding: 15px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px; margin-bottom: 20px; letter-spacing: 1px; text-transform: uppercase; }
-        .status-valid { background: #ecfdf5; color: #166534; border: 2px solid #166534; }
-        .status-invalid { background: #fef2f2; color: #991b1b; border: 2px solid #991b1b; }
-        .status-pending { background: #fefce8; color: #854d0e; border: 2px solid #854d0e; }
+        .card { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+            margin-bottom: 20px; 
+            border: 1px solid #e5e7eb; 
+        }
 
-        .data-group { margin-bottom: 15px; border-bottom: 1px solid #f3f4f6; padding-bottom: 15px; }
-        .data-group:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
-        
-        .label { font-size: 11px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
-        .value { font-size: 14px; font-weight: 600; color: var(--text-main); }
-        
-        .itin-row { background: #f9fafb; padding: 10px; border-radius: 6px; margin-top: 8px; border-left: 3px solid var(--dar-green); font-size: 12px; }
-        .itin-date { font-weight: bold; color: var(--dar-green); margin-bottom: 3px; }
-        
-        #loading { text-align: center; padding: 40px; font-weight: bold; color: var(--dar-green); }
-        #content { display: none; width: 100%; max-width: 600px; }
-        
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; background: #e5e7eb; color: #374151; margin-top: 4px; }
+        .card h3 { 
+            margin-top: 0; 
+            color: var(--dar-green); 
+            border-bottom: 2px solid #eee; 
+            padding-bottom: 10px; 
+            font-size: 15px; 
+        }
+
+        .info-row { display: flex; flex-direction: column; margin-bottom: 12px; }
+        .info-label { font-size: 11px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; }
+        .info-value { font-size: 14px; font-weight: 500; color: var(--text-main); margin-top: 2px; }
+
+        .badge { 
+            display: inline-block; 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            font-weight: bold; 
+        }
+        .status-APPROVED { background: #ecfdf5; color: #166534; border: 1px solid #a7f3d0; }
+        .status-CANCELLED { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .status-PENDING { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+
+        .personnel-list { list-style: none; padding: 0; margin: 0; }
+        .personnel-item { 
+            background: #f9fafb; 
+            padding: 10px; 
+            border-radius: 8px; 
+            margin-bottom: 8px; 
+            border-left: 3px solid var(--dar-gold); 
+        }
+
+        .itin-item { 
+            display: flex; 
+            flex-direction: column; 
+            margin-bottom: 15px; 
+            padding-bottom: 15px; 
+            border-bottom: 1px dashed #e5e7eb; 
+        }
+        .itin-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .itin-date { font-size: 12px; font-weight: bold; color: var(--dar-green); margin-bottom: 4px; }
+        .itin-dest { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
+        .itin-purp { font-size: 12px; color: var(--text-muted); font-style: italic; }
+
+        #loading, #error-msg { text-align: center; padding: 40px 20px; font-weight: bold; color: var(--text-muted); }
+        #error-msg { color: var(--danger); display: none; }
+        #content { display: none; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>DAR CS I E-VERIFIER</h2>
-        <p>Official Document Verification System</p>
+        <h1>DOCUMENT VERIFICATION</h1>
+        <p>Department of Agrarian Reform - Camarines Sur I</p>
     </div>
 
-    <div id="loading" class="card">
-        Scanning Document Details...
-    </div>
+    <div class="container">
+        <div id="loading">Scanning Document... Please wait.</div>
+        <div id="error-msg"></div>
 
-    <div id="content">
-        <div class="card">
-            <div id="status-banner" class="status-banner">...</div>
-            
-            <div class="data-group">
-                <div class="label">Control Number</div>
-                <div class="value" id="val-to-no" style="font-size: 18px; color: var(--dar-green);"></div>
+        <div id="content">
+            <div class="card" style="text-align: center; border-top: 4px solid var(--dar-green);">
+                <div class="info-label" style="margin-bottom: 5px;">Travel Order No.</div>
+                <div class="info-value" id="disp-to-no" style="font-size: 24px; color: var(--dar-green);"></div>
+                <div style="margin-top: 15px;">
+                    <span id="disp-status" class="badge"></span>
+                </div>
             </div>
 
-            <div class="data-group">
-                <div class="label">Authorized Personnel</div>
-                <div class="value" id="val-personnel"></div>
+            <div class="card">
+                <h3>Logistics & Details</h3>
+                <div class="info-row">
+                    <span class="info-label">Transportation</span>
+                    <span class="info-value" id="disp-transport"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Report To</span>
+                    <span class="info-value" id="disp-report"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Remarks</span>
+                    <span class="info-value" id="disp-remarks"></span>
+                </div>
             </div>
 
-            <div class="data-group">
-                <div class="label">Logistics & Transportation</div>
-                <div class="value" id="val-transport"></div>
-                <div id="val-remarks" style="font-size: 11px; color: var(--danger); font-weight: bold; margin-top: 5px;"></div>
+            <div class="card">
+                <h3>Authorized Personnel</h3>
+                <ul class="personnel-list" id="disp-personnel"></ul>
             </div>
 
-            <div class="data-group">
-                <div class="label">Itinerary & Scope</div>
-                <div id="val-itinerary"></div>
-            </div>
-            
-            <div class="data-group">
-                <div class="label">Document Audit Trail</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;" id="val-audit"></div>
+            <div class="card">
+                <h3>Approved Itinerary</h3>
+                <div id="disp-itinerary"></div>
             </div>
         </div>
     </div>
 
-    <script>
+    <script type="module">
         // SUPABASE CONFIGURATION
         const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
         const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        const formatTime12PST = (dateStr) => {
-            if(!dateStr) return "N/A";
-            const dateObj = new Date(dateStr);
-            return dateObj.toLocaleString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-        };
-
         async function verifyDocument() {
             const urlParams = new URLSearchParams(window.location.search);
-            // UPDATED: Now strictly reading the 'to_no' parameter generated by the QR code
             const toNo = urlParams.get('to_no');
 
-            const loadingEl = document.getElementById('loading');
-            const contentEl = document.getElementById('content');
-            const statusBanner = document.getElementById('status-banner');
-
             if (!toNo) {
-                loadingEl.innerHTML = `
-                    <h3 style='color: var(--danger); margin: 0;'>⚠️ Invalid Link</h3>
-                    <p style='color: gray; font-size: 12px; margin-top: 5px;'>No Control Number was detected in the QR Code.</p>
-                `;
+                showError("Invalid QR Code: Travel Order Number is missing.");
                 return;
             }
 
             try {
-                // Fetch Travel Order Base Data (Grouped by to_no, multiple personnel might exist)
-                const { data: toData, error: toError } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+                // Fetch Travel Order Details (Grouping Personnel)
+                const { data: orders, error: toError } = await supabase
+                    .from('travel_orders')
+                    .select('*')
+                    .eq('to_no', toNo);
+
+                if (toError) throw toError;
                 
-                if (toError || !toData || toData.length === 0) {
-                    loadingEl.innerHTML = `
-                        <h3 style='color: var(--danger); margin: 0;'>❌ Document Not Found</h3>
-                        <p style='color: gray; font-size: 12px; margin-top: 5px;'>This Travel Order (${toNo}) does not exist in the database or has been permanently deleted.</p>
-                    `;
+                if (!orders || orders.length === 0) {
+                    showError("Document Not Found. The Travel Order number does not exist or has been permanently deleted.");
                     return;
                 }
 
-                // Fetch Itinerary Data
-                const { data: itinData } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date', { ascending: true });
+                // Fetch Itinerary
+                const { data: itinerary, error: itinError } = await supabase
+                    .from('itinerary')
+                    .select('*')
+                    .eq('to_no', toNo)
+                    .order('travel_date', { ascending: true });
 
-                const baseRecord = toData[0];
-                const status = String(baseRecord.status).toUpperCase();
-                
-                // Set Status Banner
-                if (status === 'APPROVED') {
-                    statusBanner.className = 'status-banner status-valid';
-                    statusBanner.innerHTML = "✅ VALID & APPROVED";
-                } else if (status.includes('CANCELLED') || status.includes('DISAPPROVED')) {
-                    statusBanner.className = 'status-banner status-invalid';
-                    statusBanner.innerHTML = "❌ " + status;
-                } else {
-                    statusBanner.className = 'status-banner status-pending';
-                    statusBanner.innerHTML = "⏳ " + status.replace(/_/g, ' ');
-                }
+                if (itinError) throw itinError;
 
-                // Populate Fields
-                document.getElementById('val-to-no').innerText = baseRecord.to_no;
-                
-                // Extract unique personnel names
-                const personnelNames = [...new Set(toData.map(p => p.emp_name.toUpperCase()))];
-                document.getElementById('val-personnel').innerHTML = personnelNames.map(n => `<div>• ${n}</div>`).join('');
-
-                // Transport
-                document.getElementById('val-transport').innerText = baseRecord.transport;
-                if (baseRecord.remarks) {
-                    document.getElementById('val-remarks').innerText = `⚠️ ${baseRecord.remarks}`;
-                }
-
-                // Itinerary Builder
-                let itinHtml = '';
-                if (itinData && itinData.length > 0) {
-                    itinData.forEach(i => {
-                        const formattedDate = new Date(i.travel_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                        itinHtml += `
-                            <div class="itin-row">
-                                <div class="itin-date">${formattedDate}</div>
-                                <div style="font-weight: 600;">📍 ${i.destination}</div>
-                                <div style="color: var(--text-muted); font-style: italic; margin-top: 2px;">Purpose: ${i.purpose}</div>
-                            </div>
-                        `;
-                    });
-                } else {
-                    itinHtml = "<div style='font-size: 12px; color: gray;'>No itinerary data mapped.</div>";
-                }
-                document.getElementById('val-itinerary').innerHTML = itinHtml;
-
-                // Audit Trail
-                document.getElementById('val-audit').innerHTML = `
-                    <div><strong>Created:</strong> ${formatTime12PST(baseRecord.created_at)}</div>
-                    <div><strong>Unit Head Sign:</strong> ${formatTime12PST(baseRecord.unithead_signed_time || baseRecord.uh_signed_time)}</div>
-                    <div><strong>Div Chief Sign:</strong> ${formatTime12PST(baseRecord.dc_signed_time)}</div>
-                    <div><strong>PARPO Sign:</strong> ${formatTime12PST(baseRecord.parpo_signed_time)}</div>
-                `;
-
-                // Show Content
-                loadingEl.style.display = 'none';
-                contentEl.style.display = 'block';
+                renderData(toNo, orders, itinerary);
 
             } catch (err) {
-                loadingEl.innerHTML = `<h3 style='color: var(--danger); margin: 0;'>⚠️ System Error</h3><p style='color: gray; font-size: 12px; margin-top: 5px;'>${err.message}</p>`;
+                showError("Database Connection Error: " + err.message);
             }
         }
 
-        // Initialize
-        window.onload = verifyDocument;
+        function renderData(toNo, orders, itinerary) {
+            const baseOrder = orders[0]; // Primary details mapped from the first record
+
+            // Populate General Info
+            document.getElementById('disp-to-no').innerText = toNo;
+            document.getElementById('disp-transport').innerText = baseOrder.transport || "N/A";
+            document.getElementById('disp-report').innerText = baseOrder.report_to || "N/A";
+            document.getElementById('disp-remarks').innerText = baseOrder.remarks || "None";
+
+            // Status Badge
+            const statusEl = document.getElementById('disp-status');
+            const statusText = baseOrder.status.toUpperCase();
+            statusEl.innerText = statusText.replace(/_/g, ' ');
+            
+            if (statusText.includes('APPROVED')) {
+                statusEl.className = "badge status-APPROVED";
+            } else if (statusText.includes('CANCELLED') || statusText.includes('DISAPPROVED')) {
+                statusEl.className = "badge status-CANCELLED";
+            } else {
+                statusEl.className = "badge status-PENDING";
+            }
+
+            // Populate Personnel
+            const personnelContainer = document.getElementById('disp-personnel');
+            personnelContainer.innerHTML = orders.map(p => `
+                <li class="personnel-item">
+                    <div style="font-weight: bold; font-size: 14px; color: var(--text-main);">${p.emp_name.toUpperCase()}</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        ID: ${p.emp_id} | Unit: ${p.unit || 'N/A'}
+                    </div>
+                </li>
+            `).join('');
+
+            // Populate Itinerary
+            const itinContainer = document.getElementById('disp-itinerary');
+            if (itinerary && itinerary.length > 0) {
+                itinContainer.innerHTML = itinerary.map(i => {
+                    const fDate = new Date(i.travel_date).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
+                    return `
+                    <div class="itin-item">
+                        <div class="itin-date">${fDate}</div>
+                        <div class="itin-dest">${i.destination}</div>
+                        <div class="itin-purp">"${i.purpose}"</div>
+                    </div>
+                    `;
+                }).join('');
+            } else {
+                itinContainer.innerHTML = '<div style="font-size: 12px; color: gray;">No itinerary records found.</div>';
+            }
+
+            // Reveal Content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            const errEl = document.getElementById('error-msg');
+            errEl.innerText = msg;
+            errEl.style.display = 'block';
+        }
+
+        // Initialize verification on page load
+        document.addEventListener("DOMContentLoaded", verifyDocument);
     </script>
 </body>
 </html>
