@@ -2245,14 +2245,14 @@
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
-                const { data: empData } = await supabase.from('employees').select('cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
-                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
 
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    const rmk = String(r.remarks || "").toUpperCase().trim();
+                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 let ledgerUsed = 0;
@@ -2289,11 +2289,12 @@
             const isCtoCredited = ctoCheck && ctoCheck.checked;
 
             if (isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('transaction_type, calculated_hours').eq('emp_id', currentUser.emp_id);
+                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
                 let earned = 0, used = 0;
                 (ctoData || []).forEach(r => {
-                    if (r.transaction_type === 'EARNED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (r.transaction_type === 'USED') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    const rmk = String(r.remarks || "").toUpperCase().trim();
+                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
+                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
                 });
                 
                 const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
