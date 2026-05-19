@@ -142,6 +142,20 @@
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
 
+        // ACTIVITY LOG HELPER
+        window.logActivity = async function(toNo, action, details) {
+            try {
+                if(!toNo) return;
+                await supabaseClient.from('activity_log').insert({
+                    to_no: toNo,
+                    emp_id: currentUser ? currentUser.emp_id : 'SYSTEM',
+                    action: action,
+                    details: details,
+                    created_at: new Date().toISOString()
+                });
+            } catch(e) { console.error("Log error", e); }
+        };
+
         // PASSWORD HASHING UTILITY
         async function hashPassword(msg) {
             const msgUint8 = new TextEncoder().encode(msg);
@@ -320,6 +334,7 @@
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
                     <div class="space-x-2">
                         <button onclick="processBatch('DISAPPROVED')" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
+                        <button onclick="processBatch('OFFICIAL_TIME')" class="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-xs font-bold shadow-sm">Official Time</button>
                         <button onclick="processBatch('APPROVE')" class="px-4 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
@@ -411,6 +426,7 @@
                 for (let d of selectedDates) {
                     await supabaseClient.from('itinerary').delete().eq('to_no', targetToNo).eq('travel_date', d);
                 }
+                await window.logActivity(targetToNo, 'SPLIT_CANCELLED', `Dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`);
                 await supabaseClient.from('notifications').insert({
                     recipient_role: 'PARPO',
                     message: `Approved TO ${targetToNo} had dates cancelled (${selectedDates.join(', ')}) by ${currentUser.fullName}`,
@@ -424,6 +440,7 @@
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-red-600 font-bold animate-pulse">Cancelling TO...</p>`;
             await supabaseClient.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', to_no);
+            await window.logActivity(to_no, 'CANCELLED', `Entire TO cancelled by ${currentUser.fullName}`);
             await supabaseClient.from('notifications').insert({
                 recipient_role: 'PARPO',
                 message: `Approved TO ${to_no} was entirely cancelled by ${currentUser.fullName}`,
@@ -497,6 +514,7 @@
                     const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
                         const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(error) throw error;
+                        await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
                     });
                     await Promise.all(updatePromises);
 
@@ -514,8 +532,13 @@
                         
                         if (Object.keys(p).length === 0) return null; 
 
+                        if (action === 'OFFICIAL_TIME') {
+                            p.remarks = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                        }
+
                         const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                         if(updError) throw updError;
+                        await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
                         return true;
                     });
 
@@ -545,6 +568,10 @@
                     const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
+                    
+                    if (action === 'OFFICIAL_TIME') {
+                        p.remarks = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                    }
                 }
                 
                 // Guard against blank payload if role mapping failed
@@ -558,6 +585,12 @@
                 
                 const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                 if (updErr) throw updErr;
+                
+                if (action === 'DISAPPROVED') {
+                    await window.logActivity(to_no, 'DISAPPROVED', `Disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
+                } else {
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
+                }
                 
                 loadPendingTab();
             } catch (err) {
@@ -709,8 +742,9 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-5 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-5 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="flex-1 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-transform">DENY</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'OFFICIAL_TIME')" class="flex-1 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
+                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="flex-1 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
