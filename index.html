@@ -67,7 +67,6 @@
 
 
 <xmp id="employee_portal" style="display: none;">
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -409,6 +408,20 @@
         
         let tevData = []; // Combined Grouped TEV Items
         let currentTevToNo = null;
+
+        // ACTIVITY LOG HELPER
+        window.logActivity = async function(toNo, action, details) {
+            try {
+                if(!toNo) return;
+                await supabase.from('activity_log').insert({
+                    to_no: toNo,
+                    emp_id: currentUser ? currentUser.emp_id : 'SYSTEM',
+                    action: action,
+                    details: details,
+                    created_at: new Date().toISOString()
+                });
+            } catch(e) { console.error("Log error", e); }
+        };
 
         // STRICT PHILIPPINE TIME (PST) FORMATTERS
         const getPSTDateFromDateObj = (dateObj) => {
@@ -1593,11 +1606,13 @@
                     if (conflict.status.includes("PENDING")) {
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
                         await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
+                        await window.logActivity(conflict.to_no, 'OVERWRITTEN_PENDING', `Pending Travel Order overwritten by ${currentUser.full_name}`);
                     } else if (conflict.status === "APPROVED") {
                         const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
                         const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
                         
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
+                        await window.logActivity(conflict.to_no, 'SPLIT_CANCELLED', `Approved TO split/overwritten on ${conflict.affected_date}`);
 
                         await supabase.from('notifications').insert({ 
                             emp_id: currentUser.emp_id, 
@@ -1618,6 +1633,8 @@
                             
                             const { error: remErr2 } = await supabase.from('itinerary').insert(batchRemainderItin);
                             if (remErr2) throw new Error("Conflict Itinerary Insert Error: " + remErr2.message);
+                            
+                            await window.logActivity(remainderToNo, 'SPLIT_CREATED', `Created from split of ${conflict.to_no}`);
                         }
                     }
                 }
@@ -1672,6 +1689,8 @@
                 const { error: itinError } = await supabase.from('itinerary').insert(batchItin);
                 if (itinError) throw new Error("Itinerary DB Error: " + itinError.message);
                 
+                await window.logActivity(finalToNo, 'SUBMITTED', 'Travel Order Request Submitted');
+                
                 alert("Logic Executed. Submitted: " + finalToNo);
                 
                 document.getElementById('itin-from').value = '';
@@ -1719,13 +1738,15 @@
             if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            await window.logActivity(toNo, 'DELETED', 'Pending Travel Order Deleted');
             window.loadStatus();
         };
 
         window.cancelApprovedTO = async function(toNo) {
             if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
             await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}`, to_no: toNo });
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}` });
+            await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by User');
             window.loadStatus();
         };
 
@@ -1795,6 +1816,8 @@
 
             await supabase.from('itinerary').delete().eq('to_no', toNo);
             await supabase.from('travel_orders').delete().eq('to_no', toNo);
+            await window.logActivity(toNo, 'MODIFIED', 'Pending Travel Order Modified/Drafted');
+            
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
@@ -2316,8 +2339,10 @@
 
                     if (!remaining || remaining.length === 0) {
                         await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
+                        await window.logActivity(to_no, 'CANCELLED', 'Cancelled due to overlapping Leave Application');
                     } else {
                         if (toData.status === 'APPROVED') {
+                            await window.logActivity(to_no, 'SPLIT_MODIFIED', 'Approved TO modified/split due to overlapping Leave Application');
                             await supabase.from('notifications').insert({
                                 emp_id: currentUser.emp_id,
                                 message: `Approved TO ${to_no} was modified due to a Leave Application. Overlapping days were removed.`,
@@ -2336,6 +2361,7 @@
                                 routeStatus = "PENDING_UNIT_HEAD";
                             }
 
+                            await window.logActivity(to_no, 'MODIFIED_ROUTED_BACK', 'Pending TO modified and routed back due to Leave Application overlap');
                             await supabase.from('travel_orders').update({
                                 status: routeStatus,
                                 unithead_signed: null,
@@ -3041,8 +3067,6 @@
     </script>
 </body>
 </html>
-    
-    
 </xmp>
 
 
