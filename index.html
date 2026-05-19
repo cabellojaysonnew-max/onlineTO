@@ -68,8 +68,7 @@
 
 <xmp id="employee_portal" style="display: none;">
 
-    
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -273,12 +272,16 @@
                     <input type="checkbox" id="to-outside-bicol" style="width: auto; margin: 0; padding: 0;"> OUTSIDE BICOL REGION
                 </label>
                 <label>Means of Transportation</label>
-                <select id="to-transport">
+                <select id="to-transport" onchange="document.getElementById('dep-time-group').style.display = this.value === 'GOV\'T VEHICLE' ? 'block' : 'none'">
                     <option value="LAND">Public Utility (LAND)</option>
                     <option value="GOV'T VEHICLE">Gov't Vehicle</option>
                     <option value="AIR">Air Travel</option>
                     <option value="OTHERS">Others</option>
                 </select>
+                <div id="dep-time-group" style="display: none; margin-top: 10px;">
+                    <label>Departure Time</label>
+                    <input type="time" id="to-dep-time" style="margin-bottom: 0;">
+                </div>
             </div>
 
             <div class="card" id="special-div-card" style="display: none;">
@@ -1223,19 +1226,27 @@
             }
         };
 
-        window.loadCredits = async function() {
+
+
+window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
             container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
             const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             
-            const { data: ledgers } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED']);
+            const { data: ledgers } = await supabase.from('leave_ledger')
+                .select('*')
+                .eq('emp_id', currentUser.emp_id)
+                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION'])
+                .order('created_at', { ascending: true });
             
-            let vl_net = 0;
-            let sl_net = 0;
-            let spl_net = 0;
-            let wl_net = 0;
+            // Default to Employee table if no ledger history exists
+            let vl_net = emp ? parseFloat(String(emp.vl_balance || "0").trim()) || 0 : 0;
+            let sl_net = emp ? parseFloat(String(emp.sl_balance || "0").trim()) || 0 : 0;
+            let spl_net = emp ? parseFloat(String(emp.spl_balance || "0").trim()) || 0 : 0;
+            let wl_net = emp ? parseFloat(String(emp.wl_balance || "0").trim()) || 0 : 0;
+            
             let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
                 <tr style="background: var(--dar-green); color: white;">
                     <th style="padding: 5px; text-align: left;">Date</th>
@@ -1246,53 +1257,87 @@
             let hasDeductions = false;
 
             if (ledgers && ledgers.length > 0) {
+                // If ledger history exists, reset to 0 and calculate from the ground up chronologically
+                vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
+
                 ledgers.forEach(l => {
-                    if (String(l.type || '').toUpperCase() === 'MANUAL INPUT' || String(l.transaction_type || '').toUpperCase() === 'MANUAL INPUT') return;
-
-                    hasDeductions = true;
-                    const l_type = (l.type || '').toUpperCase();
-                    let isCredit = String(l.transaction_type || '').toUpperCase() === 'CREDIT';
+                    const l_type = String(l.type || '').toUpperCase();
+                    const transType = String(l.transaction_type || '').toUpperCase();
+                    const remarks = String(l.remarks || '').toUpperCase();
                     
-                    let rawVal = isCredit ? (l.credit || l.debit || "0") : (l.debit || "0");
-                    let val = parseFloat(String(rawVal).trim()) || 0;
-                    let multiplier = isCredit ? 1 : -1;
+                    // 1. STRICT MANUAL INPUT RESET 
+                    // Overwrite the running total up to this date based on the Manual Input String
+                    if (remarks.includes('MANUAL BALANCE SETTING')) {
+                        const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
+                        const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
+                        const splMatch = remarks.match(/SPL:\s*([0-9.-]+)/i);
+                        const wlMatch = remarks.match(/WL:\s*([0-9.-]+)/i);
+                        
+                        if (vlMatch) vl_net = parseFloat(vlMatch[1]);
+                        if (slMatch) sl_net = parseFloat(slMatch[1]);
+                        if (splMatch) spl_net = parseFloat(splMatch[1]);
+                        if (wlMatch) wl_net = parseFloat(wlMatch[1]);
+                        return; // Move to the next row, do not apply arithmetic to this reset row
+                    }
 
-                    if (l_type.includes('SICK')) sl_net += (val * multiplier);
-                    else if (l_type.includes('SPECIAL PRIVILEGE') || l_type.includes('SPL')) spl_net += (val * multiplier);
-                    else if (l_type.includes('WELLNESS')) wl_net += (val * multiplier);
-                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) vl_net += (val * multiplier);
+                    // 2. STANDARD ADDITIONS & DEDUCTIONS
+                    let creditVal = parseFloat(String(l.credit || "0").trim()) || 0;
+                    let debitVal = parseFloat(String(l.debit || "0").trim()) || 0;
 
-                    let tColor = isCredit ? 'var(--success)' : 'var(--danger)';
-                    let tSign = isCredit ? '+' : '-';
+                    let val = creditVal > 0 ? creditVal : (debitVal > 0 ? -debitVal : 0);
+                    let displayVal = Math.abs(val);
+                    let tSign = val >= 0 ? '+' : '-';
 
-                    deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                        <td style="padding: 5px;">${l.type}</td>
-                        <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${val}</td>
-                        <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                    </tr>`;
+                    // Combine fields to ensure SL/VL remarks are caught even if type is NULL
+                    const idStr = (l_type + " " + transType + " " + remarks);
+
+                    // Strictly route the value to the correct distinct Leave Type
+                    if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
+                        sl_net += val;
+                    }
+                    else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
+                        spl_net += val;
+                    }
+                    else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
+                        wl_net += val;
+                    }
+                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
+                        vl_net += val;
+                    }
+
+                    // Log the visible transaction in the UI history table
+                    if (val !== 0 && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
+                        hasDeductions = true;
+                        let tColor = val >= 0 ? 'var(--success)' : 'var(--danger)';
+                        let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
+
+                        deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
+                            <td style="padding: 5px;">${displayType}</td>
+                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${tSign}${displayVal}</td>
+                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                        </tr>`;
+                    }
                 });
             }
             deductionsHtml += `</table>`;
             if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = emp ? Math.max(0, (parseFloat(String(emp.vl_balance || "0").trim()) || 0) + vl_net).toFixed(2) : 0;
-            let currentSL = emp ? Math.max(0, (parseFloat(String(emp.sl_balance || "0").trim()) || 0) + sl_net).toFixed(2) : 0;
-            let currentSPL = emp ? Math.max(0, (parseFloat(String(emp.spl_balance || "0").trim()) || 0) + spl_net).toFixed(2) : 0;
-            let currentWL = emp ? Math.max(0, (parseFloat(String(emp.wl_balance || "0").trim()) || 0) + wl_net).toFixed(2) : 0;
+            let currentVL = Math.max(0, vl_net).toFixed(3);
+            let currentSL = Math.max(0, sl_net).toFixed(3);
+            let currentSPL = Math.max(0, spl_net).toFixed(3);
+            let currentWL = Math.max(0, wl_net).toFixed(3);
 
-            if(emp) {
-                container.innerHTML = `
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
-                        <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
-                    </div>
-                    <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
-                    ${deductionsHtml}
-                `;
-            }
+            container.innerHTML = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
+                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
+                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
+                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
+                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
+                </div>
+                <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
+                ${deductionsHtml}
+            `;
 
             const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
             
@@ -1332,7 +1377,7 @@
                 ${ctoHtml}
             `;
         };
-
+        
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
             const img = document.getElementById('my-qr-img');
@@ -1595,6 +1640,15 @@
                 let baseRemarks = [];
                 if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
                 if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
+                if (transport === "GOV'T VEHICLE") {
+                    const depTime = document.getElementById('to-dep-time').value;
+                    if (depTime) {
+                        let [h, m] = depTime.split(':');
+                        let ampm = h >= 12 ? 'PM' : 'AM';
+                        let h12 = h % 12 || 12;
+                        baseRemarks.push(`Departure: ${h12}:${m} ${ampm}`);
+                    }
+                }
 
                 const batchPersonnel = personnelDraft.map(p => ({
                     to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
@@ -1617,6 +1671,8 @@
                 document.getElementById('dynamic-itin-fields').innerHTML = '';
                 document.getElementById('to-transport').selectedIndex = 0;
                 document.getElementById('to-outside-bicol').checked = false;
+                document.getElementById('to-dep-time').value = '';
+                document.getElementById('dep-time-group').style.display = 'none';
                 personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
                 window.renderPersonnel();
                 itineraryDraft = [];
@@ -1673,6 +1729,7 @@
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
             
             document.getElementById('to-transport').value = to.transport;
+            document.getElementById('dep-time-group').style.display = to.transport === "GOV'T VEHICLE" ? 'block' : 'none';
             document.getElementById('to-outside-bicol').checked = to.remarks && to.remarks.includes("OUTSIDE BICOL");
             if (itin.length > 0) {
                 document.getElementById('itin-from').value = itin[0].travel_date;
@@ -1773,9 +1830,10 @@
                     if (data) dc_list = data;
                 }
 
+                const qrUrl = encodeURIComponent(`https://cabellojaysonnew-max.github.io/onlineTO/verifier.html?to_no=${toNo}`);
                 const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
                     urlToBase64(getAssetUrl("bg_form.jpg")),
-                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${toNo}`),
+                    urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}`),
                     urlToBase64(getAssetUrl("P2.png")), 
                     ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
                     ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
@@ -1784,211 +1842,209 @@
                 const uh_imgs = sigs.slice(0, uh_list.length);
                 const dc_imgs = sigs.slice(uh_list.length);
 
-                for (let i = 0; i < 3; i++) {
-                    if (i > 0) doc.addPage();
-                    if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
-                    
-                    // TOP MOST RED INK REMARK FOR GOV'T VEHICLE (Y=8)
-                    if (od.transport === "GOV'T VEHICLE") {
-                        doc.setTextColor(255, 0, 0); // RED INK
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-                        doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
-                        doc.setTextColor(0, 0, 0); // RESET TO BLACK
-                    }
-
-                    if (img_qr) { 
-                        try { 
-                            doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
-                            if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
-
-                            // AUDIT TRAIL TIMESTAMPS
-                            doc.setFont("helvetica", "normal");
-                            doc.setFontSize(4);
-                            let auditText = [
-                                `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
-                                `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
-                                `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
-                            ];
-                            doc.text(auditText, 190, 36, {align: 'center'});
-                        } catch(e){} 
-                    }
-
-                    if (od.remarks && od.remarks.includes("EXISTING PSO")) {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-                        doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
-                    }
-
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-                    doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
-                    const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-                    doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
-
-                    const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
-                        let currentSize = defaultSize;
-                        doc.setFontSize(currentSize);
-                        let lines = doc.splitTextToSize(text || "", maxWidth);
-                        while (lines.length > maxLines && currentSize > 4.5) {
-                            currentSize -= 0.5;
-                            doc.setFontSize(currentSize);
-                            lines = doc.splitTextToSize(text || "", maxWidth);
-                        }
-                        let curY = y;
-                        lines.forEach((line) => {
-                            doc.text(line, x, curY);
-                            doc.line(x, curY + 1, lineEndX, curY + 1);
-                            curY += 4.5;
-                        });
-                        doc.setFontSize(defaultSize);
-                        return lines.length;
-                    };
-
-                    doc.setFontSize(10); 
-                    doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
-                    doc.setFont("helvetica", "normal");
-                    let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
-
-                    let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
-
-                    doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
-                    doc.setFont("helvetica", "normal"); 
-                    let posLinesCount = renderFlexibleText(positions, 40, nextY, 45, 85, 10, 2);
-                    
-                    doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
-                    doc.setFont("helvetica", "normal"); 
-                    let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
-
-                    let maxSubLines = Math.max(posLinesCount, statLinesCount);
-                    let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
-
-                    doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, transY);
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    const drawCheck = (label, x, y, isChecked) => {
-                        doc.rect(x, y - 3, 3, 3);
-                        if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
-                        doc.text(label, x + 5, y);
-                    };
-                    drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
-                    
-                    drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
-                    if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
-                        doc.text(`Sched: ${vLog.schedule}`, 103, transY + 5);
-                        doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
-                    }
-
-                    drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
-                    drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
-
-                    doc.setFontSize(10); doc.setFont("helvetica", "bold");
-                    let destLabelY = transY + 17;
-                    doc.text("DESTINATION:", 20, destLabelY);
-                    const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-                    let destY = destLabelY;
-                    const destMaxWidth = 110;
-
-                    itin_list.forEach(it => {
-                        const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
-                        const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
-                        wrappedDestLines.forEach((line) => {
-                            doc.text(line, 50, destY);
-                            destY += 3.5;
-                        });
-                    });
-                    
-                    let curY = Math.max(destY, destLabelY + 5);
-
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("DEPARTURE DATE:", 20, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
-                    doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
-
-                    curY += 6;
-                    doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-                    doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
-                    
-                    curY += 6;
-                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
-                    curY += 4;
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-
-                    const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
-                    const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
-                    purpLines.forEach((line) => {
-                        doc.text(line, 20, curY);
-                        doc.line(20, curY + 1, 160, curY + 1);
-                        curY += 4.5; 
-                    });
-                    curY += 2;
-                    
-                    doc.setFont("helvetica", "italic"); doc.setFontSize(8);
-                    doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
-                    drawCheck("LIVE IN", 110, curY, false);
-                    drawCheck("LIVE OUT", 135, curY, false);
-
-                    const renderSigs = (list, imgs, startX, width) => {
-                        if (list.length === 0) return;
-                        const count = list.length;
-                        const step = width / count;
-                        const imgSize = count > 2 ? 18 : 25;
-                        
-                        for (let j = 0; j < count; j++) {
-                            let cx = startX + (step * j) + (step / 2); 
-                            let imgX = cx - (imgSize / 2);
-                            
-                            if (i > 0 && imgs[j]) { 
-                                try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
-                            }
-                            
-                            let name = list[j].full_name.toUpperCase();
-                            let fontSize = 8;
-                            doc.setFontSize(fontSize);
-                            while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
-                                fontSize -= 0.5;
-                                doc.setFontSize(fontSize);
-                            }
-                            
-                            doc.text(name, cx, 166, { align: 'center' });
-                        }
-                    };
-
-                    if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                        doc.text("Recommending Approval:", 20, 156);
-                        
-                        // Division Chief Signature
-                        renderSigs(dc_list, dc_imgs, 20, 60);
-                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("DIVISION CHIEF", 52, 172, {align: 'center'});
-                        
-                        // PARPO II Signature
-                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 142, 30, 30); } catch(e){} }
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                        doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
-                        doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
-                        
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
-                        doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
-                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                        doc.text("Regional Director", 128, 206);
-                    } else {
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                        doc.text("Recommended by:", 20, 156);
-                        
-                        if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
-                        renderSigs(dc_list, dc_imgs, 95, 60);
-
-                        doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
-                        doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
-
-                        if(i > 0 && img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
-                        doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-                        doc.text("RICARDO C. GARCIA", 114, 202);
-                        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                        doc.text("PARPO II", 128, 206);
-                    }
+                if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+                
+                // TOP MOST RED INK REMARK FOR GOV'T VEHICLE (Y=8)
+                if (od.transport === "GOV'T VEHICLE") {
+                    doc.setTextColor(255, 0, 0); // RED INK
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                    doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, 8, { align: 'center' });
+                    doc.setTextColor(0, 0, 0); // RESET TO BLACK
                 }
+
+                if (img_qr) { 
+                    try { 
+                        doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
+                        if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
+
+                        // AUDIT TRAIL TIMESTAMPS
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(4);
+                        let auditText = [
+                            `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                            `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
+                            `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+                        ];
+                        doc.text(auditText, 190, 36, {align: 'center'});
+                    } catch(e){} 
+                }
+
+                if (od.remarks && od.remarks.includes("EXISTING PSO")) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+                    doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+                }
+
+                doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+                doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+                const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
+
+                const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
+                    let currentSize = defaultSize;
+                    doc.setFontSize(currentSize);
+                    let lines = doc.splitTextToSize(text || "", maxWidth);
+                    while (lines.length > maxLines && currentSize > 4.5) {
+                        currentSize -= 0.5;
+                        doc.setFontSize(currentSize);
+                        lines = doc.splitTextToSize(text || "", maxWidth);
+                    }
+                    let curY = y;
+                    lines.forEach((line) => {
+                        doc.text(line, x, curY);
+                        doc.line(x, curY + 1, lineEndX, curY + 1);
+                        curY += 4.5;
+                    });
+                    doc.setFontSize(defaultSize);
+                    return lines.length;
+                };
+
+                doc.setFontSize(10); 
+                doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
+                doc.setFont("helvetica", "normal");
+                let nameLinesCount = renderFlexibleText(names, 40, 48, 120, 160, 10, 4);
+
+                let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
+
+                doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
+                doc.setFont("helvetica", "normal"); 
+                let posLinesCount = renderFlexibleText(positions, 40, nextY, 45, 85, 10, 2);
+                
+                doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
+                doc.setFont("helvetica", "normal"); 
+                let statLinesCount = renderFlexibleText(stations, 110, nextY, 50, 160, 10, 2);
+
+                let maxSubLines = Math.max(posLinesCount, statLinesCount);
+                let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
+
+                doc.setFont("helvetica", "bold"); doc.text("MEANS OF TRANSPORTATION:", 20, transY);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                const drawCheck = (label, x, y, isChecked) => {
+                    doc.rect(x, y - 3, 3, 3);
+                    if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.2); doc.setFont("helvetica", "normal"); }
+                    doc.text(label, x + 5, y);
+                };
+                drawCheck("AIR", 20, transY + 5, od.transport === "AIR");
+                
+                drawCheck("GOV'T VEHICLE", 70, transY + 5, od.transport === "GOV'T VEHICLE");
+                if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(255, 0, 0);
+                    doc.text(`Sched: ${vLog.schedule}`, 103, transY + 5);
+                    doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
+                }
+
+                drawCheck("LAND", 20, transY + 10, od.transport === "LAND");
+                drawCheck("OTHERS, PLEASE SPECIFY", 70, transY + 10, od.transport === "OTHERS");
+
+                doc.setFontSize(10); doc.setFont("helvetica", "bold");
+                let destLabelY = transY + 17;
+                doc.text("DESTINATION:", 20, destLabelY);
+                const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+                let destY = destLabelY;
+                const destMaxWidth = 110;
+
+                itin_list.forEach(it => {
+                    const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
+                    const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
+                    wrappedDestLines.forEach((line) => {
+                        doc.text(line, 50, destY);
+                        destY += 3.5;
+                    });
+                });
+                
+                let curY = Math.max(destY, destLabelY + 5);
+
+                doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                doc.text("DEPARTURE DATE:", 20, curY);
+                doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
+                doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
+                doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+
+                curY += 6;
+                doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
+                doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 160, curY+1);
+                
+                curY += 6;
+                doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
+                curY += 4;
+                doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+
+                const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+                const purpLines = doc.splitTextToSize(uniquePurposes || "", 140);
+                purpLines.forEach((line) => {
+                    doc.text(line, 20, curY);
+                    doc.line(20, curY + 1, 160, curY + 1);
+                    curY += 4.5; 
+                });
+                curY += 2;
+                
+                doc.setFont("helvetica", "italic"); doc.setFontSize(8);
+                doc.text("In case of seminar/workshop/consultation/briefing, indicate:", 20, curY);
+                drawCheck("LIVE IN", 110, curY, false);
+                drawCheck("LIVE OUT", 135, curY, false);
+
+                const renderSigs = (list, imgs, startX, width) => {
+                    if (list.length === 0) return;
+                    const count = list.length;
+                    const step = width / count;
+                    const imgSize = count > 2 ? 18 : 25;
+                    
+                    for (let j = 0; j < count; j++) {
+                        let cx = startX + (step * j) + (step / 2); 
+                        let imgX = cx - (imgSize / 2);
+                        
+                        if (imgs[j]) { 
+                            try { doc.addImage(imgs[j], 'PNG', imgX, 150, imgSize, imgSize); } catch(e){} 
+                        }
+                        
+                        let name = list[j].full_name.toUpperCase();
+                        let fontSize = 8;
+                        doc.setFontSize(fontSize);
+                        while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                            fontSize -= 0.5;
+                            doc.setFontSize(fontSize);
+                        }
+                        
+                        doc.text(name, cx, 166, { align: 'center' });
+                    }
+                };
+
+                if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("Recommending Approval:", 20, 156);
+                    
+                    // Division Chief Signature
+                    renderSigs(dc_list, dc_imgs, 20, 60);
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("DIVISION CHIEF", 52, 172, {align: 'center'});
+                    
+                    // PARPO II Signature
+                    if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 142, 30, 30); } catch(e){} }
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
+                    
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+                    doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.text("Regional Director", 128, 206);
+                } else {
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("Recommended by:", 20, 156);
+                    
+                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
+                    renderSigs(dc_list, dc_imgs, 95, 60);
+
+                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
+                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+
+                    if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text("RICARDO C. GARCIA", 114, 202);
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    doc.text("PARPO II", 128, 206);
+                }
+                
                 await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
             } catch (e) { alert("PDF Error: " + e.message); }
         };
@@ -3000,9 +3056,6 @@
 <xmp id="admin_console" style="display: none;">
 
 
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3872,7 +3925,7 @@
                                 const dest = (i.destination || '').toLowerCase();
                                 
                                 const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                                const destParts = dest.split(/[\\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
                                 
                                 const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
                                 
@@ -3985,8 +4038,8 @@
                 // Supabase explicit timezone bounds for Philippine Standard Time (UTC+08:00)
                 const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
 
-                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name').in('emp_id', validEmpIds),
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes, allHistToRes, allHistItinRes] = await Promise.all([
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name, unit').in('emp_id', validEmpIds),
                     supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no, destination').eq('travel_date', todayStr),
@@ -3995,7 +4048,9 @@
                     isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
                     supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
                     supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth)
+                    supabaseClient.from('itinerary').select('to_no, destination, travel_date').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth),
+                    supabaseClient.from('travel_orders').select('to_no, emp_id').eq('status', 'APPROVED'),
+                    supabaseClient.from('itinerary').select('to_no, destination, travel_date')
                 ]);
 
                 const tos = toRes.data || [];
@@ -4035,7 +4090,6 @@
                 let listBirthday = [];
                 let listGatePass = [];
                 
-                // Trackers for Field Staff Location matching
                 let listAtDestination = [];
                 let listOutsideDestination = [];
                 let listNoLogsField = [];
@@ -4047,12 +4101,10 @@
                     }
                 });
 
-                // Compute exact destination matches for personnel on travel order
                 empIdsOnTO.forEach(empId => {
                     const emp = validEmps.find(e => e.emp_id === empId);
                     if(!emp) return;
                     
-                    // BUG FIX COMPLETED: Grab ALL approved TOs for the user, then find the specific one happening today.
                     const empActiveTOs = activeTOs.filter(t => t.emp_id === empId);
                     const itinForEmp = itinsToday.find(i => empActiveTOs.some(t => t.to_no === i.to_no));
                     
@@ -4084,11 +4136,17 @@
                 });
 
                 validEmps.forEach(emp => {
+                    // STRICT YYYY-MM-DD Parsing to prevent timezone offsets
                     if (emp.dob) {
                         try {
-                            const dobDate = new Date(emp.dob);
-                            if (dobDate.getMonth() + 1 === currentMonth) {
-                                listBirthday.push({ name: emp.full_name, date: dobDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+                            const parts = emp.dob.split('-');
+                            if (parts.length >= 3) {
+                                const dobM = parseInt(parts[1], 10);
+                                const dobD = parseInt(parts[2].substring(0, 2), 10);
+                                if (dobM === currentMonth) {
+                                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                                    listBirthday.push({ name: emp.full_name, date: `${monthNames[dobM - 1]} ${dobD}` });
+                                }
                             }
                         } catch(e){}
                     }
@@ -4172,13 +4230,157 @@
                 const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
                 const deskStaff = logsMap.size - fieldStaff; 
 
-                // BUG FIX COMPLETED: listOutsideDestination variable assignment corrected.
+                // AI Strategic Routing Implementation
+                const allHistTOs = allHistToRes.data || [];
+                const allHistItins = allHistItinRes.data || [];
+                
+                const stratEmps = validEmps.filter(e => 
+                    (e.employment_type || '').toUpperCase() === 'PERMANENT' &&
+                    (e.station || '').toUpperCase().includes('CS1') &&
+                    (e.status || '').toUpperCase() === 'ACTIVE'
+                );
+                const stratEmpIds = stratEmps.map(e => e.emp_id);
+                
+                const validMonthToNos = new Set(monthItineraries.map(i => i.to_no));
+                const traveledThisMonthIds = new Set();
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && validMonthToNos.has(t.to_no) && stratEmpIds.includes(t.emp_id)) {
+                        traveledThisMonthIds.add(t.emp_id);
+                    }
+                });
+                const percentTraveled = stratEmpIds.length > 0 ? Math.round((traveledThisMonthIds.size / stratEmpIds.length) * 100) : 0;
+
+                const allowedPlaces = ["Iriga City/Buhi", "Baao", "BaNaBa", "Bula", "Libmanan I, II, III, and IV", "Minalabac", "Pamplona", "Pasacao", "SanMilGaz", "Cabusao", "Del Gallego", "Lupi", "Ragay", "Sipocot I, II and II", "Regional Office"];
+                
+                let placeFrequencyCounts = {};
+                let monthPlaceFrequencyCounts = {}; 
+                allowedPlaces.forEach(p => {
+                    placeFrequencyCounts[p] = 0;
+                    monthPlaceFrequencyCounts[p] = 0;
+                });
+                let currentWeekOverlaps = {};
+                
+                const sWeek = new Date(nowManilaObj);
+                sWeek.setDate(nowManilaObj.getDate() - nowManilaObj.getDay() + 1); 
+                const eWeek = new Date(sWeek);
+                eWeek.setDate(sWeek.getDate() + 4); 
+                
+                const validHistToNos = new Set(allHistTOs.filter(t => stratEmpIds.includes(t.emp_id)).map(t => t.to_no));
+                
+                allHistItins.forEach(i => {
+                    if (validHistToNos.has(i.to_no) && i.destination) {
+                        const matchedPlace = allowedPlaces.find(ap => i.destination.toLowerCase().includes(ap.toLowerCase()) || ap.toLowerCase().includes(i.destination.toLowerCase()));
+                        if (matchedPlace) {
+                            placeFrequencyCounts[matchedPlace]++;
+                            
+                            const iDate = new Date(i.travel_date);
+                            if (iDate >= sWeek && iDate <= eWeek) {
+                                if (!currentWeekOverlaps[matchedPlace]) currentWeekOverlaps[matchedPlace] = 0;
+                                currentWeekOverlaps[matchedPlace]++;
+                            }
+
+                            const iDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(iDate);
+                            if (iDateStr >= firstDayOfMonth && iDateStr <= lastDayOfMonth) {
+                                monthPlaceFrequencyCounts[matchedPlace]++;
+                            }
+                        }
+                    }
+                });
+                
+                let sortedPlacesMonth = Object.entries(monthPlaceFrequencyCounts).sort((a, b) => b[1] - a[1]);
+                let topStratPlacesMonth = sortedPlacesMonth.slice(0, 3).filter(p => p[1] > 0).map(p => p[0]);
+                let unvisitedPlacesMonth = sortedPlacesMonth.filter(p => p[1] === 0).map(p => p[0]);
+                
+                let overlapWarnings = Object.entries(currentWeekOverlaps).filter(p => p[1] >= 3).map(p => `${p[0]} (${p[1]} personnel)`);
+
+                let unvisitedText = unvisitedPlacesMonth.length > 0 
+                    ? `Critical monitoring gaps remain, with <strong>ZERO deployments</strong> this month to: <strong class="text-rose-600 font-black">${unvisitedPlacesMonth.join(', ')}</strong>.` 
+                    : `All designated municipalities have been visited at least once this month.`;
+
+                let deploymentSuggestion = unvisitedPlacesMonth.length > 0
+                    ? `Mandate upcoming travel orders to prioritize the unvisited areas (${unvisitedPlacesMonth.slice(0, 3).join(', ')}). Limit further non-essential deployments to ${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(' and ') : 'high-frequency zones'}.`
+                    : `Maintain current balanced deployment patterns while ensuring follow-up visits to low-frequency areas.`;
+
+                let strategyHtml = `
+                <div class="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5 rounded-2xl shadow-[0_4px_12px_rgba(79,70,229,0.06)] mt-6 mb-4 relative overflow-hidden">
+                    <div class="flex items-center space-x-2 mb-3 relative z-10">
+                        <span class="text-2xl drop-shadow-sm">🧠</span>
+                        <h3 class="font-black text-indigo-900 text-sm uppercase tracking-widest leading-none">AI Routing Strategy</h3>
+                    </div>
+                    <div class="flex justify-between items-center border-b border-indigo-100 pb-2 mb-3">
+                        <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Target: Permanent | CS1 | Active</p>
+                        <span class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">${percentTraveled}% Traveled This Month</span>
+                    </div>
+                    <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-3 opacity-90">
+                        Monthly analysis indicates that <strong>${percentTraveled}%</strong> of the target personnel (${traveledThisMonthIds.size} out of ${stratEmpIds.length}) have traveled. High-frequency visitation zones include <strong class="text-indigo-600 font-black">${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(', ') : 'no significant data'}</strong>. ${unvisitedText}
+                    </p>
+                    <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-4 opacity-90">
+                        <strong>Management Action:</strong> ${deploymentSuggestion} Disperse personnel targeting the same geographic clusters to ensure comprehensive regional coverage and optimal constituent support simultaneously.
+                    </p>
+                    ${overlapWarnings.length > 0 
+                        ? `<div class="bg-white border-l-4 border-rose-500 p-3 rounded-lg shadow-sm text-[10px] text-rose-700 font-bold leading-tight">⚠️ OVERLAP DETECTED THIS WEEK: Intense personnel concentration in ${overlapWarnings.join(', ')}. Recommend rescheduling select itineraries to balance area presence.</div>` 
+                        : `<div class="bg-white border-l-4 border-emerald-500 p-3 rounded-lg shadow-sm text-[10px] text-emerald-700 font-bold leading-tight">✅ Excellent distribution detected for the current week. No severe overlaps in targeted municipalities.</div>`}
+                </div>`;
+
+                // --- NEW: PROVINCIAL DEEP DIVE LOGIC ---
+                const activeUnits = {};
+                tos.forEach(t => {
+                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.unit && t.unit !== 'NA' && t.unit !== 'N/A') {
+                        const unt = t.unit.trim().toUpperCase();
+                        activeUnits[unt] = (activeUnits[unt] || 0) + 1;
+                    }
+                });
+                const topUnits = Object.entries(activeUnits).sort((a,b) => b[1] - a[1]).slice(0,3);
+
+                const highlyVisitedHtml = topStratPlacesMonth.map(p => `<div class="flex justify-between text-xs border-b border-indigo-100/30 py-1.5"><span class="text-indigo-200">${p}</span><span class="font-bold text-white">${monthPlaceFrequencyCounts[p]} deployments</span></div>`).join('');
+                const neglectedHtml = unvisitedPlacesMonth.map(p => `<span class="inline-block px-2 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded text-[9px] font-bold mr-1 mb-1 shadow-sm">${p}</span>`).join('');
+
+                let monthNameStr = new Date(nowManilaObj).toLocaleString('default', { month: 'long' });
+
+                let provincialDeepDiveHtml = `
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-xl mt-8 mb-4 border border-slate-700 relative overflow-hidden">
+                        <div class="flex items-center space-x-2 mb-4 relative z-10">
+                            <span class="text-2xl drop-shadow-md">🗺️</span>
+                            <div>
+                                <h3 class="font-black text-white text-sm uppercase tracking-widest leading-none">Provincial Deep Dive</h3>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">Macro-level Management Analysis (${monthNameStr} ${tY})</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 gap-4 relative z-10">
+                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
+                                <h4 class="text-[10px] text-indigo-300 font-black uppercase tracking-wider mb-2 flex justify-between"><span>Coverage Concentration</span> <span>Top 3 Areas</span></h4>
+                                <div class="space-y-1 mb-4">
+                                    ${highlyVisitedHtml || '<p class="text-xs text-slate-400">No data</p>'}
+                                </div>
+                                <h4 class="text-[10px] text-rose-300 font-black uppercase tracking-wider mb-2">Neglected Zones (Zero Deployments)</h4>
+                                <div class="flex flex-wrap gap-1">
+                                    ${neglectedHtml || '<p class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded">100% Province Coverage Achieved</p>'}
+                                </div>
+                            </div>
+
+                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
+                                <h4 class="text-[10px] text-emerald-300 font-black uppercase tracking-wider mb-2">Unit Mobility Efficiency</h4>
+                                <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                                    The most active operational units generating deployments this month are: <br>
+                                    <span class="text-white font-bold inline-block mt-1">${topUnits.map(u => `• ${u[0]} (${u[1]} TOs)`).join('<br>') || 'None'}</span>
+                                </p>
+                                <div class="mt-2 text-[9px] text-slate-400 border-t border-white/10 pt-2 uppercase tracking-wider font-bold">
+                                    *High mobility units must be cross-referenced with deliverables to ensure travel correlates with field output.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
                 analyticsData = { 
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
                     anomalies: anomalyCount,
-                    insights: { topDest, topTrav }
+                    insights: { topDest, topTrav },
+                    strategyHtml: strategyHtml,
+                    provincialDeepDiveHtml: provincialDeepDiveHtml
                 };
                 
                 renderAnalyticsView();
@@ -4259,7 +4461,6 @@
                         </div>
                     </div>
 
-                    <!-- NEW DESTINATION TRACKING CARDS -->
                     <div class="analytics-card">
                         <div class="analytics-header flex justify-between"><span>At Actual Destination</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.atDestination.length}</span></div>
                         <div class="analytics-list">${renderListRows(analyticsData.lists.atDestination, 'location', iconLocation)}</div>
@@ -4299,6 +4500,10 @@
                         <div class="analytics-header flex justify-between"><span>Birthdays This Month</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.birthday.length}</span></div>
                         <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', iconCake)}</div>
                     </div>
+
+                    ${analyticsData.strategyHtml || ''}
+                    
+                    ${analyticsData.provincialDeepDiveHtml || ''}
                 </div>
             `;
 
@@ -4354,7 +4559,6 @@
     </script>
 </body>
 </html>
-
 
     
     
