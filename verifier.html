@@ -9,134 +9,226 @@
         :root {
             --dar-green: #003811;
             --dar-gold: #D4AF37;
-            --bg-main: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
+            --bg-main: #f3f4f6;
+            --text-main: #111827;
             --text-muted: #6b7280;
-            --success: #16a34a;
-            --warning: #f59e0b;
-            --danger: #dc2626;
+            --border-color: #e5e7eb;
         }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); }
-
-        .header { 
-            background: var(--dar-green); 
-            color: white; 
-            padding: 20px; 
-            text-align: center; 
-            border-bottom: 4px solid var(--dar-gold); 
-        }
-        
-        .header h1 { margin: 0; font-size: 18px; }
-        .header p { margin: 5px 0 0 0; font-size: 12px; color: #d1d5db; }
-
-        .container { padding: 20px; max-width: 600px; margin: auto; }
-        
-        .card { 
-            background: var(--card-bg); 
-            padding: 20px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
-            margin-bottom: 20px; 
-            border: 1px solid #e5e7eb; 
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
         }
 
-        .card h3 { 
-            margin-top: 0; 
-            color: var(--dar-green); 
-            border-bottom: 2px solid #eee; 
-            padding-bottom: 10px; 
-            font-size: 15px; 
+        /* The "Document" Look */
+        .document-wrapper {
+            background: #ffffff;
+            width: 100%;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            border-top: 6px solid var(--dar-green);
+            overflow: hidden;
         }
 
-        .info-row { display: flex; flex-direction: column; margin-bottom: 12px; }
-        .info-label { font-size: 11px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; }
-        .info-value { font-size: 14px; font-weight: 500; color: var(--text-main); margin-top: 2px; }
-
-        .badge { 
-            display: inline-block; 
-            padding: 6px 12px; 
-            border-radius: 20px; 
-            font-size: 12px; 
-            font-weight: bold; 
+        .header {
+            text-align: center;
+            padding: 30px 20px 20px;
+            border-bottom: 1px solid var(--border-color);
         }
-        .status-APPROVED { background: #ecfdf5; color: #166534; border: 1px solid #a7f3d0; }
-        .status-CANCELLED { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+        .header h1 {
+            margin: 0;
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: var(--dar-green);
+            text-transform: uppercase;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .content-body {
+            padding: 0 25px 30px;
+        }
+
+        /* Top Meta Section */
+        .doc-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 2px solid var(--dar-green);
+            margin-bottom: 20px;
+        }
+
+        .meta-col {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .meta-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .to-number {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--dar-green);
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            color: var(--dar-gold);
+            margin: 0 0 12px 0;
+            letter-spacing: 0.5px;
+        }
+
+        /* Grid Details */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            background: #fafafa;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .detail-item.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        /* Lists */
+        .list-container {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .list-row {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+            background: #ffffff;
+        }
+
+        .list-row:last-child {
+            border-bottom: none;
+        }
+
+        .primary-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .secondary-text {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .status-APPROVED { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+        .status-CANCELLED { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
         .status-PENDING { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 
-        .personnel-list { list-style: none; padding: 0; margin: 0; }
-        .personnel-item { 
-            background: #f9fafb; 
-            padding: 10px; 
-            border-radius: 8px; 
-            margin-bottom: 8px; 
-            border-left: 3px solid var(--dar-gold); 
+        /* States */
+        .state-message {
+            text-align: center;
+            padding: 50px 20px;
+            font-size: 14px;
+            color: var(--text-muted);
         }
-
-        .itin-item { 
-            display: flex; 
-            flex-direction: column; 
-            margin-bottom: 15px; 
-            padding-bottom: 15px; 
-            border-bottom: 1px dashed #e5e7eb; 
-        }
-        .itin-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        .itin-date { font-size: 12px; font-weight: bold; color: var(--dar-green); margin-bottom: 4px; }
-        .itin-dest { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
-        .itin-purp { font-size: 12px; color: var(--text-muted); font-style: italic; }
-
-        #loading, #error-msg { text-align: center; padding: 40px 20px; font-weight: bold; color: var(--text-muted); }
-        #error-msg { color: var(--danger); display: none; }
+        .error { color: var(--danger); font-weight: 600; }
         #content { display: none; }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>DOCUMENT VERIFICATION</h1>
-        <p>Department of Agrarian Reform - Camarines Sur I</p>
-    </div>
+    <div class="document-wrapper">
+        <div class="header">
+            <h1>Document Verification</h1>
+            <p>Department of Agrarian Reform - Camarines Sur I</p>
+        </div>
 
-    <div class="container">
-        <div id="loading">Scanning Document... Please wait.</div>
-        <div id="error-msg"></div>
+        <div id="loading" class="state-message">
+            Retrieving official records...
+        </div>
+        <div id="error-msg" class="state-message error" style="display: none;"></div>
 
-        <div id="content">
-            <div class="card" style="text-align: center; border-top: 4px solid var(--dar-green);">
-                <div class="info-label" style="margin-bottom: 5px;">Travel Order No.</div>
-                <div class="info-value" id="disp-to-no" style="font-size: 24px; color: var(--dar-green);"></div>
-                <div style="margin-top: 15px;">
+        <div id="content" class="content-body">
+            
+            <div class="doc-meta">
+                <div class="meta-col">
+                    <span class="meta-label">Travel Order No.</span>
+                    <span class="to-number" id="disp-to-no"></span>
+                </div>
+                <div class="meta-col" style="align-items: flex-end;">
+                    <span class="meta-label">Current Status</span>
                     <span id="disp-status" class="badge"></span>
                 </div>
             </div>
 
-            <div class="card">
+            <div class="section">
                 <h3>Logistics & Details</h3>
-                <div class="info-row">
-                    <span class="info-label">Transportation</span>
-                    <span class="info-value" id="disp-transport"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Report To</span>
-                    <span class="info-value" id="disp-report"></span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Remarks</span>
-                    <span class="info-value" id="disp-remarks"></span>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="meta-label">Transportation</div>
+                        <div class="detail-value" id="disp-transport"></div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="meta-label">Report To</div>
+                        <div class="detail-value" id="disp-report"></div>
+                    </div>
+                    <div class="detail-item full-width">
+                        <div class="meta-label">Remarks</div>
+                        <div class="detail-value" id="disp-remarks"></div>
+                    </div>
                 </div>
             </div>
 
-            <div class="card">
+            <div class="section">
                 <h3>Authorized Personnel</h3>
-                <ul class="personnel-list" id="disp-personnel"></ul>
+                <div class="list-container" id="disp-personnel"></div>
             </div>
 
-            <div class="card">
+            <div class="section">
                 <h3>Approved Itinerary</h3>
-                <div id="disp-itinerary"></div>
+                <div class="list-container" id="disp-itinerary"></div>
             </div>
+
         </div>
     </div>
 
@@ -151,12 +243,12 @@
             const toNo = urlParams.get('to_no');
 
             if (!toNo) {
-                showError("Invalid QR Code: Travel Order Number is missing.");
+                showError("Invalid link: Travel Order Number is missing.");
                 return;
             }
 
             try {
-                // Fetch Travel Order Details (Grouping Personnel)
+                // Fetch Travel Order Details
                 const { data: orders, error: toError } = await supabase
                     .from('travel_orders')
                     .select('*')
@@ -165,7 +257,7 @@
                 if (toError) throw toError;
                 
                 if (!orders || orders.length === 0) {
-                    showError("Document Not Found. The Travel Order number does not exist or has been permanently deleted.");
+                    showError("Record Not Found. This Travel Order does not exist or has been permanently deleted.");
                     return;
                 }
 
@@ -181,14 +273,14 @@
                 renderData(toNo, orders, itinerary);
 
             } catch (err) {
-                showError("Database Connection Error: " + err.message);
+                showError("Connection Error: " + err.message);
             }
         }
 
         function renderData(toNo, orders, itinerary) {
-            const baseOrder = orders[0]; // Primary details mapped from the first record
+            const baseOrder = orders[0]; 
 
-            // Populate General Info
+            // Headers
             document.getElementById('disp-to-no').innerText = toNo;
             document.getElementById('disp-transport').innerText = baseOrder.transport || "N/A";
             document.getElementById('disp-report').innerText = baseOrder.report_to || "N/A";
@@ -207,32 +299,28 @@
                 statusEl.className = "badge status-PENDING";
             }
 
-            // Populate Personnel
-            const personnelContainer = document.getElementById('disp-personnel');
-            personnelContainer.innerHTML = orders.map(p => `
-                <li class="personnel-item">
-                    <div style="font-weight: bold; font-size: 14px; color: var(--text-main);">${p.emp_name.toUpperCase()}</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        ID: ${p.emp_id} | Unit: ${p.unit || 'N/A'}
-                    </div>
-                </li>
+            // Personnel List
+            document.getElementById('disp-personnel').innerHTML = orders.map(p => `
+                <div class="list-row">
+                    <div class="primary-text">${p.emp_name.toUpperCase()}</div>
+                    <div class="secondary-text">ID: ${p.emp_id} &nbsp;&bull;&nbsp; Unit: ${p.unit || 'N/A'}</div>
+                </div>
             `).join('');
 
-            // Populate Itinerary
+            // Itinerary List
             const itinContainer = document.getElementById('disp-itinerary');
             if (itinerary && itinerary.length > 0) {
                 itinContainer.innerHTML = itinerary.map(i => {
-                    const fDate = new Date(i.travel_date).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
+                    const fDate = new Date(i.travel_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
                     return `
-                    <div class="itin-item">
-                        <div class="itin-date">${fDate}</div>
-                        <div class="itin-dest">${i.destination}</div>
-                        <div class="itin-purp">"${i.purpose}"</div>
+                    <div class="list-row">
+                        <div class="primary-text">${i.destination}</div>
+                        <div class="secondary-text">${fDate} &nbsp;&bull;&nbsp; <i>"${i.purpose}"</i></div>
                     </div>
                     `;
                 }).join('');
             } else {
-                itinContainer.innerHTML = '<div style="font-size: 12px; color: gray;">No itinerary records found.</div>';
+                itinContainer.innerHTML = '<div class="list-row" style="color: gray; font-size: 13px;">No itinerary records found.</div>';
             }
 
             // Reveal Content
@@ -247,7 +335,7 @@
             errEl.style.display = 'block';
         }
 
-        // Initialize verification on page load
+        // Init
         document.addEventListener("DOMContentLoaded", verifyDocument);
     </script>
 </body>
