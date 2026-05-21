@@ -340,6 +340,14 @@
         let tevData = []; // Combined Grouped TEV Items
         let currentTevToNo = null;
 
+        // XSS PREVENTION UTILITY
+        window.escapeHTML = function(str) {
+            if (!str) return "";
+            return String(str).replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        };
+
         // ACTIVITY LOG HELPER
         window.logActivity = async function(toNo, action, details) {
             try {
@@ -635,8 +643,15 @@
                 }
                 
                 const hashedPass = await window.hashPassword(pass);
+                const isHashAttempt = pass.length === 64 && /^[a-f0-9]{64}$/i.test(pass);
 
-                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
+                let isAuthValid = false;
+                if ((data.pass === pass && !isHashAttempt) || data.pass === hashedPass || (data.pass?.trim() === pass && !isHashAttempt) || data.pass?.trim() === hashedPass) {
+                    isAuthValid = true;
+                }
+
+                if (isAuthValid) {
+                    document.getElementById('login-pass').value = ''; // Security: Clear pass from input
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -735,10 +750,10 @@
                     container.innerHTML += `
                         <div style="display:flex; flex-direction:column; border-left: 2px solid var(--dar-green); padding-left: 10px; margin-bottom: 5px;">
                             <div style="font-size: 12px; color: var(--dar-green); font-weight: bold; margin-bottom: 2px;">
-                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${currentStatus.replace(' AM','').replace(' PM',' Clock')} ${offlineTag}
+                                <span style="color: ${i % 2 === 0 ? 'var(--success)' : 'var(--danger)'}">${icon}</span> ${window.escapeHTML(currentStatus.replace(' AM','').replace(' PM',' Clock'))} ${offlineTag}
                             </div>
                             <div style="font-size: 16px; font-weight: bold; color: var(--text-main); margin-bottom: 2px;">${fmtTime}</div>
-                            <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${l.place_name || l.address || 'Unknown Location'}</div>
+                            <div style="font-size: 11px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window.escapeHTML(l.place_name || l.address || 'Unknown Location')}</div>
                         </div>
                     `;
                 });
@@ -1001,15 +1016,15 @@
                 html += `
                 <div style="margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <strong style="font-size:11px; color:var(--dar-green);">${fDate}</strong>
+                        <strong style="font-size:11px; color:var(--dar-green);">${window.escapeHTML(fDate)}</strong>
                         <button class="btn-success" style="padding: 2px 6px; font-size: 9px; border: none; border-radius: 4px; cursor: pointer; color: white; width:auto; margin:0;" onclick="window.addTevItem(${dIndex})">+ ADD ROW</button>
                     </div>
                 `;
                 day.items.forEach((item, iIndex) => {
                     html += `
                     <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                        <input type="text" id="tev-part-${dIndex}-${iIndex}" placeholder="Particular (e.g. DARPO to Terminal)" value="${(item.particular || '').replace(/"/g, '&quot;')}" oninput="tevData[${dIndex}].items[${iIndex}].particular = this.value" style="flex:2; padding:6px; font-size:11px; margin:0;">
-                        <input type="number" id="tev-amt-${dIndex}-${iIndex}" placeholder="0.00" value="${item.amount || ''}" oninput="tevData[${dIndex}].items[${iIndex}].amount = this.value" style="flex:1; padding:6px; font-size:11px; margin:0;">
+                        <input type="text" id="tev-part-${dIndex}-${iIndex}" placeholder="Particular (e.g. DARPO to Terminal)" value="${window.escapeHTML(item.particular || '')}" oninput="tevData[${dIndex}].items[${iIndex}].particular = this.value" style="flex:2; padding:6px; font-size:11px; margin:0;">
+                        <input type="number" id="tev-amt-${dIndex}-${iIndex}" placeholder="0.00" value="${window.escapeHTML(item.amount || '')}" oninput="tevData[${dIndex}].items[${iIndex}].amount = this.value" style="flex:1; padding:6px; font-size:11px; margin:0;">
                         ${day.items.length > 1 ? `<button class="btn-danger" style="padding:6px; margin:0; width:auto; font-size:10px;" onclick="window.removeTevItem(${dIndex}, ${iIndex})">✕</button>` : ''}
                     </div>
                     `;
@@ -1275,10 +1290,10 @@
                         let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
 
                         deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                            <td style="padding: 5px;">${displayType}</td>
+                            <td style="padding: 5px;">${window.escapeHTML(l.start_date || l.created_at.split('T')[0])}</td>
+                            <td style="padding: 5px;">${window.escapeHTML(displayType)}</td>
                             <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${valStr}</td>
-                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
+                            <td style="padding: 5px; color: gray;">${window.escapeHTML(l.remarks || l.transaction_type)}</td>
                         </tr>`;
                     }
                 });
@@ -1321,10 +1336,10 @@
                         let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
                         let sign = ttype === 'USED' ? '-' : '+';
                         ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${c.date}</td>
-                            <td style="padding: 5px;">${ttype}</td>
+                            <td style="padding: 5px;">${window.escapeHTML(c.date)}</td>
+                            <td style="padding: 5px;">${window.escapeHTML(ttype)}</td>
                             <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
-                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                            <td style="padding: 5px; color: gray;">${window.escapeHTML(c.remarks || c.purpose || '')}</td>
                         </tr>`;
                     }
                 });
@@ -1363,7 +1378,7 @@
             resDiv.innerHTML = ''; resDiv.style.display = 'block';
             data.forEach(emp => {
                 const row = document.createElement('div'); row.className = 'search-row';
-                row.innerHTML = `${emp.full_name} (${emp.emp_id})`;
+                row.innerHTML = `${window.escapeHTML(emp.full_name)} (${window.escapeHTML(emp.emp_id)})`;
                 row.onclick = () => {
                     if (personnelDraft.length >= 5) return alert("Max 5 Personnel");
                     if (personnelDraft.some(p => p.emp_id === emp.emp_id)) return;
@@ -1378,7 +1393,7 @@
             const list = document.getElementById('personnel-draft-list');
             list.innerHTML = personnelDraft.map((p, i) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#f0f4f8; padding:8px 12px; border-radius:8px; margin-bottom:5px; font-size:13px;">
-                    <span>👤 ${p.name}</span>
+                    <span>👤 ${window.escapeHTML(p.name)}</span>
                     ${p.emp_id !== currentUser.emp_id ? `<button class="btn-danger" style="padding:2px 8px; width:auto; margin:0;" onclick="window.removePersonnel(${i})">X</button>` : ''}
                 </div>`).join('');
         }
@@ -1482,11 +1497,11 @@
                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
                             <button onclick="window.removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
                         </div>
-                        <input type="text" id="dest-${i}" placeholder="Destination" value="${prev.dest.replace(/"/g, '&quot;')}">
+                        <input type="text" id="dest-${i}" placeholder="Destination" value="${window.escapeHTML(prev.dest.replace(/"/g, '&quot;'))}">
                         ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose">${prev.purp}</textarea>
+                        <textarea id="purp-${i}" rows="2" placeholder="Purpose">${window.escapeHTML(prev.purp)}</textarea>
                         ${pbddSelect}
-                        <input type="text" id="rep-${i}" placeholder="Report To" value="${prev.rep.replace(/"/g, '&quot;')}">
+                        <input type="text" id="rep-${i}" placeholder="Report To" value="${window.escapeHTML(prev.rep.replace(/"/g, '&quot;'))}">
                     </div>`;
                 itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, unitId: isPBDD ? `unit-${i}` : null, cardId, hasPSO });
                 currentDt.setDate(currentDt.getDate() + 1);
@@ -1739,14 +1754,14 @@
                 container.innerHTML += `
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
+                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${window.escapeHTML(i.travel_date)}</h5>
                              <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="window.removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
                         </div>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${window.escapeHTML(i.destination)}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
+                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${window.escapeHTML(i.purpose)}</textarea>
                         ${pbddSelect}
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${window.escapeHTML(to.report_to)}" style="padding:8px; font-size:13px; margin-bottom:0;">
                     </div>
                 `;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
@@ -2072,11 +2087,11 @@
 
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
-                            <span class="badge ${sCls}">${to.status.replace(/_/g, ' ')}</span>
+                            <div style="font-weight:bold; font-size: 13px;">${window.escapeHTML(to.to_no)}</div>
+                            <span class="badge ${sCls}">${window.escapeHTML(to.status.replace(/_/g, ' '))}</span>
                         </div>
                         <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
-                            ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
+                            ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${window.escapeHTML(i.travel_date)}</strong>: ${window.escapeHTML(i.destination)} <span style="color: gray; font-style: italic;">(${window.escapeHTML(i.purpose)})</span></div>`).join('')}
                         </div>
                         <div class="action-group" style="margin-top: 0;">
                             ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
@@ -2098,11 +2113,11 @@
                     const isApp = app.transaction_type === 'APPROVED';
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
-                            <span class="badge ${sCls}">${app.transaction_type}</span>
+                            <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${window.escapeHTML(app.type)}</div>
+                            <span class="badge ${sCls}">${window.escapeHTML(app.transaction_type)}</span>
                         </div>
-                        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
-                        <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
+                        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${window.escapeHTML(app.start_date)} to ${window.escapeHTML(app.end_date)} (${app.debit} days)</div>
+                        <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${window.escapeHTML(app.remarks)}</div>
                         <div class="action-group" style="margin-top: 8px;">
                             ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
                             <button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>
@@ -2719,7 +2734,7 @@
                             if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
                                 activityHtml += `<div class="cal-entry entry-to">ON OFFICIAL TIME</div>`;
                             } else {
-                                activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`;
+                                activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${window.escapeHTML(i.destination)}</div>`;
                             }
                         });
                     }
@@ -3035,8 +3050,9 @@
                 if(error) throw error;
 
                 const hashedOld = await window.hashPassword(curr);
+                const isHashAttempt = curr.length === 64 && /^[a-f0-9]{64}$/i.test(curr);
                 
-                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
+                if ((isHashAttempt) || (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld)) {
                     return alert("Wrong current password.");
                 }
                 
@@ -3047,6 +3063,8 @@
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
                 currentUser.pass = hashedNew; // Update session
+                
+                // Security: Wipe inputs immediately
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
