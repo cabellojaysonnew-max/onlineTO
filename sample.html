@@ -857,7 +857,23 @@
                 
                 let outOfBoundsStr = "";
                 if (todayDestination) {
-                    if (!addressStr.toLowerCase().includes(todayDestination.toLowerCase()) && !placeName.toLowerCase().includes(todayDestination.toLowerCase())) {
+                    const destLower = todayDestination.toLowerCase();
+                    const destParts = destLower.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 2);
+                    const addrLower = addressStr.toLowerCase();
+                    const placeLower = placeName.toLowerCase();
+                    
+                    let isWithin = addrLower.includes(destLower) || placeLower.includes(destLower);
+                    
+                    if (!isWithin) {
+                        for (let part of destParts) {
+                            if (addrLower.includes(part) || placeLower.includes(part)) {
+                                isWithin = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!isWithin) {
                         outOfBoundsStr = " (Outside Destination)";
                         placeName = placeName + outOfBoundsStr;
                     }
@@ -2064,7 +2080,7 @@
                         </div>
                         <div class="action-group" style="margin-top: 0;">
                             ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
-                            ${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                            ${isApproved ? `<button class="btn btn-gold btn-small" onclick="window.openTevModal('${to.to_no}')" style="font-weight: bold; border: 1px solid var(--dar-green);">💸 TEV Claim</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
                 }
