@@ -425,7 +425,7 @@
         };
 
         // SETUP BIOMETRIC
-        window.setupBiometric = async function(empId, hashedPass) {
+        window.setupBiometric = async function(empId) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
             if (!available) return;
@@ -451,7 +451,6 @@
                         });
                         localStorage.setItem('dar_emp_bio_cred', bufferToBase64(cred.rawId));
                         localStorage.setItem('dar_emp_id', empId);
-                        localStorage.setItem('dar_emp_token', hashedPass);
                         alert("Biometric login enabled!");
                         document.getElementById('btn-bio-login').style.display = 'flex';
                     } catch(e) {
@@ -461,12 +460,11 @@
             }
         };
 
-        // HANDLE BIOMETRIC LOGIN
+        // HANDLE BIOMETRIC LOGIN (STRICTLY SUPABASE AUTH)
         window.handleBiometricLogin = async function() {
             try {
                 const credId = localStorage.getItem('dar_emp_bio_cred');
                 const empId = localStorage.getItem('dar_emp_id');
-                const token = localStorage.getItem('dar_emp_token');
                 if (!credId || !empId) return;
 
                 const challenge = new Uint8Array(32);
@@ -481,8 +479,18 @@
                     }
                 });
 
+                // WebAuthn passes -> Now strictly verify if Supabase Auth session is active
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                
+                if (sessionError || !sessionData.session) {
+                    alert("Your secure session has expired. Please use the password login to re-authenticate.");
+                    return;
+                }
+
+                // Session is active. Setup UI.
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
-                if (data && (data.pass === token)) {
+                
+                if (data) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -625,7 +633,7 @@
         };
 
         // =======================================================
-        // UPDATED: handleLogout function
+        // HANDLE LOGOUT
         // =======================================================
         window.handleLogout = async function() {
             try {
@@ -637,7 +645,7 @@
         };
 
         // =======================================================
-        // UPDATED: handleLogin utilizing Supabase Authentication
+        // HANDLE LOGIN (STRICTLY SUPABASE AUTHENTICATION)
         // =======================================================
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
@@ -646,8 +654,9 @@
             if (!id || !pass) return alert("Please enter ID and Password");
 
             try {
-                // 1. Authenticate via Supabase Auth using constructed email
                 const email = `${id}@dar.gov.ph`;
+                
+                // STRICT RULE: ONLY use Supabase User Authentication
                 const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                     email: email,
                     password: pass
@@ -657,18 +666,13 @@
                     return alert("Login Error: Invalid credentials or user not found in Authentication.");
                 }
 
-                // 2. Fetch employee metadata from the 'employees' table
+                // After successful Supabase Auth, fetch metadata for UI mapping (no password checks)
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
 
-                if (error) {
-                    return alert("Database connection issue: " + error.message);
-                }
-                if (!data) {
-                    return alert("Employee ID not found in records.");
-                }
+                if (error) return alert("Database connection issue: " + error.message);
+                if (!data) return alert("Employee ID not found in records.");
 
-                // 3. Proceed with successful login UI setup
-                document.getElementById('login-pass').value = ''; // Security: Clear pass from input
+                document.getElementById('login-pass').value = ''; 
                 currentUser = data;
                 document.getElementById('user-name').innerText = data.full_name;
                 document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -696,9 +700,8 @@
                 cachedHolidays = hols || [];
                 window.updateLeaveInputs();
                 
-                // Generate hash for biometric local storage backwards compatibility
-                const hashedPass = await window.hashPassword(pass);
-                window.setupBiometric(id, hashedPass);
+                // Initialize biometric registration (without passing actual passwords to local DB)
+                window.setupBiometric(id);
                 
             } catch (err) {
                 alert("Login Error: " + err.message);
@@ -3085,14 +3088,8 @@
 
                 if (updateError) throw updateError;
 
-                // 3. Update hashed password in 'employees' table to maintain Biometric login functionality
-                const hashedNew = await window.hashPassword(nw);
-                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-                if (updErr) console.warn("Failed to update biometric fallback hash:", updErr.message);
-
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew; // Update local session state
                 
                 // Security: Wipe inputs immediately
                 document.getElementById('pass-curr').value = "";
@@ -3105,3 +3102,5 @@
     </script>
 </body>
 </html>
+
+```
