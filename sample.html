@@ -1506,6 +1506,9 @@
             let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
 
             if (isPBDD) {
+                if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit.trim() !== "NA") {
+                    pbddUnits.add(currentUser.unit.trim());
+                }
                 finalUnit = Array.from(pbddUnits).join(', ');
             }
 
