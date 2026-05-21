@@ -116,7 +116,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
-                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+                <button onclick="window.handleLogout()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
             </div>
         </div>
 
@@ -624,6 +624,21 @@
             };
         };
 
+        // =======================================================
+        // UPDATED: handleLogout function
+        // =======================================================
+        window.handleLogout = async function() {
+            try {
+                await supabase.auth.signOut();
+            } catch (err) {
+                console.log("Signout warning:", err);
+            }
+            location.reload();
+        };
+
+        // =======================================================
+        // UPDATED: handleLogin utilizing Supabase Authentication
+        // =======================================================
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -631,59 +646,60 @@
             if (!id || !pass) return alert("Please enter ID and Password");
 
             try {
+                // 1. Authenticate via Supabase Auth using constructed email
+                const email = `${id}@dar.gov.ph`;
+                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: pass
+                });
+
+                if (authError) {
+                    return alert("Login Error: Invalid credentials or user not found in Authentication.");
+                }
+
+                // 2. Fetch employee metadata from the 'employees' table
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
-                
+
                 if (error) {
-                    alert("Database connection issue: " + error.message);
-                    return;
+                    return alert("Database connection issue: " + error.message);
                 }
                 if (!data) {
-                    alert("Employee ID not found.");
-                    return;
+                    return alert("Employee ID not found in records.");
                 }
+
+                // 3. Proceed with successful login UI setup
+                document.getElementById('login-pass').value = ''; // Security: Clear pass from input
+                currentUser = data;
+                document.getElementById('user-name').innerText = data.full_name;
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('itin-from').min = todayStr;
+                document.getElementById('itin-to').min = todayStr;
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                window.renderPersonnel();
+
+                if (String(data.s_assignment).toUpperCase() === 'TRUE') {
+                    document.getElementById('special-div-card').style.display = 'block';
+                    const sDivs = (data.division || "").split(',');
+                    let sdHtml = '';
+                    sDivs.forEach(d => {
+                        const val = d.trim();
+                        if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                    });
+                    document.getElementById('special-div-list').innerHTML = sdHtml;
+                } else {
+                    document.getElementById('special-div-card').style.display = 'none';
+                }
+
+                const { data: hols } = await supabase.from('holidays').select('date, description');
+                cachedHolidays = hols || [];
+                window.updateLeaveInputs();
                 
+                // Generate hash for biometric local storage backwards compatibility
                 const hashedPass = await window.hashPassword(pass);
-                const isHashAttempt = pass.length === 64 && /^[a-f0-9]{64}$/i.test(pass);
-
-                let isAuthValid = false;
-                if ((data.pass === pass && !isHashAttempt) || data.pass === hashedPass || (data.pass?.trim() === pass && !isHashAttempt) || data.pass?.trim() === hashedPass) {
-                    isAuthValid = true;
-                }
-
-                if (isAuthValid) {
-                    document.getElementById('login-pass').value = ''; // Security: Clear pass from input
-                    currentUser = data;
-                    document.getElementById('user-name').innerText = data.full_name;
-                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                    document.getElementById('login-screen').classList.remove('active');
-                    document.getElementById('app-screen').classList.add('active');
-                    document.getElementById('itin-from').min = todayStr;
-                    document.getElementById('itin-to').min = todayStr;
-                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                    window.renderPersonnel();
-
-                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
-                        document.getElementById('special-div-card').style.display = 'block';
-                        const sDivs = (data.division || "").split(',');
-                        let sdHtml = '';
-                        sDivs.forEach(d => {
-                            const val = d.trim();
-                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
-                        });
-                        document.getElementById('special-div-list').innerHTML = sdHtml;
-                    } else {
-                        document.getElementById('special-div-card').style.display = 'none';
-                    }
-
-                    const { data: hols } = await supabase.from('holidays').select('date, description');
-                    cachedHolidays = hols || [];
-                    window.updateLeaveInputs();
-                    
-                    window.setupBiometric(id, data.pass);
-                    
-                } else { 
-                    alert("Incorrect Password."); 
-                }
+                window.setupBiometric(id, hashedPass);
+                
             } catch (err) {
                 alert("Login Error: " + err.message);
             }
@@ -3039,30 +3055,44 @@
             }
         };
 
+        // =======================================================
+        // UPDATED: changePassword utilizing Supabase Authentication
+        // =======================================================
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value.trim();
             const nw = document.getElementById('pass-new').value.trim();
-            
-            if(!curr || !nw) return alert("Please fill out both fields.");
+            const conf = document.getElementById('pass-conf').value.trim();
+
+            if(!curr || !nw || !conf) return alert("Please fill out all fields.");
+            if(nw !== conf) return alert("New password and confirm password do not match.");
 
             try {
-                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
-                if(error) throw error;
+                // 1. Re-authenticate to verify current password
+                const email = `${currentUser.emp_id}@dar.gov.ph`;
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: curr
+                });
 
-                const hashedOld = await window.hashPassword(curr);
-                const isHashAttempt = curr.length === 64 && /^[a-f0-9]{64}$/i.test(curr);
-                
-                if ((isHashAttempt) || (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld)) {
+                if (signInError) {
                     return alert("Wrong current password.");
                 }
-                
+
+                // 2. Update password in Supabase Auth
+                const { error: updateError } = await supabase.auth.updateUser({
+                    password: nw
+                });
+
+                if (updateError) throw updateError;
+
+                // 3. Update hashed password in 'employees' table to maintain Biometric login functionality
                 const hashedNew = await window.hashPassword(nw);
                 const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-                if (updErr) throw updErr;
+                if (updErr) console.warn("Failed to update biometric fallback hash:", updErr.message);
 
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew; // Update session
+                currentUser.pass = hashedNew; // Update local session state
                 
                 // Security: Wipe inputs immediately
                 document.getElementById('pass-curr').value = "";
