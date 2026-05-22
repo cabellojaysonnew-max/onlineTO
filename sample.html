@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DAR CS I - Mobile Portal</title>
+    
+    <script>
+        window.escapeHTML = function(str) {
+            if (!str) return "";
+            return String(str).replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag]));
+        };
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
@@ -116,7 +126,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
-                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+                <button onclick="window.handleLogout()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
             </div>
         </div>
 
@@ -367,12 +377,6 @@
 
         const todayStr = getPSTDate();
 
-        // PASSWORD HASHING UTILITY
-        window.hashPassword = async function(msg) {
-            if (!msg) return "";
-            return sha256(msg); 
-        };
-
         // WEBAUTHN UTILS
         const bufferToBase64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
         const base64ToBuffer = (b64) => {
@@ -417,7 +421,7 @@
         };
 
         // SETUP BIOMETRIC
-        window.setupBiometric = async function(empId, hashedPass) {
+        window.setupBiometric = async function(empId) {
             if (!window.PublicKeyCredential) return;
             const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
             if (!available) return;
@@ -443,7 +447,6 @@
                         });
                         localStorage.setItem('dar_emp_bio_cred', bufferToBase64(cred.rawId));
                         localStorage.setItem('dar_emp_id', empId);
-                        localStorage.setItem('dar_emp_token', hashedPass);
                         alert("Biometric login enabled!");
                         document.getElementById('btn-bio-login').style.display = 'flex';
                     } catch(e) {
@@ -458,7 +461,6 @@
             try {
                 const credId = localStorage.getItem('dar_emp_bio_cred');
                 const empId = localStorage.getItem('dar_emp_id');
-                const token = localStorage.getItem('dar_emp_token');
                 if (!credId || !empId) return;
 
                 const challenge = new Uint8Array(32);
@@ -473,8 +475,17 @@
                     }
                 });
 
+                // Check Supabase Auth session instead of old custom hash logic
+                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                
+                if (sessionError || !sessionData.session) {
+                    alert("Your secure session has expired. Please use the password login to re-authenticate.");
+                    return;
+                }
+
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
-                if (data && (data.pass === token)) {
+                
+                if (data) {
                     currentUser = data;
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
@@ -502,7 +513,7 @@
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                 } else { 
-                    alert("Invalid Credentials"); 
+                    alert("Employee ID not found."); 
                 }
             } catch(e) {
                 console.log("Biometric auth failed", e);
@@ -616,6 +627,17 @@
             };
         };
 
+        // --- NEW SUPABASE AUTHENTICATION INTEGRATION ---
+        
+        window.handleLogout = async function() {
+            try {
+                await supabase.auth.signOut();
+            } catch (err) {
+                console.log("Signout warning:", err);
+            }
+            location.reload();
+        };
+
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -623,6 +645,19 @@
             if (!id || !pass) return alert("Please enter ID and Password");
 
             try {
+                const email = `${id}@dar.gov.ph`;
+                
+                // 1. Authenticate with Supabase Auth
+                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: pass
+                });
+
+                if (authError) {
+                    return alert("Login Error: " + authError.message);
+                }
+
+                // 2. Fetch Metadata for UI
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', id).maybeSingle();
                 
                 if (error) {
@@ -630,47 +665,78 @@
                     return;
                 }
                 if (!data) {
-                    alert("Employee ID not found.");
+                    alert("Employee ID not found in records.");
                     return;
                 }
                 
-                const hashedPass = await window.hashPassword(pass);
+                // 3. Setup UI
+                document.getElementById('login-pass').value = ''; 
+                currentUser = data;
+                document.getElementById('user-name').innerText = data.full_name;
+                document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
+                document.getElementById('login-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('itin-from').min = todayStr;
+                document.getElementById('itin-to').min = todayStr;
+                personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
+                window.renderPersonnel();
 
-                if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
-                    currentUser = data;
-                    document.getElementById('user-name').innerText = data.full_name;
-                    document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
-                    document.getElementById('login-screen').classList.remove('active');
-                    document.getElementById('app-screen').classList.add('active');
-                    document.getElementById('itin-from').min = todayStr;
-                    document.getElementById('itin-to').min = todayStr;
-                    personnelDraft = [{ emp_id: data.emp_id, name: data.full_name, unit: data.unit }];
-                    window.renderPersonnel();
-
-                    if (String(data.s_assignment).toUpperCase() === 'TRUE') {
-                        document.getElementById('special-div-card').style.display = 'block';
-                        const sDivs = (data.division || "").split(',');
-                        let sdHtml = '';
-                        sDivs.forEach(d => {
-                            const val = d.trim();
-                            if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
-                        });
-                        document.getElementById('special-div-list').innerHTML = sdHtml;
-                    } else {
-                        document.getElementById('special-div-card').style.display = 'none';
-                    }
-
-                    const { data: hols } = await supabase.from('holidays').select('date, description');
-                    cachedHolidays = hols || [];
-                    window.updateLeaveInputs();
-                    
-                    window.setupBiometric(id, data.pass);
-                    
-                } else { 
-                    alert("Incorrect Password."); 
+                if (String(data.s_assignment).toUpperCase() === 'TRUE') {
+                    document.getElementById('special-div-card').style.display = 'block';
+                    const sDivs = (data.division || "").split(',');
+                    let sdHtml = '';
+                    sDivs.forEach(d => {
+                        const val = d.trim();
+                        if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                    });
+                    document.getElementById('special-div-list').innerHTML = sdHtml;
+                } else {
+                    document.getElementById('special-div-card').style.display = 'none';
                 }
+
+                const { data: hols } = await supabase.from('holidays').select('date, description');
+                cachedHolidays = hols || [];
+                window.updateLeaveInputs();
+                
+                window.setupBiometric(id);
+                
             } catch (err) {
                 alert("Login Error: " + err.message);
+            }
+        };
+
+        window.changePassword = async function() {
+            const curr = document.getElementById('pass-curr').value.trim();
+            const nw = document.getElementById('pass-new').value.trim();
+            const conf = document.getElementById('pass-conf').value.trim();
+            
+            if(!curr || !nw || !conf) return alert("Please fill out all fields.");
+            if(nw !== conf) return alert("New passwords do not match.");
+
+            try {
+                // 1. Re-authenticate to confirm old password
+                const email = `${currentUser.emp_id}@dar.gov.ph`;
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: curr
+                });
+
+                if (signInError) return alert("Wrong current password.");
+
+                // 2. Update password in Supabase Auth
+                const { error: updateError } = await supabase.auth.updateUser({
+                    password: nw
+                });
+
+                if (updateError) throw updateError;
+
+                alert("Password successfully updated!"); 
+                window.hideChangePassword();
+                document.getElementById('pass-curr').value = "";
+                document.getElementById('pass-new').value = "";
+                document.getElementById('pass-conf').value = "";
+            } catch(e) {
+                alert("Error updating password: " + e.message);
             }
         };
 
@@ -3027,26 +3093,30 @@
         window.changePassword = async function() {
             const curr = document.getElementById('pass-curr').value.trim();
             const nw = document.getElementById('pass-new').value.trim();
+            const conf = document.getElementById('pass-conf').value.trim();
             
-            if(!curr || !nw) return alert("Please fill out both fields.");
+            if(!curr || !nw || !conf) return alert("Please fill out all fields.");
+            if(nw !== conf) return alert("New passwords do not match.");
 
             try {
-                const { data, error } = await supabase.from('employees').select('pass').eq('emp_id', currentUser.emp_id).single();
-                if(error) throw error;
+                // 1. Re-authenticate to confirm old password
+                const email = `${currentUser.emp_id}@dar.gov.ph`;
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: curr
+                });
 
-                const hashedOld = await window.hashPassword(curr);
-                
-                if (data.pass !== curr && data.pass !== hashedOld && data.pass?.trim() !== curr && data.pass?.trim() !== hashedOld) {
-                    return alert("Wrong current password.");
-                }
-                
-                const hashedNew = await window.hashPassword(nw);
-                const { error: updErr } = await supabase.from('employees').update({ pass: hashedNew }).eq('emp_id', currentUser.emp_id);
-                if (updErr) throw updErr;
+                if (signInError) return alert("Wrong current password.");
+
+                // 2. Update password in Supabase Auth
+                const { error: updateError } = await supabase.auth.updateUser({
+                    password: nw
+                });
+
+                if (updateError) throw updateError;
 
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
-                currentUser.pass = hashedNew; // Update session
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
