@@ -1,16 +1,3 @@
-### ACTION PLAN & IMPLEMENTATION
-
-Here is exactly what I did to fulfill your requirements without altering the rest of your system:
-
-1. **Pending Tab Breakdown (Daily View):** Inside `loadPendingTab()`, I removed the `[...new Set(...)]` grouping for destinations and purposes. I replaced it with `itinDetailsHTML` that maps over the `fullItinerary` array. This creates a dedicated HTML block for each travel date, showing the specific date, destination, and purpose clearly separated under the employee's name.
-2. **Popup Data Modification:** I updated the data passed to `initiateDirectTO()`. Instead of passing the grouped destination string and an encoded array of just dates, it now passes `itinEncoded` (the entire itinerary object array).
-3. **Popup Specific Destinations:** Inside the `initiateDirectTO` function, the checkboxes list now extracts both the date and the specific destination from the itinerary object, appending both to the label next to the checkbox.
-4. **Disapproval Reason on Uncheck:** I added a new hidden input (`pendingPartialDenyReason`) to the `pendingDateModal` HTML. Inside `checkApproveReasonVisibility`, I added logic to compare the number of checked boxes versus total boxes. If any box is unchecked during an approval flow (which means it's being denied/removed), the new input appears, requiring the approver to state the reason.
-5. **Execution & Logging:** I updated `processPendingDates` and `executePartialTO` to capture this new reason. If dates are unchecked, the specific reason is now properly logged in the `activity_log` for those removed dates.
-
-Here is the complete, unaltered code reflecting only your requested additions.
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
