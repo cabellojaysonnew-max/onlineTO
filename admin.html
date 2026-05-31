@@ -353,8 +353,10 @@
                         </div>
                         <div class="p-6 space-y-4">
                             <p id="pendingDateModalText" class="text-sm font-bold text-gray-700">Select dates:</p>
+                            <p id="pendingModalDestination" class="text-xs font-bold text-dar-green mb-2"></p>
                             <div id="pendingDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div>
                             <input type="text" id="pendingDenyReason" placeholder="Reason for denial" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
+                            <input type="text" id="pendingApproveReason" placeholder="Reason (Required/Optional for 1-day approval)" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
                             <button id="pendingDateConfirmBtn" class="w-full dar-green text-white font-bold py-3 rounded-xl mt-2">Proceed</button>
                         </div>
                     </div>
@@ -580,46 +582,63 @@
             document.getElementById('pendingDateModal').style.display = 'none';
         };
 
-        window.initiateDirectTO = function(to_no, action, datesEncoded) {
+        window.initiateDirectTO = function(to_no, action, datesEncoded, destEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
-            if (dates.length > 1) {
-                currentPendingToNo = to_no;
-                currentPendingAction = action;
-                const list = document.getElementById('pendingDatesList');
-                list.innerHTML = '';
-                dates.forEach(d => {
-                    list.innerHTML += `
-                        <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
-                            <input type="checkbox" value="${d}" class="pending-date-cb w-5 h-5 rounded focus:ring-green-500 border-gray-300" checked>
-                            <span class="text-sm font-bold text-gray-700">${new Date(d).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
-                        </label>
-                    `;
-                });
-                
-                const reasonInput = document.getElementById('pendingDenyReason');
-                const hdr = document.getElementById('pendingDateModalHeader');
-                const btn = document.getElementById('pendingDateConfirmBtn');
-                const txt = document.getElementById('pendingDateModalText');
+            const dest = decodeURIComponent(destEncoded);
+            
+            currentPendingToNo = to_no;
+            currentPendingAction = action;
+            
+            const destLabel = document.getElementById('pendingModalDestination');
+            if(destLabel) destLabel.innerText = "📍 Destination: " + (dest || 'N/A');
 
-                if (action === 'DISAPPROVED') {
-                    hdr.className = "bg-red-600 text-white p-4 font-bold text-center relative";
-                    hdr.innerHTML = `Deny Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
-                    btn.className = "w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2";
-                    txt.innerText = "Select dates to DENY (Unselected dates remain pending):";
-                    reasonInput.classList.remove('hidden');
-                } else {
-                    hdr.className = "dar-green text-white p-4 font-bold text-center relative";
-                    hdr.innerHTML = `Approve Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
-                    btn.className = "w-full dar-green text-white font-bold py-3 rounded-xl mt-2";
-                    txt.innerText = "Select dates to " + (action === 'OFFICIAL_TIME' ? 'Approve (Official Time)' : 'Approve') + " (Unselected dates will be removed):";
-                    reasonInput.classList.add('hidden');
-                }
-                
-                document.getElementById('pendingDateConfirmBtn').onclick = processPendingDates;
-                document.getElementById('pendingDateModal').style.display = 'flex';
+            const list = document.getElementById('pendingDatesList');
+            list.innerHTML = '';
+            dates.forEach(d => {
+                list.innerHTML += `
+                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
+                        <input type="checkbox" value="${d}" class="pending-date-cb w-5 h-5 rounded focus:ring-green-500 border-gray-300" checked>
+                        <span class="text-sm font-bold text-gray-700">${new Date(d).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
+                    </label>
+                `;
+            });
+            
+            const reasonInput = document.getElementById('pendingDenyReason');
+            const approveInput = document.getElementById('pendingApproveReason');
+            const hdr = document.getElementById('pendingDateModalHeader');
+            const btn = document.getElementById('pendingDateConfirmBtn');
+            const txt = document.getElementById('pendingDateModalText');
+
+            if (action === 'DISAPPROVED') {
+                hdr.className = "bg-red-600 text-white p-4 font-bold text-center relative";
+                hdr.innerHTML = `Deny Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
+                btn.className = "w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2";
+                txt.innerText = "Select dates to DENY (Unselected dates remain pending):";
+                reasonInput.classList.remove('hidden');
+                approveInput.classList.add('hidden');
             } else {
-                processDirectTO(to_no, action);
+                hdr.className = "dar-green text-white p-4 font-bold text-center relative";
+                hdr.innerHTML = `Approve Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
+                btn.className = "w-full dar-green text-white font-bold py-3 rounded-xl mt-2";
+                txt.innerText = "Select dates to " + (action === 'OFFICIAL_TIME' ? 'Approve (Official Time)' : 'Approve') + " (Unselected dates will be removed):";
+                reasonInput.classList.add('hidden');
+                
+                const checkApproveReasonVisibility = () => {
+                    const checkedCount = document.querySelectorAll('.pending-date-cb:checked').length;
+                    if (checkedCount === 1) {
+                        approveInput.classList.remove('hidden');
+                    } else {
+                        approveInput.classList.add('hidden');
+                    }
+                };
+                
+                const checkboxes = document.querySelectorAll('.pending-date-cb');
+                checkboxes.forEach(cb => cb.addEventListener('change', checkApproveReasonVisibility));
+                checkApproveReasonVisibility(); 
             }
+            
+            document.getElementById('pendingDateConfirmBtn').onclick = processPendingDates;
+            document.getElementById('pendingDateModal').style.display = 'flex';
         };
 
         window.processPendingDates = async function() {
@@ -630,16 +649,22 @@
             if (selectedDates.length === 0) return alert("Select at least one date.");
 
             let denyReason = "";
+            let approveReason = "";
+
             if (currentPendingAction === 'DISAPPROVED') {
                 denyReason = document.getElementById('pendingDenyReason').value.trim();
                 if (!denyReason && selectedDates.length === totalDates) return alert("Please provide a reason for denying the entire TO.");
+            } else {
+                if (selectedDates.length === 1) {
+                    approveReason = document.getElementById('pendingApproveReason').value.trim();
+                }
             }
 
             hidePendingDateModal();
-            await executePartialTO(currentPendingToNo, currentPendingAction, selectedDates, totalDates, denyReason);
+            await executePartialTO(currentPendingToNo, currentPendingAction, selectedDates, totalDates, denyReason, approveReason);
         };
 
-        window.executePartialTO = async function(to_no, action, selectedDates, totalDates, denyReason) {
+        window.executePartialTO = async function(to_no, action, selectedDates, totalDates, denyReason, approveReason) {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
 
@@ -665,12 +690,25 @@
                     const { data: toData, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no).limit(1);
                     if (error) throw error;
                     const p = getAppPayload(currentUser, toData[0]);
+                    
                     if (action === 'OFFICIAL_TIME') p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                    
+                    if (approveReason) {
+                        p.remarks = approveReason;
+                    }
 
                     if (Object.keys(p).length === 0) throw new Error("Approval failed: Role not configured.");
 
                     await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
                     await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
+                    
+                    if (approveReason) {
+                        await supabaseClient.from('notifications').insert({
+                            recipient_role: 'EMPLOYEE',
+                            message: `Your TO ${to_no} was processed. Reason/Note: ${approveReason}`,
+                            to_no: to_no
+                        });
+                    }
                 }
                 loadPendingTab();
             } catch(e) {
@@ -865,9 +903,9 @@
                             <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.datesEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.datesEncoded}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.datesEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
