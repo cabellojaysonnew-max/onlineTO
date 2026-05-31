@@ -1,20 +1,3 @@
-### Strategy Discussion
-
-**Rule 1: Unapproved TO Remarks Pop-up**
-
-1. **UI Component:** Added a new hidden modal (`#remarksModal`) to display the remarks cleanly without relying on obtrusive native browser alerts.
-2. **Data Fetching & Filtering:** Created a new asynchronous function, `window.checkUnapprovedRemarks()`, which fires immediately after `handleLogin` and `handleBiometricLogin` complete. It queries Supabase for any Travel Orders linked to the user that are not `APPROVED` or `CANCELLED` and contain non-null `remarks`.
-3. **Sanitization:** The function scrubs out standard system-generated tracking remarks (e.g., "OUTSIDE BICOL", "EXISTING PSO", or departure times) to ensure only genuine approver/system-conflict remarks trigger the pop-up.
-
-**Rule 2: SPLIT TO Number Modification & Sequence Isolation**
-
-1. **Sequence Isolation:** Modified `window.generateToNo()` to evaluate `currentUser.type`. If the user type is `SPLIT`, it searches the database using the `LIKE 'YYYY-%-SPLIT-%'` pattern. This guarantees that all SPLIT personnel share a global numbering sequence *regardless* of their division, as requested.
-2. **Number Formatting:** If standard, the logic explicitly uses `.not('to_no', 'like', '%-SPLIT-%')` to prevent normal TOs from accidentally inflating based on SPLIT sequences. The returned TO string dynamically embeds the `-SPLIT-` keyword right before the 5-digit sequence (e.g., `2026-PARPO-SPLIT-00001`).
-3. **PDF Reflection:** Because the `to_no` is strictly saved in the database with the `-SPLIT-` identifier, the `generateOfficialPDF` organically queries and renders the exact formatted string on the final PDF without requiring messy string interception during printing.
-
----
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
