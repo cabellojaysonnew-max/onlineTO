@@ -116,7 +116,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
-                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+                <button onclick="window.logoutUser()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
             </div>
         </div>
 
@@ -364,6 +364,19 @@
             } catch(e) { console.error("Log error", e); }
         };
 
+        // SESSION MANAGEMENT HELPER
+        window.saveSession = function(user) {
+            localStorage.setItem('dar_session_user', JSON.stringify({
+                user: user,
+                expiry: Date.now() + 15 * 24 * 60 * 60 * 1000 // 15 Days
+            }));
+        };
+
+        window.logoutUser = function() {
+            localStorage.removeItem('dar_session_user');
+            location.reload();
+        };
+
         window.checkUnapprovedRemarks = async function() {
             if (!currentUser) return;
             try {
@@ -528,6 +541,7 @@
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
                 if (data && (data.pass === token)) {
                     currentUser = data;
+                    window.saveSession(data);
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
@@ -692,6 +706,7 @@
 
                 if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
+                    window.saveSession(data);
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
@@ -2002,11 +2017,28 @@
                 
                 let curY = Math.max(destY, destLabelY + 5);
 
+                let returnDateStr = itin_list[itin_list.length-1]?.travel_date || "";
+                let isContinuous = true;
+                if (itin_list.length > 1) {
+                    for (let i = 0; i < itin_list.length - 1; i++) {
+                        let d1 = new Date(itin_list[i].travel_date);
+                        let d2 = new Date(itin_list[i+1].travel_date);
+                        let diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+                        if (diff !== 1) {
+                            isContinuous = false;
+                            break;
+                        }
+                    }
+                }
+                if (!isContinuous && itin_list.length > 1) {
+                    returnDateStr = "PM OF THE SAME DATES";
+                }
+
                 doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                 doc.text("DEPARTURE DATE:", 20, curY);
                 doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
                 doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-                doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+                doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 160, curY+1);
 
                 curY += 6;
                 doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
@@ -3092,6 +3124,7 @@
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
                 currentUser.pass = hashedNew; // Update session
+                window.saveSession(currentUser); // Update session memory
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
@@ -3099,8 +3132,59 @@
                 alert("Error updating password: " + e.message);
             }
         };
+
+        // RESTORE SESSION ON LOAD
+        window.restoreSession = async function() {
+            const sessionData = localStorage.getItem('dar_session_user');
+            if (sessionData) {
+                try {
+                    const session = JSON.parse(sessionData);
+                    if (Date.now() < session.expiry) {
+                        currentUser = session.user;
+                        document.getElementById('user-name').innerText = currentUser.full_name;
+                        document.getElementById('user-info').innerText = `${currentUser.division} | ${currentUser.position}`; 
+                        document.getElementById('login-screen').classList.remove('active');
+                        document.getElementById('app-screen').classList.add('active');
+                        document.getElementById('itin-from').min = todayStr;
+                        document.getElementById('itin-to').min = todayStr;
+                        personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
+                        window.renderPersonnel();
+
+                        if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
+                            document.getElementById('special-div-card').style.display = 'block';
+                            const sDivs = (currentUser.division || "").split(',');
+                            let sdHtml = '';
+                            sDivs.forEach(d => {
+                                const val = d.trim();
+                                if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                            });
+                            document.getElementById('special-div-list').innerHTML = sdHtml;
+                        } else {
+                            document.getElementById('special-div-card').style.display = 'none';
+                        }
+
+                        supabase.from('holidays').select('date, description').then(({data}) => {
+                            cachedHolidays = data || [];
+                            window.updateLeaveInputs();
+                        });
+                        
+                        await window.checkUnapprovedRemarks();
+                        window.loadAttendance();
+                    } else {
+                        localStorage.removeItem('dar_session_user');
+                    }
+                } catch(e) {
+                    console.error("Session restore failed", e);
+                    localStorage.removeItem('dar_session_user');
+                }
+            }
+        };
+
+        // Trigger session check automatically at bottom of the module script
+        window.restoreSession();
+
     </script>
 </body>
 </html>
 
-```
+
