@@ -1756,59 +1756,72 @@
         };
 
         window.deletePendingTO = async function(toNo) {
-            if(!confirm(`Permanently delete Pending TO ${toNo}?`)) return;
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            await window.logActivity(toNo, 'DELETED', 'Pending Travel Order Deleted');
+            if(!confirm(`Delete Pending TO ${toNo} for yourself? (Other participants will remain unaffected)`)) return;
+            const { data: others } = await supabase.from('travel_orders').select('emp_id').eq('to_no', toNo).neq('emp_id', currentUser.emp_id);
+            await supabase.from('travel_orders').delete().eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
+            if (!others || others.length === 0) { await supabase.from('itinerary').delete().eq('to_no', toNo); }
+            await window.logActivity(toNo, 'DELETED', 'Pending Travel Order Deleted for ' + currentUser.full_name);
             window.loadStatus();
         };
 
         window.cancelApprovedTO = async function(toNo) {
-            if(!confirm(`Cancel Approved TO ${toNo}? PARPO will be notified.`)) return;
-            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled by ${currentUser.full_name}` });
-            await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by User');
+            if(!confirm(`Cancel your participation in Approved TO ${toNo}? (Other participants will remain unaffected)`)) return;
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled for ${currentUser.full_name}` });
+            await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by ' + currentUser.full_name);
             window.loadStatus();
         };
 
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification? (Old pending record will be removed)")) return;
-            const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
-            if (!toGroup || toGroup.length === 0) return;
-            const to = toGroup[0];
-            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-            
-            document.getElementById('to-transport').value = to.transport;
-            document.getElementById('dep-time-group').style.display = to.transport === "GOV'T VEHICLE" ? 'block' : 'none';
-            document.getElementById('to-outside-bicol').checked = to.remarks && to.remarks.includes("OUTSIDE BICOL");
-            if (itin.length > 0) {
-                document.getElementById('itin-from').value = itin[0].travel_date;
-                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date;
+        window.dropApprovedTODay = async function(toNo) {
+            const targetDate = prompt(`Enter the specific DATE you want to drop (YYYY-MM-DD):\nNote: Dropping a day from a group TO will securely split you into a new TO number.`);
+            if(!targetDate) return;
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo);
+            if (!itin.some(i => i.travel_date === targetDate.trim())) return alert("Date not found in this TO.");
+            if (itin.length === 1) {
+                alert("This TO only has one day. Dropping it will cancel the entire TO for you.");
+                return window.cancelApprovedTO(toNo);
             }
+            const { data: others } = await supabase.from('travel_orders').select('emp_id').eq('to_no', toNo).neq('emp_id', currentUser.emp_id);
+            if (!others || others.length === 0) {
+                await supabase.from('itinerary').delete().eq('to_no', toNo).eq('travel_date', targetDate.trim());
+                await window.logActivity(toNo, 'DAY_DROPPED', `Dropped ${targetDate.trim()} from TO`);
+                alert(`Day ${targetDate.trim()} dropped successfully.`);
+                window.loadStatus();
+            } else {
+                alert("Group TO detected. You will be split into your own TO number with the remaining days.");
+                const remainingDays = itin.filter(day => day.travel_date !== targetDate.trim());
+                const remainderToNo = await window.generateToNo(currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN");
+                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
+                const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).eq('emp_id', currentUser.emp_id).maybeSingle();
+                const { id, ...restOrig } = origTO;
+                await supabase.from('travel_orders').insert({ ...restOrig, to_no: remainderToNo, status: 'APPROVED' });
+                const batchRemainderItin = remainingDays.map(({ id, ...restItin }) => ({ ...restItin, to_no: remainderToNo }));
+                await supabase.from('itinerary').insert(batchRemainderItin);
+                await window.logActivity(remainderToNo, 'SPLIT_CREATED', `Split from ${toNo} due to dropping ${targetDate.trim()}`);
+                window.loadStatus();
+            }
+        };
 
-            const container = document.getElementById('dynamic-itin-fields');
-            container.innerHTML = ''; itineraryDraft = [];
+        window.modifyPendingTO = async function(toNo) {
+            if(!confirm("Load this TO back into draft for modification?\n(Warning: If this is a group TO, modifying it will separate YOU from the group draft to prevent overwriting others.)")) return;
+            const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+            const myTo = toGroup.find(t => t.emp_id === currentUser.emp_id);
+            if (!myTo) return;
+            const others = toGroup.filter(t => t.emp_id !== currentUser.emp_id);
+            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            document.getElementById('to-transport').value = myTo.transport;
+            document.getElementById('dep-time-group').style.display = myTo.transport === "GOV'T VEHICLE" ? 'block' : 'none';
+            document.getElementById('to-outside-bicol').checked = myTo.remarks && myTo.remarks.includes("OUTSIDE BICOL");
+            if (itin.length > 0) { document.getElementById('itin-from').value = itin[0].travel_date; document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; }
+            const container = document.getElementById('dynamic-itin-fields'); container.innerHTML = ''; itineraryDraft = [];
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
-            
             let pbddOptions = '';
-            if (userUnit) {
-                pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
-            }
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
-                if (u !== userUnit) {
-                    pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
-                }
-            });
-
+            if (userUnit) pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
+            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; });
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
-                const pbddSelect = isPBDD ? `
-                    <select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${pbddOptions}
-                    </select>
-                ` : '';
-
+                const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions}</select>` : '';
                 container.innerHTML += `
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1819,26 +1832,24 @@
                         ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
                         ${pbddSelect}
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${to.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
-                    </div>
-                `;
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${myTo.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                    </div>`;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
             });
-            
-            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
-            window.renderPersonnel();
-
-            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
-                const savedDivs = to.division.split(',').map(d => d.trim());
-                document.querySelectorAll('input[name="special_div"]').forEach(cb => {
-                    cb.checked = savedDivs.includes(cb.value);
-                });
+            if (others.length > 0) {
+                personnelDraft = [{ emp_id: myTo.emp_id, name: myTo.emp_name, unit: myTo.unit }];
+                await supabase.from('travel_orders').delete().eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
+            } else {
+                personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
+                await supabase.from('itinerary').delete().eq('to_no', toNo);
+                await supabase.from('travel_orders').delete().eq('to_no', toNo);
             }
-
-            await supabase.from('itinerary').delete().eq('to_no', toNo);
-            await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            await window.logActivity(toNo, 'MODIFIED', 'Pending Travel Order Modified/Drafted');
-            
+            window.renderPersonnel();
+            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
+                const savedDivs = myTo.division.split(',').map(d => d.trim());
+                document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
+            }
+            await window.logActivity(toNo, 'MODIFIED', 'Pending Travel Order Modified/Drafted by ' + currentUser.full_name);
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
@@ -2145,21 +2156,13 @@
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
-            
             if(filter === "TO") {
-                const { data: tos } = await supabase.from('travel_orders')
-                    .select('*')
-                    .eq('emp_id', currentUser.emp_id)
-                    .not('status', 'ilike', '%DISAPPROVED%')
-                    .order('created_at', {ascending: false})
-                    .limit(30);
-                
+                const { data: tos } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%DISAPPROVED%').order('created_at', {ascending: false}).limit(30);
                 let html = '';
                 for(let to of tos || []) {
                     const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).order('travel_date', {ascending: true});
                     const sCls = to.status.includes('APPROVED') ? 'bg-approved' : (to.status.includes('CANCELLED') ? 'bg-cancelled' : 'bg-pending');
                     const isApproved = to.status === 'APPROVED', isPending = to.status.includes('PENDING');
-
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px;">${to.to_no}</div>
@@ -2168,20 +2171,15 @@
                         <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
                             ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
                         </div>
-                        <div class="action-group" style="margin-top: 0;">
+                        <div class="action-group" style="margin-top: 0; flex-wrap: wrap;">
                             ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete</button>` : ''}
-                            ${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>` : ''}
+                            ${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-warning btn-small" onclick="window.dropApprovedTODay('${to.to_no}')" style="background:#f59e0b; color:white;">Drop Day</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel TO</button>` : ''}
                         </div>
                     </div>`;
                 }
                 list.innerHTML = html || "No Travel Orders found.";
             } else {
-                const { data: leaves } = await supabase.from('leave_ledger')
-                    .select('*')
-                    .eq('emp_id', currentUser.emp_id)
-                    .in('transaction_type', ['APPLICATION', 'APPROVED'])
-                    .order('created_at', {ascending: false});
-                
+                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']).order('created_at', {ascending: false});
                 let html = '';
                 for(let app of leaves || []) {
                     const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : 'bg-pending';
