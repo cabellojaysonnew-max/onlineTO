@@ -1,3 +1,16 @@
+### ACTION PLAN & IMPLEMENTATION
+
+Here is exactly what I did to fulfill your requirements without altering the rest of your system:
+
+1. **Pending Tab Breakdown (Daily View):** Inside `loadPendingTab()`, I removed the `[...new Set(...)]` grouping for destinations and purposes. I replaced it with `itinDetailsHTML` that maps over the `fullItinerary` array. This creates a dedicated HTML block for each travel date, showing the specific date, destination, and purpose clearly separated under the employee's name.
+2. **Popup Data Modification:** I updated the data passed to `initiateDirectTO()`. Instead of passing the grouped destination string and an encoded array of just dates, it now passes `itinEncoded` (the entire itinerary object array).
+3. **Popup Specific Destinations:** Inside the `initiateDirectTO` function, the checkboxes list now extracts both the date and the specific destination from the itinerary object, appending both to the label next to the checkbox.
+4. **Disapproval Reason on Uncheck:** I added a new hidden input (`pendingPartialDenyReason`) to the `pendingDateModal` HTML. Inside `checkApproveReasonVisibility`, I added logic to compare the number of checked boxes versus total boxes. If any box is unchecked during an approval flow (which means it's being denied/removed), the new input appears, requiring the approver to state the reason.
+5. **Execution & Logging:** I updated `processPendingDates` and `executePartialTO` to capture this new reason. If dates are unchecked, the specific reason is now properly logged in the `activity_log` for those removed dates.
+
+Here is the complete, unaltered code reflecting only your requested additions.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -353,10 +366,11 @@
                         </div>
                         <div class="p-6 space-y-4">
                             <p id="pendingDateModalText" class="text-sm font-bold text-gray-700">Select dates:</p>
-                            <p id="pendingModalDestination" class="text-xs font-bold text-dar-green mb-2"></p>
+                            <p id="pendingModalDestination" class="text-xs font-bold text-dar-green mb-2 hidden"></p>
                             <div id="pendingDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div>
                             <input type="text" id="pendingDenyReason" placeholder="Reason for denial" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
                             <input type="text" id="pendingApproveReason" placeholder="Reason (Required/Optional for 1-day approval)" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
+                            <input type="text" id="pendingPartialDenyReason" placeholder="Reason for unchecked (denied) dates" class="hidden w-full px-4 py-2 border border-red-300 rounded-lg text-sm mb-2">
                             <button id="pendingDateConfirmBtn" class="w-full dar-green text-white font-bold py-3 rounded-xl mt-2">Proceed</button>
                         </div>
                     </div>
@@ -582,32 +596,39 @@
             document.getElementById('pendingDateModal').style.display = 'none';
         };
 
-        window.initiateDirectTO = function(to_no, action, datesEncoded, destEncoded) {
-            const dates = JSON.parse(decodeURIComponent(datesEncoded));
-            const dest = decodeURIComponent(destEncoded);
+        window.initiateDirectTO = function(to_no, action, itinEncoded) {
+            const itinerary = JSON.parse(decodeURIComponent(itinEncoded));
             
             currentPendingToNo = to_no;
             currentPendingAction = action;
             
             const destLabel = document.getElementById('pendingModalDestination');
-            if(destLabel) destLabel.innerText = "📍 Destination: " + (dest || 'N/A');
+            if(destLabel) destLabel.style.display = 'none';
 
             const list = document.getElementById('pendingDatesList');
             list.innerHTML = '';
-            dates.forEach(d => {
+            itinerary.forEach(i => {
+                const dStr = new Date(i.travel_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
                 list.innerHTML += `
                     <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
-                        <input type="checkbox" value="${d}" class="pending-date-cb w-5 h-5 rounded focus:ring-green-500 border-gray-300" checked>
-                        <span class="text-sm font-bold text-gray-700">${new Date(d).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</span>
+                        <input type="checkbox" value="${i.travel_date}" class="pending-date-cb w-5 h-5 rounded focus:ring-green-500 border-gray-300" checked>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold text-gray-700">${dStr}</span>
+                            <span class="text-[10px] text-gray-500">📍 ${i.destination || 'N/A'}</span>
+                        </div>
                     </label>
                 `;
             });
             
             const reasonInput = document.getElementById('pendingDenyReason');
             const approveInput = document.getElementById('pendingApproveReason');
+            const partialDenyInput = document.getElementById('pendingPartialDenyReason');
             const hdr = document.getElementById('pendingDateModalHeader');
             const btn = document.getElementById('pendingDateConfirmBtn');
             const txt = document.getElementById('pendingDateModalText');
+
+            partialDenyInput.classList.add('hidden');
+            partialDenyInput.value = '';
 
             if (action === 'DISAPPROVED') {
                 hdr.className = "bg-red-600 text-white p-4 font-bold text-center relative";
@@ -624,11 +645,20 @@
                 reasonInput.classList.add('hidden');
                 
                 const checkApproveReasonVisibility = () => {
-                    const checkedCount = document.querySelectorAll('.pending-date-cb:checked').length;
+                    const checkboxes = document.querySelectorAll('.pending-date-cb');
+                    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                    const totalCount = checkboxes.length;
+
                     if (checkedCount === 1) {
                         approveInput.classList.remove('hidden');
                     } else {
                         approveInput.classList.add('hidden');
+                    }
+
+                    if (checkedCount < totalCount) {
+                        partialDenyInput.classList.remove('hidden');
+                    } else {
+                        partialDenyInput.classList.add('hidden');
                     }
                 };
                 
@@ -650,6 +680,7 @@
 
             let denyReason = "";
             let approveReason = "";
+            let partialDenyReason = "";
 
             if (currentPendingAction === 'DISAPPROVED') {
                 denyReason = document.getElementById('pendingDenyReason').value.trim();
@@ -658,13 +689,17 @@
                 if (selectedDates.length === 1) {
                     approveReason = document.getElementById('pendingApproveReason').value.trim();
                 }
+                if (selectedDates.length < totalDates) {
+                    partialDenyReason = document.getElementById('pendingPartialDenyReason').value.trim();
+                    if (!partialDenyReason) return alert("Please provide a reason for the unchecked (disapproved) dates.");
+                }
             }
 
             hidePendingDateModal();
-            await executePartialTO(currentPendingToNo, currentPendingAction, selectedDates, totalDates, denyReason, approveReason);
+            await executePartialTO(currentPendingToNo, currentPendingAction, selectedDates, totalDates, denyReason, approveReason, partialDenyReason);
         };
 
-        window.executePartialTO = async function(to_no, action, selectedDates, totalDates, denyReason, approveReason) {
+        window.executePartialTO = async function(to_no, action, selectedDates, totalDates, denyReason, approveReason, partialDenyReason) {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
 
@@ -685,6 +720,7 @@
                         for (let d of unselectedDates) {
                             await supabaseClient.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
                         }
+                        await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${unselectedDates.join(', ')}) by ${currentUser.fullName}. Reason: ${partialDenyReason}`);
                     }
                     
                     const { data: toData, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no).limit(1);
@@ -862,16 +898,28 @@
                         dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
                     }
                     
-                    const datesEncoded = encodeURIComponent(JSON.stringify(fullItinerary.map(i => i.travel_date)));
+                    const itinEncoded = encodeURIComponent(JSON.stringify(fullItinerary));
+                    
+                    const itinDetailsHTML = fullItinerary.map(i => {
+                        const d = new Date(i.travel_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+                        return `<div class="mt-1.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <div class="flex items-start">
+                                        <span class="font-bold text-[10px] text-dar-green w-12 shrink-0">${d}</span>
+                                        <div class="flex flex-col">
+                                            <span class="text-[10px] text-gray-700 font-bold leading-tight">📍 ${i.destination || 'N/A'}</span>
+                                            <span class="text-[9px] text-gray-500 mt-0.5 leading-tight">🎯 ${i.purpose || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>`;
+                    }).join('');
 
                     pendingOrders.push({ 
                         to_no, 
                         names: list.map(g => g.emp_name), 
-                        destinations: [...new Set(fullItinerary.map(i => i.destination))].join(', ') || 'N/A', 
-                        purpose: [...new Set(fullItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
+                        itinDetailsHTML: itinDetailsHTML, 
                         report_to: list[0].report_to || 'N/A', 
                         dateStr: dt,
-                        datesEncoded: datesEncoded
+                        itinEncoded: itinEncoded
                     });
                 }
             }
@@ -898,14 +946,13 @@
                                 <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
-                            <p class="text-[11px] text-gray-500 break-words whitespace-normal mt-0.5">🎯 ${o.purpose}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
-                            <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
+                            ${o.itinDetailsHTML}
+                            <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t pt-1">👤 Report To: ${o.report_to}</p>
+                            <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Total Range: ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.datesEncoded}', '${encodeURIComponent(o.destinations)}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.itinEncoded}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
@@ -1538,3 +1585,5 @@
     </script>
 </body>
 </html>
+
+```
