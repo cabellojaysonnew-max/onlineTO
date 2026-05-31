@@ -185,7 +185,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button onclick="window.showChangePassword()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">🔒</button>
-                <button onclick="location.reload()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
+                <button onclick="window.logoutUser()" style="background: none; border: 1px solid white; color: white; border-radius: 4px; padding: 4px 8px; font-size: 11px;">Logout</button>
             </div>
         </div>
 
@@ -219,6 +219,16 @@
                     </div>
                 
                 <button class="btn btn-primary" onclick="window.generateTEVPDF()">📄 GENERATE COMBINED TEV FORM</button>
+            </div>
+        </div>
+
+        <div id="remarksModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2000; justify-content:center; align-items:center;">
+            <div class="card" style="width: 85%; max-width: 400px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <button onclick="document.getElementById('remarksModal').style.display='none'" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--warning);">Attention</h3>
+                <p style="font-size:12px; color:var(--text-muted);">You have unapproved Travel Orders with remarks:</p>
+                <div id="remarks-content" style="max-height: 300px; overflow-y: auto; font-size: 12px;"></div>
+                <button class="btn btn-primary" style="margin-top: 15px;" onclick="document.getElementById('remarksModal').style.display='none'">OK</button>
             </div>
         </div>
 
@@ -423,6 +433,61 @@
             } catch(e) { console.error("Log error", e); }
         };
 
+        // SESSION MANAGEMENT HELPER
+        window.saveSession = function(user) {
+            localStorage.setItem('dar_session_user', JSON.stringify({
+                user: user,
+                expiry: Date.now() + 15 * 24 * 60 * 60 * 1000 // 15 Days
+            }));
+        };
+
+        window.logoutUser = function() {
+            localStorage.removeItem('dar_session_user');
+            location.reload();
+        };
+
+        window.checkUnapprovedRemarks = async function() {
+            if (!currentUser) return;
+            try {
+                const { data } = await supabase.from('travel_orders')
+                    .select('to_no, remarks, status')
+                    .eq('emp_id', currentUser.emp_id)
+                    .neq('status', 'APPROVED')
+                    .neq('status', 'CANCELLED')
+                    .not('remarks', 'is', null)
+                    .neq('remarks', '');
+
+                if (data && data.length > 0) {
+                    let hasRealRemarks = false;
+                    let html = '';
+                    const uniqueTos = [];
+                    const seen = new Set();
+                    for (const to of data) {
+                        if (!seen.has(to.to_no)) {
+                            seen.add(to.to_no);
+                            uniqueTos.push(to);
+                        }
+                    }
+
+                    uniqueTos.forEach(to => {
+                        const clean = to.remarks.replace('EXISTING PSO', '').replace('OUTSIDE BICOL', '').replace(/Departure: \d{1,2}:\d{2} (AM|PM)/, '').replace(/\|/g, '').trim();
+                        if (clean.length > 0) {
+                            hasRealRemarks = true;
+                            html += `<div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                                <strong>${to.to_no}</strong> <span class="badge" style="float:none; margin-left:5px; background:#fefce8; color:#854d0e;">${to.status.replace(/_/g, ' ')}</span><br>
+                                <span style="color: var(--danger); font-weight: bold;">Remarks:</span> ${to.remarks}
+                            </div>`;
+                        }
+                    });
+
+                    if (hasRealRemarks) {
+                        document.getElementById('remarks-content').innerHTML = html;
+                        document.getElementById('remarksModal').style.display = 'flex';
+                    }
+                }
+            } catch(e) { console.error("Remarks Error:", e); }
+        };
+
         // STRICT PHILIPPINE TIME (PST) FORMATTERS
         const getPSTDateFromDateObj = (dateObj) => {
             const options = { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' };
@@ -545,6 +610,7 @@
                 const { data, error } = await supabase.from('employees').select('*').eq('emp_id', empId).maybeSingle();
                 if (data && (data.pass === token)) {
                     currentUser = data;
+                    window.saveSession(data);
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
@@ -570,6 +636,8 @@
                     const { data: hols } = await supabase.from('holidays').select('date, description');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
+                    
+                    await window.checkUnapprovedRemarks();
                 } else { 
                     alert("Invalid Credentials"); 
                 }
@@ -707,6 +775,7 @@
 
                 if (data.pass === pass || data.pass === hashedPass || data.pass?.trim() === pass || data.pass?.trim() === hashedPass) {
                     currentUser = data;
+                    window.saveSession(data);
                     document.getElementById('user-name').innerText = data.full_name;
                     document.getElementById('user-info').innerText = `${data.division} | ${data.position}`; 
                     document.getElementById('login-screen').classList.remove('active');
@@ -735,6 +804,7 @@
                     
                     window.setupBiometric(id, data.pass);
                     
+                    await window.checkUnapprovedRemarks();
                 } else { 
                     alert("Incorrect Password."); 
                 }
@@ -1095,18 +1165,19 @@
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                
-                if (empDiv === "PARPO") {
+                const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+
+                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
                 } else if (empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
-                    if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                    if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
                     const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
 
@@ -1715,21 +1786,42 @@
         window.generateToNo = async function(targetDiv) {
             const year = new Date().getFullYear();
             const div = (targetDiv || currentUser.division || "GEN").split(',')[0].trim().substring(0, 5).toUpperCase();
-            const { data } = await supabase.from('travel_orders')
-                .select('to_no')
-                .like('to_no', `${year}-${div}-%`)
-                .order('to_no', { ascending: false })
-                .limit(1);
+            const isSplit = currentUser && String(currentUser.type).toUpperCase() === 'SPLIT';
             
             let seq = 1;
-            if (data && data.length > 0 && data[0].to_no) {
-                const parts = data[0].to_no.split('-');
-                if (parts.length >= 3) {
-                    const parsed = parseInt(parts[2], 10);
+            
+            if (isSplit) {
+                const { data } = await supabase.from('travel_orders')
+                    .select('to_no')
+                    .like('to_no', `${year}-%-SPLIT-%`);
+                    
+                if (data && data.length > 0) {
+                    let maxSeq = 0;
+                    data.forEach(row => {
+                        const parts = row.to_no.split('-');
+                        const parsed = parseInt(parts[parts.length - 1], 10);
+                        if (!isNaN(parsed) && parsed > maxSeq) {
+                            maxSeq = parsed;
+                        }
+                    });
+                    seq = maxSeq + 1;
+                }
+                return `${year}-${div}-SPLIT-${String(seq).padStart(5, '0')}`;
+            } else {
+                const { data } = await supabase.from('travel_orders')
+                    .select('to_no')
+                    .like('to_no', `${year}-${div}-%`)
+                    .not('to_no', 'like', '%-SPLIT-%')
+                    .order('to_no', { ascending: false })
+                    .limit(1);
+                    
+                if (data && data.length > 0 && data[0].to_no) {
+                    const parts = data[0].to_no.split('-');
+                    const parsed = parseInt(parts[parts.length - 1], 10);
                     if (!isNaN(parsed)) seq = parsed + 1; 
                 }
+                return `${year}-${div}-${String(seq).padStart(5, '0')}`;
             }
-            return `${year}-${div}-${String(seq).padStart(5, '0')}`;
         };
 
         window.deletePendingTO = async function(toNo) {
@@ -1995,11 +2087,28 @@
                 
                 let curY = Math.max(destY, destLabelY + 5);
 
+                let returnDateStr = itin_list[itin_list.length-1]?.travel_date || "";
+                let isContinuous = true;
+                if (itin_list.length > 1) {
+                    for (let i = 0; i < itin_list.length - 1; i++) {
+                        let d1 = new Date(itin_list[i].travel_date);
+                        let d2 = new Date(itin_list[i+1].travel_date);
+                        let diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+                        if (diff !== 1) {
+                            isContinuous = false;
+                            break;
+                        }
+                    }
+                }
+                if (!isContinuous && itin_list.length > 1) {
+                    returnDateStr = "PM OF THE SAME DATES";
+                }
+
                 doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                 doc.text("DEPARTURE DATE:", 20, curY);
                 doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
                 doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-                doc.setFont("helvetica", "normal"); doc.text(itin_list[itin_list.length-1]?.travel_date || "", 125, curY); doc.line(125, curY+1, 160, curY+1);
+                doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 160, curY+1);
 
                 curY += 6;
                 doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
@@ -2853,18 +2962,19 @@
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                
-                if (empDiv === "PARPO") {
+                const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+
+                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
                 } else if (empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('employees').select('full_name').eq('unit', currentUser.unit).ilike('position', '%MARPO%').maybeSingle();
-                    if (mData) { chiefName = mData.full_name.toUpperCase(); }
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                    if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
                     const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    if (chiefData) { chiefName = chiefData.full_name.toUpperCase(); }
+                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
 
@@ -3085,6 +3195,7 @@
                 alert("Password successfully updated!"); 
                 window.hideChangePassword();
                 currentUser.pass = hashedNew; // Update session
+                window.saveSession(currentUser); // Update session memory
                 document.getElementById('pass-curr').value = "";
                 document.getElementById('pass-new').value = "";
                 document.getElementById('pass-conf').value = "";
@@ -3092,6 +3203,57 @@
                 alert("Error updating password: " + e.message);
             }
         };
+
+        // RESTORE SESSION ON LOAD
+        window.restoreSession = async function() {
+            const sessionData = localStorage.getItem('dar_session_user');
+            if (sessionData) {
+                try {
+                    const session = JSON.parse(sessionData);
+                    if (Date.now() < session.expiry) {
+                        currentUser = session.user;
+                        document.getElementById('user-name').innerText = currentUser.full_name;
+                        document.getElementById('user-info').innerText = `${currentUser.division} | ${currentUser.position}`; 
+                        document.getElementById('login-screen').classList.remove('active');
+                        document.getElementById('app-screen').classList.add('active');
+                        document.getElementById('itin-from').min = todayStr;
+                        document.getElementById('itin-to').min = todayStr;
+                        personnelDraft = [{ emp_id: currentUser.emp_id, name: currentUser.full_name, unit: currentUser.unit }];
+                        window.renderPersonnel();
+
+                        if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
+                            document.getElementById('special-div-card').style.display = 'block';
+                            const sDivs = (currentUser.division || "").split(',');
+                            let sdHtml = '';
+                            sDivs.forEach(d => {
+                                const val = d.trim();
+                                if(val) sdHtml += `<div class="radio-item"><input type="checkbox" name="special_div" value="${val}" checked> ${val}</div>`;
+                            });
+                            document.getElementById('special-div-list').innerHTML = sdHtml;
+                        } else {
+                            document.getElementById('special-div-card').style.display = 'none';
+                        }
+
+                        supabase.from('holidays').select('date, description').then(({data}) => {
+                            cachedHolidays = data || [];
+                            window.updateLeaveInputs();
+                        });
+                        
+                        await window.checkUnapprovedRemarks();
+                        window.loadAttendance();
+                    } else {
+                        localStorage.removeItem('dar_session_user');
+                    }
+                } catch(e) {
+                    console.error("Session restore failed", e);
+                    localStorage.removeItem('dar_session_user');
+                }
+            }
+        };
+
+        // Trigger session check automatically at bottom of the module script
+        window.restoreSession();
+
     </script>
 </body>
 </html>
@@ -3257,6 +3419,8 @@
         let analyticsData = {};
         let selectedPendingOrders = new Set(); 
         let currentCancelToNo = null;
+        let currentPendingToNo = null;
+        let currentPendingAction = null;
 
         // ACTIVITY LOG HELPER
         window.logActivity = async function(toNo, action, details) {
@@ -3458,6 +3622,24 @@
                 <div id="pwdModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="dar-green text-white p-4 font-bold text-center relative">Security<button onclick="hideChangePassword()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><input type="password" id="oldPwd" placeholder="Current Password" class="w-full px-4 py-2 border rounded-lg text-sm"><input type="password" id="newPwd" placeholder="New Password" class="w-full px-4 py-2 border rounded-lg text-sm"><button onclick="updatePassword()" class="w-full dar-green text-white font-bold py-3 rounded-xl">Save</button></div></div></div>
                 
                 <div id="cancelModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"><div class="bg-red-600 text-white p-4 font-bold text-center relative">Cancel Travel Order<button onclick="hideCancelModal()" class="absolute right-4 text-xl leading-none">✕</button></div><div class="p-6 space-y-4"><p class="text-sm font-bold text-gray-700">Select dates to cancel:</p><div id="cancelDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div><button onclick="confirmCancelTO()" class="w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2">Cancel Selected Dates</button><button onclick="cancelEntireTO()" class="w-full bg-red-800 text-white font-bold py-3 rounded-xl mt-2">Cancel Entire TO</button></div></div></div>
+
+                <div id="pendingDateModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
+                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
+                        <div id="pendingDateModalHeader" class="dar-green text-white p-4 font-bold text-center relative">
+                            Select Dates
+                            <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <p id="pendingDateModalText" class="text-sm font-bold text-gray-700">Select dates:</p>
+                            <p id="pendingModalDestination" class="text-xs font-bold text-dar-green mb-2 hidden"></p>
+                            <div id="pendingDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                            <input type="text" id="pendingDenyReason" placeholder="Reason for denial" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
+                            <input type="text" id="pendingApproveReason" placeholder="Reason (Required/Optional for 1-day approval)" class="hidden w-full px-4 py-2 border rounded-lg text-sm mb-2">
+                            <input type="text" id="pendingPartialDenyReason" placeholder="Reason for unchecked (denied) dates" class="hidden w-full px-4 py-2 border border-red-300 rounded-lg text-sm mb-2">
+                            <button id="pendingDateConfirmBtn" class="w-full dar-green text-white font-bold py-3 rounded-xl mt-2">Proceed</button>
+                        </div>
+                    </div>
+                </div>
 
                 <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
             `;
@@ -3674,6 +3856,168 @@
             }
         }
 
+        // --- PENDING MODAL & DIRECT ACTIONS ---
+        window.hidePendingDateModal = function() {
+            document.getElementById('pendingDateModal').style.display = 'none';
+        };
+
+        window.initiateDirectTO = function(to_no, action, itinEncoded) {
+            const itinerary = JSON.parse(decodeURIComponent(itinEncoded));
+            
+            currentPendingToNo = to_no;
+            currentPendingAction = action;
+            
+            const destLabel = document.getElementById('pendingModalDestination');
+            if(destLabel) destLabel.style.display = 'none';
+
+            const list = document.getElementById('pendingDatesList');
+            list.innerHTML = '';
+            itinerary.forEach(i => {
+                const dStr = new Date(i.travel_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+                list.innerHTML += `
+                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
+                        <input type="checkbox" value="${i.travel_date}" class="pending-date-cb w-5 h-5 rounded focus:ring-green-500 border-gray-300" checked>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold text-gray-700">${dStr}</span>
+                            <span class="text-[10px] text-gray-500">📍 ${i.destination || 'N/A'}</span>
+                        </div>
+                    </label>
+                `;
+            });
+            
+            const reasonInput = document.getElementById('pendingDenyReason');
+            const approveInput = document.getElementById('pendingApproveReason');
+            const partialDenyInput = document.getElementById('pendingPartialDenyReason');
+            const hdr = document.getElementById('pendingDateModalHeader');
+            const btn = document.getElementById('pendingDateConfirmBtn');
+            const txt = document.getElementById('pendingDateModalText');
+
+            partialDenyInput.classList.add('hidden');
+            partialDenyInput.value = '';
+
+            if (action === 'DISAPPROVED') {
+                hdr.className = "bg-red-600 text-white p-4 font-bold text-center relative";
+                hdr.innerHTML = `Deny Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
+                btn.className = "w-full bg-red-600 text-white font-bold py-3 rounded-xl mt-2";
+                txt.innerText = "Select dates to DENY (Unselected dates remain pending):";
+                reasonInput.classList.remove('hidden');
+                approveInput.classList.add('hidden');
+            } else {
+                hdr.className = "dar-green text-white p-4 font-bold text-center relative";
+                hdr.innerHTML = `Approve Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
+                btn.className = "w-full dar-green text-white font-bold py-3 rounded-xl mt-2";
+                txt.innerText = "Select dates to " + (action === 'OFFICIAL_TIME' ? 'Approve (Official Time)' : 'Approve') + " (Unselected dates will be removed):";
+                reasonInput.classList.add('hidden');
+                
+                const checkApproveReasonVisibility = () => {
+                    const checkboxes = document.querySelectorAll('.pending-date-cb');
+                    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                    const totalCount = checkboxes.length;
+
+                    if (checkedCount === 1) {
+                        approveInput.classList.remove('hidden');
+                    } else {
+                        approveInput.classList.add('hidden');
+                    }
+
+                    if (checkedCount < totalCount) {
+                        partialDenyInput.classList.remove('hidden');
+                    } else {
+                        partialDenyInput.classList.add('hidden');
+                    }
+                };
+                
+                const checkboxes = document.querySelectorAll('.pending-date-cb');
+                checkboxes.forEach(cb => cb.addEventListener('change', checkApproveReasonVisibility));
+                checkApproveReasonVisibility(); 
+            }
+            
+            document.getElementById('pendingDateConfirmBtn').onclick = processPendingDates;
+            document.getElementById('pendingDateModal').style.display = 'flex';
+        };
+
+        window.processPendingDates = async function() {
+            const checkboxes = document.querySelectorAll('.pending-date-cb');
+            const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            const totalDates = checkboxes.length;
+
+            if (selectedDates.length === 0) return alert("Select at least one date.");
+
+            let denyReason = "";
+            let approveReason = "";
+            let partialDenyReason = "";
+
+            if (currentPendingAction === 'DISAPPROVED') {
+                denyReason = document.getElementById('pendingDenyReason').value.trim();
+                if (!denyReason && selectedDates.length === totalDates) return alert("Please provide a reason for denying the entire TO.");
+            } else {
+                if (selectedDates.length === 1) {
+                    approveReason = document.getElementById('pendingApproveReason').value.trim();
+                }
+                if (selectedDates.length < totalDates) {
+                    partialDenyReason = document.getElementById('pendingPartialDenyReason').value.trim();
+                    if (!partialDenyReason) return alert("Please provide a reason for the unchecked (disapproved) dates.");
+                }
+            }
+
+            hidePendingDateModal();
+            await executePartialTO(currentPendingToNo, currentPendingAction, selectedDates, totalDates, denyReason, approveReason, partialDenyReason);
+        };
+
+        window.executePartialTO = async function(to_no, action, selectedDates, totalDates, denyReason, approveReason, partialDenyReason) {
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
+
+            try {
+                if (action === 'DISAPPROVED') {
+                    if (selectedDates.length === totalDates) {
+                        await supabaseClient.from('travel_orders').update({ status: 'DISAPPROVED', received: denyReason }).eq('to_no', to_no);
+                        await window.logActivity(to_no, 'DISAPPROVED', `Disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
+                    } else {
+                        for (let d of selectedDates) {
+                            await supabaseClient.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
+                        }
+                        await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${selectedDates.join(', ')}) by ${currentUser.fullName}`);
+                    }
+                } else {
+                    if (selectedDates.length < totalDates) {
+                        const unselectedDates = Array.from(document.querySelectorAll('.pending-date-cb')).filter(cb => !cb.checked).map(cb => cb.value);
+                        for (let d of unselectedDates) {
+                            await supabaseClient.from('itinerary').delete().eq('to_no', to_no).eq('travel_date', d);
+                        }
+                        await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${unselectedDates.join(', ')}) by ${currentUser.fullName}. Reason: ${partialDenyReason}`);
+                    }
+                    
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no).limit(1);
+                    if (error) throw error;
+                    const p = getAppPayload(currentUser, toData[0]);
+                    
+                    if (action === 'OFFICIAL_TIME') p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
+                    
+                    if (approveReason) {
+                        p.remarks = approveReason;
+                    }
+
+                    if (Object.keys(p).length === 0) throw new Error("Approval failed: Role not configured.");
+
+                    await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
+                    
+                    if (approveReason) {
+                        await supabaseClient.from('notifications').insert({
+                            recipient_role: 'EMPLOYEE',
+                            message: `Your TO ${to_no} was processed. Reason/Note: ${approveReason}`,
+                            to_no: to_no
+                        });
+                    }
+                }
+                loadPendingTab();
+            } catch(e) {
+                alert(e.message);
+                loadPendingTab();
+            }
+        };
+
         window.processDirectTO = async function(to_no, action) {
             try {
                 let p;
@@ -3804,7 +4148,6 @@
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
-                            // Set flag to filter itinerary tags
                             showOnlyDatesForUnits = unitsCanSign; 
                         }
                     }
@@ -3819,14 +4162,29 @@
                         const end = new Date(fullItinerary[fullItinerary.length-1].travel_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                         dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
                     }
+                    
+                    const itinEncoded = encodeURIComponent(JSON.stringify(fullItinerary));
+                    
+                    const itinDetailsHTML = fullItinerary.map(i => {
+                        const d = new Date(i.travel_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+                        return `<div class="mt-1.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <div class="flex items-start">
+                                        <span class="font-bold text-[10px] text-dar-green w-12 shrink-0">${d}</span>
+                                        <div class="flex flex-col">
+                                            <span class="text-[10px] text-gray-700 font-bold leading-tight">📍 ${i.destination || 'N/A'}</span>
+                                            <span class="text-[9px] text-gray-500 mt-0.5 leading-tight">🎯 ${i.purpose || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>`;
+                    }).join('');
 
                     pendingOrders.push({ 
                         to_no, 
                         names: list.map(g => g.emp_name), 
-                        destinations: [...new Set(fullItinerary.map(i => i.destination))].join(', ') || 'N/A', 
-                        purpose: [...new Set(fullItinerary.map(i => i.purpose))].join(', ') || 'N/A', 
+                        itinDetailsHTML: itinDetailsHTML, 
                         report_to: list[0].report_to || 'N/A', 
-                        dateStr: dt
+                        dateStr: dt,
+                        itinEncoded: itinEncoded
                     });
                 }
             }
@@ -3853,14 +4211,13 @@
                                 <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-1">📍 ${o.destinations}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${o.purpose}</p>
-                            <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
-                            <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${o.dateStr}</p>
+                            ${o.itinDetailsHTML}
+                            <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t pt-1">👤 Report To: ${o.report_to}</p>
+                            <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Total Range: ${o.dateStr}</p>
                             <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="processDirectTO('${o.to_no}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="processDirectTO('${o.to_no}', 'OFFICIAL_TIME')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
-                                <button onclick="processDirectTO('${o.to_no}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.itinEncoded}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
+                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
@@ -3954,7 +4311,7 @@
                                 </div>
                                 <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
                                 <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
-                                <p class="text-[11px] text-gray-500 truncate mt-0.5">🎯 ${purpose}</p>
+                                <p class="text-[11px] text-gray-500 break-words whitespace-normal mt-0.5">🎯 ${purpose}</p>
                                 <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
                                 <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
                                 ${actionBtns}
@@ -4095,15 +4452,15 @@
                 const cMap = { blue: 'border-blue-500 bg-blue-50 text-blue-800', purple: 'border-purple-500 bg-purple-50 text-purple-800', orange: 'border-orange-500 bg-orange-50 text-orange-800', red: 'border-red-500 bg-red-50 text-red-800' };
                 const c = cMap[r.color];
                 const extra = r.extraHTML ? r.extraHTML : '';
-                h += `<div class="bg-white p-4 rounded-xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-slate-800 truncate">${r.title}</p><p class="text-[10px] text-slate-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-slate-500 truncate mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded bg-white border opacity-80 uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
+                h += `<div class="bg-white p-4 rounded-xl border-l-4 shadow-sm flex items-center justify-between text-left ${c.split(' ')[0]}"><div class="overflow-hidden w-full"><p class="font-bold text-sm text-slate-800 truncate">${r.title}</p><p class="text-[10px] text-slate-500 truncate mt-1">📍 ${r.subtitle || 'N/A'}</p><p class="text-[10px] text-slate-500 break-words whitespace-normal mt-0.5">🎯 ${r.purpose || 'N/A'}</p>${extra}</div><div class="shrink-0 ml-2"><span class="text-[8px] font-black px-2 py-1 rounded bg-white border opacity-80 uppercase ${c.split(' ').slice(1).join(' ')}">${r.type}</span></div></div>`;
             });
             container.innerHTML = h;
         }
 
-        // --- AI ANALYTICS TAB ---
+        // --- SCOPED ANALYTICS TAB ---
         async function loadAnalyticsTab() {
             const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Management Overview...</p>`;
+            content.innerHTML = `<p class="flex items-center justify-center h-full text-slate-500 font-bold animate-pulse">Compiling Scoped Overview...</p>`;
             
             try {
                 const { data: allEmps } = await supabaseClient.from('employees').select('*');
@@ -4123,14 +4480,10 @@
                 const currentMonth = Number(tM);
                 const isMonday = nowManilaObj.getDay() === 1;
 
-                const firstDayOfMonth = `${tY}-${tM}-01`;
-                const lastDayObj = new Date(tY, tM, 0); 
-                const lastDayOfMonth = `${lastDayObj.getFullYear()}-${String(lastDayObj.getMonth()+1).padStart(2,'0')}-${String(lastDayObj.getDate()).padStart(2,'0')}`;
-
                 // Supabase explicit timezone bounds for Philippine Standard Time (UTC+08:00)
                 const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
 
-                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes, monthItRes, allHistToRes, allHistItinRes] = await Promise.all([
+                const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes] = await Promise.all([
                     supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name, unit').in('emp_id', validEmpIds),
                     supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
@@ -4139,10 +4492,7 @@
                     supabaseClient.from('so_records').select('emp_id').in('emp_id', validEmpIds).eq('date', todayStr),
                     isMonday ? supabaseClient.from('flag_attendance').select('emp_id, time_in, status').in('emp_id', validEmpIds).eq('date', todayStr) : Promise.resolve({data: []}),
                     supabaseClient.from('gate_pass_logs').select('emp_id, purpose, time_out, time_in').in('emp_id', validEmpIds).eq('date', todayStr),
-                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr),
-                    supabaseClient.from('itinerary').select('to_no, destination, travel_date').gte('travel_date', firstDayOfMonth).lte('travel_date', lastDayOfMonth),
-                    supabaseClient.from('travel_orders').select('to_no, emp_id').eq('status', 'APPROVED'),
-                    supabaseClient.from('itinerary').select('to_no, destination, travel_date')
+                    supabaseClient.from('schedule_override').select('emp_id, start_time').in('emp_id', validEmpIds).lte('start_date', todayStr).gte('end_date', todayStr)
                 ]);
 
                 const tos = toRes.data || [];
@@ -4228,7 +4578,6 @@
                 });
 
                 validEmps.forEach(emp => {
-                    // STRICT YYYY-MM-DD Parsing to prevent timezone offsets
                     if (emp.dob) {
                         try {
                             const parts = emp.dob.split('-');
@@ -4292,9 +4641,9 @@
                     else toStats.Pending++;
                 });
 
-                const monthItineraries = monthItRes.data || [];
+                // SCOPED INSIGHTS: Based strictly on personnel currently under your jurisdiction
                 const destCounts = {};
-                monthItineraries.forEach(i => {
+                itinsToday.forEach(i => {
                     if (i.destination && i.destination.toUpperCase() !== 'N/A') {
                         const d = i.destination.trim();
                         destCounts[d] = (destCounts[d] || 0) + 1;
@@ -4305,10 +4654,9 @@
                     if (count > topDest.count) topDest = { name: dest, count };
                 }
 
-                const monthToNos = [...new Set(monthItineraries.map(i => i.to_no))];
                 const travCounts = {};
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.emp_name) {
+                activeTOs.forEach(t => {
+                    if (t.emp_name) {
                         const n = t.emp_name.trim();
                         travCounts[n] = (travCounts[n] || 0) + 1;
                     }
@@ -4322,157 +4670,12 @@
                 const fieldStaff = empIdsOnTO.length + empIdsOnPSO.length + empIdsOnSO.length;
                 const deskStaff = logsMap.size - fieldStaff; 
 
-                // AI Strategic Routing Implementation
-                const allHistTOs = allHistToRes.data || [];
-                const allHistItins = allHistItinRes.data || [];
-                
-                const stratEmps = validEmps.filter(e => 
-                    (e.employment_type || '').toUpperCase() === 'PERMANENT' &&
-                    (e.station || '').toUpperCase().includes('CS1') &&
-                    (e.status || '').toUpperCase() === 'ACTIVE'
-                );
-                const stratEmpIds = stratEmps.map(e => e.emp_id);
-                
-                const validMonthToNos = new Set(monthItineraries.map(i => i.to_no));
-                const traveledThisMonthIds = new Set();
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED' && validMonthToNos.has(t.to_no) && stratEmpIds.includes(t.emp_id)) {
-                        traveledThisMonthIds.add(t.emp_id);
-                    }
-                });
-                const percentTraveled = stratEmpIds.length > 0 ? Math.round((traveledThisMonthIds.size / stratEmpIds.length) * 100) : 0;
-
-                const allowedPlaces = ["Iriga City/Buhi", "Baao", "BaNaBa", "Bula", "Libmanan I, II, III, and IV", "Minalabac", "Pamplona", "Pasacao", "SanMilGaz", "Cabusao", "Del Gallego", "Lupi", "Ragay", "Sipocot I, II and II", "Regional Office"];
-                
-                let placeFrequencyCounts = {};
-                let monthPlaceFrequencyCounts = {}; 
-                allowedPlaces.forEach(p => {
-                    placeFrequencyCounts[p] = 0;
-                    monthPlaceFrequencyCounts[p] = 0;
-                });
-                let currentWeekOverlaps = {};
-                
-                const sWeek = new Date(nowManilaObj);
-                sWeek.setDate(nowManilaObj.getDate() - nowManilaObj.getDay() + 1); 
-                const eWeek = new Date(sWeek);
-                eWeek.setDate(sWeek.getDate() + 4); 
-                
-                const validHistToNos = new Set(allHistTOs.filter(t => stratEmpIds.includes(t.emp_id)).map(t => t.to_no));
-                
-                allHistItins.forEach(i => {
-                    if (validHistToNos.has(i.to_no) && i.destination) {
-                        const matchedPlace = allowedPlaces.find(ap => i.destination.toLowerCase().includes(ap.toLowerCase()) || ap.toLowerCase().includes(i.destination.toLowerCase()));
-                        if (matchedPlace) {
-                            placeFrequencyCounts[matchedPlace]++;
-                            
-                            const iDate = new Date(i.travel_date);
-                            if (iDate >= sWeek && iDate <= eWeek) {
-                                if (!currentWeekOverlaps[matchedPlace]) currentWeekOverlaps[matchedPlace] = 0;
-                                currentWeekOverlaps[matchedPlace]++;
-                            }
-
-                            const iDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(iDate);
-                            if (iDateStr >= firstDayOfMonth && iDateStr <= lastDayOfMonth) {
-                                monthPlaceFrequencyCounts[matchedPlace]++;
-                            }
-                        }
-                    }
-                });
-                
-                let sortedPlacesMonth = Object.entries(monthPlaceFrequencyCounts).sort((a, b) => b[1] - a[1]);
-                let topStratPlacesMonth = sortedPlacesMonth.slice(0, 3).filter(p => p[1] > 0).map(p => p[0]);
-                let unvisitedPlacesMonth = sortedPlacesMonth.filter(p => p[1] === 0).map(p => p[0]);
-                
-                let overlapWarnings = Object.entries(currentWeekOverlaps).filter(p => p[1] >= 3).map(p => `${p[0]} (${p[1]} personnel)`);
-
-                let unvisitedText = unvisitedPlacesMonth.length > 0 
-                    ? `Critical monitoring gaps remain, with <strong>ZERO deployments</strong> this month to: <strong class="text-rose-600 font-black">${unvisitedPlacesMonth.join(', ')}</strong>.` 
-                    : `All designated municipalities have been visited at least once this month.`;
-
-                let deploymentSuggestion = unvisitedPlacesMonth.length > 0
-                    ? `Mandate upcoming travel orders to prioritize the unvisited areas (${unvisitedPlacesMonth.slice(0, 3).join(', ')}). Limit further non-essential deployments to ${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(' and ') : 'high-frequency zones'}.`
-                    : `Maintain current balanced deployment patterns while ensuring follow-up visits to low-frequency areas.`;
-
-                let strategyHtml = `
-                <div class="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5 rounded-2xl shadow-[0_4px_12px_rgba(79,70,229,0.06)] mt-6 mb-4 relative overflow-hidden">
-                    <div class="flex items-center space-x-2 mb-3 relative z-10">
-                        <span class="text-2xl drop-shadow-sm">🧠</span>
-                        <h3 class="font-black text-indigo-900 text-sm uppercase tracking-widest leading-none">AI Routing Strategy</h3>
-                    </div>
-                    <div class="flex justify-between items-center border-b border-indigo-100 pb-2 mb-3">
-                        <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Target: Permanent | CS1 | Active</p>
-                        <span class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">${percentTraveled}% Traveled This Month</span>
-                    </div>
-                    <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-3 opacity-90">
-                        Monthly analysis indicates that <strong>${percentTraveled}%</strong> of the target personnel (${traveledThisMonthIds.size} out of ${stratEmpIds.length}) have traveled. High-frequency visitation zones include <strong class="text-indigo-600 font-black">${topStratPlacesMonth.length > 0 ? topStratPlacesMonth.join(', ') : 'no significant data'}</strong>. ${unvisitedText}
-                    </p>
-                    <p class="text-[11px] text-indigo-900 leading-relaxed text-justify mb-4 opacity-90">
-                        <strong>Management Action:</strong> ${deploymentSuggestion} Disperse personnel targeting the same geographic clusters to ensure comprehensive regional coverage and optimal constituent support simultaneously.
-                    </p>
-                    ${overlapWarnings.length > 0 
-                        ? `<div class="bg-white border-l-4 border-rose-500 p-3 rounded-lg shadow-sm text-[10px] text-rose-700 font-bold leading-tight">⚠️ OVERLAP DETECTED THIS WEEK: Intense personnel concentration in ${overlapWarnings.join(', ')}. Recommend rescheduling select itineraries to balance area presence.</div>` 
-                        : `<div class="bg-white border-l-4 border-emerald-500 p-3 rounded-lg shadow-sm text-[10px] text-emerald-700 font-bold leading-tight">✅ Excellent distribution detected for the current week. No severe overlaps in targeted municipalities.</div>`}
-                </div>`;
-
-                // --- NEW: PROVINCIAL DEEP DIVE LOGIC ---
-                const activeUnits = {};
-                tos.forEach(t => {
-                    if (t.status === 'APPROVED' && monthToNos.includes(t.to_no) && t.unit && t.unit !== 'NA' && t.unit !== 'N/A') {
-                        const unt = t.unit.trim().toUpperCase();
-                        activeUnits[unt] = (activeUnits[unt] || 0) + 1;
-                    }
-                });
-                const topUnits = Object.entries(activeUnits).sort((a,b) => b[1] - a[1]).slice(0,3);
-
-                const highlyVisitedHtml = topStratPlacesMonth.map(p => `<div class="flex justify-between text-xs border-b border-indigo-100/30 py-1.5"><span class="text-indigo-200">${p}</span><span class="font-bold text-white">${monthPlaceFrequencyCounts[p]} deployments</span></div>`).join('');
-                const neglectedHtml = unvisitedPlacesMonth.map(p => `<span class="inline-block px-2 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded text-[9px] font-bold mr-1 mb-1 shadow-sm">${p}</span>`).join('');
-
-                let monthNameStr = new Date(nowManilaObj).toLocaleString('default', { month: 'long' });
-
-                let provincialDeepDiveHtml = `
-                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-xl mt-8 mb-4 border border-slate-700 relative overflow-hidden">
-                        <div class="flex items-center space-x-2 mb-4 relative z-10">
-                            <span class="text-2xl drop-shadow-md">🗺️</span>
-                            <div>
-                                <h3 class="font-black text-white text-sm uppercase tracking-widest leading-none">Provincial Deep Dive</h3>
-                                <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">Macro-level Management Analysis (${monthNameStr} ${tY})</p>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 gap-4 relative z-10">
-                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
-                                <h4 class="text-[10px] text-indigo-300 font-black uppercase tracking-wider mb-2 flex justify-between"><span>Coverage Concentration</span> <span>Top 3 Areas</span></h4>
-                                <div class="space-y-1 mb-4">
-                                    ${highlyVisitedHtml || '<p class="text-xs text-slate-400">No data</p>'}
-                                </div>
-                                <h4 class="text-[10px] text-rose-300 font-black uppercase tracking-wider mb-2">Neglected Zones (Zero Deployments)</h4>
-                                <div class="flex flex-wrap gap-1">
-                                    ${neglectedHtml || '<p class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded">100% Province Coverage Achieved</p>'}
-                                </div>
-                            </div>
-
-                            <div class="bg-white/5 p-4 rounded-xl border border-white/10 backdrop-blur-sm shadow-inner">
-                                <h4 class="text-[10px] text-emerald-300 font-black uppercase tracking-wider mb-2">Unit Mobility Efficiency</h4>
-                                <p class="text-xs text-slate-300 leading-relaxed mb-3">
-                                    The most active operational units generating deployments this month are: <br>
-                                    <span class="text-white font-bold inline-block mt-1">${topUnits.map(u => `• ${u[0]} (${u[1]} TOs)`).join('<br>') || 'None'}</span>
-                                </p>
-                                <div class="mt-2 text-[9px] text-slate-400 border-t border-white/10 pt-2 uppercase tracking-wider font-bold">
-                                    *High mobility units must be cross-referenced with deliverables to ensure travel correlates with field output.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
                 analyticsData = { 
                     toStats, 
                     workforce: { total: totalStaff, field: fieldStaff, desk: Math.max(0, deskStaff), onLeave: listLeave.length },
                     lists: { late: listLate, absent: listAbsent, leave: listLeave, birthday: listBirthday, gatepass: listGatePass, atDestination: listAtDestination, outsideDestination: listOutsideDestination, noLogsField: listNoLogsField },
                     anomalies: anomalyCount,
-                    insights: { topDest, topTrav },
-                    strategyHtml: strategyHtml,
-                    provincialDeepDiveHtml: provincialDeepDiveHtml
+                    insights: { topDest, topTrav }
                 };
                 
                 renderAnalyticsView();
@@ -4487,7 +4690,7 @@
             let capacity = Math.round((activeForce / Math.max(1, analyticsData.workforce.total)) * 100);
             let availabilityRate = Math.round(((analyticsData.workforce.total - analyticsData.lists.absent.length - analyticsData.workforce.onLeave) / Math.max(1, analyticsData.workforce.total)) * 100);
             
-            let aiText = `<strong>MANAGEMENT BRIEF:</strong> Daily operational capacity stands at ${capacity}%. `;
+            let aiText = `<strong>SCOPED BRIEF:</strong> Daily operational capacity stands at ${capacity}% for your jurisdiction. `;
             if (analyticsData.workforce.field > analyticsData.workforce.desk) aiText += `Resource deployment is currently optimized for field operations. `;
             if (analyticsData.anomalies > 0) aiText += `<span class="text-rose-600 font-bold">Action Required: ${analyticsData.anomalies} attendance log(s) flagged for potential compliance review.</span> `;
             if (analyticsData.lists.absent.length > 0) aiText += `Unaccounted personnel stands at ${analyticsData.lists.absent.length}. `;
@@ -4522,10 +4725,10 @@
                         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
                             <span class="kpi-label mb-1">Most Visited</span>
                             <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topDest.name !== 'None' ? analyticsData.insights.topDest.name : 'N/A'}</span>
-                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topDest.count} Deployments</span>
+                            <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topDest.count} Deployments Today</span>
                         </div>
                         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                            <span class="kpi-label mb-1">Top Traveler</span>
+                            <span class="kpi-label mb-1">Active Traveler</span>
                             <span class="text-sm font-black text-slate-800 leading-tight truncate w-full">${analyticsData.insights.topTrav.name !== 'None' ? analyticsData.insights.topTrav.name : 'N/A'}</span>
                             <span class="text-[10px] text-emerald-600 font-bold mt-1">${analyticsData.insights.topTrav.count} Approved TOs</span>
                         </div>
@@ -4592,10 +4795,6 @@
                         <div class="analytics-header flex justify-between"><span>Birthdays This Month</span><span class="bg-slate-100 px-2 py-0.5 rounded text-slate-600">${analyticsData.lists.birthday.length}</span></div>
                         <div class="analytics-list">${renderListRows(analyticsData.lists.birthday, 'date', iconCake)}</div>
                     </div>
-
-                    ${analyticsData.strategyHtml || ''}
-                    
-                    ${analyticsData.provincialDeepDiveHtml || ''}
                 </div>
             `;
 
