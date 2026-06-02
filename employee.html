@@ -1102,49 +1102,58 @@
             
             try {
 
-// --- START OF FORM 48 SIGNATORIES REVISION ---
+                // --- START OF FORM 48 SIGNATORIES REVISION ---
 let chiefName = "_________________________";
 let chiefPos = "DIVISION CHIEF";
+
 const empDiv = (currentUser.division || "").toUpperCase().trim();
 const empUnit = (currentUser.unit || "").toUpperCase().trim();
 const empStation = (currentUser.station || "").toUpperCase().trim();
+const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
-// FIXED: Renamed 'isMARPO' to 'isMARPO_Signatory' to resolve the reference error in the PDF generator
-const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
-
-if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
+if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO) {
     chiefName = "RICARDO C. GARCIA";
     chiefPos = "PARPO II";
 } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-    const safeUnit = currentUser.unit ? String(currentUser.unit).trim() : "";
     
-    // Querying the 'users' table using the 'unit' column
-    const { data: mData } = await supabase.from('users')
-        .select('full_name, role')
-        .ilike('unit', safeUnit)
-        .limit(1)
-        .maybeSingle();
-        
-    if (mData && mData.full_name) { 
-        chiefName = mData.full_name.toUpperCase(); 
-        chiefPos = mData.role === 'UNIT_HEAD' ? 'UNIT HEAD' : 'MARPO';
-    } else {
-        chiefPos = "MARPO"; 
+    // DARMO employees get their specific unit's MARPO matching 'unit' to 'unit'
+    if (empUnit) {
+        const { data: mData } = await supabase.from('users')
+            .select('full_name, role')
+            .ilike('unit', empUnit) // Directly maps employees.unit to users.unit
+            .in('role', ['MARPO', 'UNIT_HEAD']) // CRITICAL: Ensures it fetches the actual head, not just any employee
+            .limit(1)
+            .maybeSingle();
+            
+        if (mData && mData.full_name) { 
+            chiefName = mData.full_name.toUpperCase(); 
+            // Dynamically set title based on their role in the users table
+            chiefPos = mData.role === 'UNIT_HEAD' ? 'UNIT HEAD' : 'MARPO';
+        } else {
+            // FALLBACK: If MARPO isn't found for this unit, fallback to Division Chief
+            const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+            const { data: chiefData } = await supabase.from('users')
+                .select('full_name')
+                .eq('division', baseDiv)
+                .eq('role', 'CHIEF')
+                .limit(1)
+                .maybeSingle();
+                
+            if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
+            chiefPos = "DIVISION CHIEF";
+        }
     }
 } else {
+    // All other employees fallback to Division Chief
     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-    
-    // Querying the Division Chief
     const { data: chiefData } = await supabase.from('users')
         .select('full_name')
-        .ilike('division', baseDiv)
+        .eq('division', baseDiv)
         .eq('role', 'CHIEF')
         .limit(1)
         .maybeSingle();
         
-    if (chiefData && chiefData.full_name) { 
-        chiefName = chiefData.full_name.toUpperCase(); 
-    }
+    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
     chiefPos = "DIVISION CHIEF";
 }
 // --- END OF FORM 48 SIGNATORIES REVISION ---
