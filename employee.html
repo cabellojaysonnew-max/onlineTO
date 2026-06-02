@@ -2879,7 +2879,23 @@ window.modifyPendingTO = async function(toNo) {
                     
                     const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
                     const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                    const holiday = (holidays || []).find(h => h.date === dateStr);
+const holiday = (holidays || []).find(h => {
+    if (h.date !== dateStr) return false;
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true;
+    if (hasNaga) return station === "DARPO-CS1";
+    if (hasCamSur) return station !== "DARPO-CS1";
+    
+    return true;
+});
+
+                    
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
                     let activityHtml = "";
