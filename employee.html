@@ -1101,44 +1101,26 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             try {
-let chiefName = "_________________________";
+                let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
-                const empUnit = (currentUser.unit || "").trim();
-                
-                // I-debug natin kung ano ang unit na hinahanap
-                console.log("Current User Unit for search:", empUnit);
+                const empDiv = (currentUser.division || "").toUpperCase().trim();
+                const empUnit = (currentUser.unit || "").toUpperCase().trim();
+                const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
-                if (currentUser.unit === "PARPO" || currentUser.division === "PARPO" || (currentUser.position && currentUser.position.toUpperCase().includes("MARPO"))) {
+                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
+                } else if (empUnit.includes("DARMO")) {
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                    if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
+                    chiefPos = "MARPO";
                 } else {
-                    // Dito natin hahanapin ang MARPO
-                    const { data: mData, error } = await supabase.from('users')
-                        .select('full_name')
-                        .eq('unit', empUnit)
-                        .eq('role', 'MARPO')
-                        .maybeSingle();
-                        
-                    if (mData && mData.full_name) { 
-                        console.log("MARPO Found:", mData.full_name);
-                        chiefName = mData.full_name.toUpperCase(); 
-                        chiefPos = "MARPO";
-                    } else {
-                        console.log("MARPO Error or Not Found:", error);
-                        // Fallback sa Division Chief
-                        const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                        const { data: chiefData } = await supabase.from('users')
-                            .select('full_name')
-                            .eq('division', baseDiv)
-                            .eq('role', 'CHIEF')
-                            .maybeSingle();
-                            
-                        if (chiefData && chiefData.full_name) { 
-                            chiefName = chiefData.full_name.toUpperCase(); 
-                            chiefPos = "DIVISION CHIEF";
-                        }
-                    }
+                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
+                    chiefPos = "DIVISION CHIEF";
                 }
+
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
                     if (index > 0) doc.addPage();
@@ -2394,23 +2376,13 @@ let chiefName = "_________________________";
                 }
             }
 
-            let routeStatus = "PENDING_CHIEF";
-            if (String(currentUser.unit).toUpperCase() === "PARPO" || String(currentUser.division).toUpperCase() === "PARPO") {
-                routeStatus = "PENDING_PARPO";
-            } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
-                routeStatus = "PENDING_UNIT_HEAD";
-            }
-
             const rDetail = document.querySelector('input[name="ldetail"]:checked');
             const specify = document.getElementById('leave-specify');
             let detailStr = rDetail ? rDetail.value : "See Remarks";
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
-            
-            const routingTag = `[ROUTING: ${routeStatus}]`;
-            const fullRemarks = `${routingTag} ${detailStr} | Commutation: ${comm}`;
+            const fullRemarks = `${detailStr} | Commutation: ${comm}`;
 
-            
             const dates_to_check = [];
             let curr = new Date(start);
             const eDate = new Date(end);
@@ -2946,14 +2918,13 @@ let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                const empStation = (currentUser.station || "").toUpperCase().trim();
                 const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('users').select('full_name').eq('station', currentUser.station).ilike('position', '%MARPO%').maybeSingle();
+                } else if (empUnit.includes("DARMO")) {
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
@@ -2962,6 +2933,7 @@ let chiefName = "_________________________";
                     if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
+
                 let grandUndertimeH = 0;
                 let grandUndertimeM = 0;
 
