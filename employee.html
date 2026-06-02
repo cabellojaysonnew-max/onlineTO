@@ -1102,6 +1102,7 @@
             
             try {
 // --- START OF FORM 48 SIGNATORIES REVISION ---
+
                 let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
@@ -1112,15 +1113,20 @@
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-                    // DARMO employees get their specific unit's MARPO from the users table
+                } else if (empStation.includes("DARMO")) {
+                    // DARMO employees get their specific unit's MARPO from the users table using the 'unit' column
                     const { data: mData } = await supabase.from('users')
-                        .select('full_name')
+                        .select('full_name, role')
                         .eq('unit', currentUser.unit)
                         .maybeSingle();
                         
-                    if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
-                    chiefPos = "MARPO";
+                    if (mData && mData.full_name) { 
+                        chiefName = mData.full_name.toUpperCase(); 
+                        // Dynamically set title based on their role in the users table (MARPO vs UNIT HEAD)
+                        chiefPos = mData.role === 'UNIT_HEAD' ? 'UNIT HEAD' : 'MARPO';
+                    } else {
+                        chiefPos = "MARPO";
+                    }
                 } else {
                     // All other employees fallback to Division Chief
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
@@ -1133,7 +1139,9 @@
                     if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
-                // --- END OF FORM 48 SIGNATORIES REVISION ---
+
+                
+// --- END OF FORM 48 SIGNATORIES REVISION ---
 
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
