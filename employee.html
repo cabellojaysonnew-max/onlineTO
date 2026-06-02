@@ -3032,11 +3032,11 @@
                     let row_h = 4.2;
                     let totalUndertimeMins = 0;
 
-                    for (let d = 1; d <= 31; d++) {
-                        doc.rect(startX, ty, cw_day, row_h);
-                        doc.text(String(d), startX + 4, ty + 3, { align: "center" });
-
-                        if (d <= endDt.getDate()) {
+                            const totalDaysInMonth = endDt.getDate();
+                            for (let d = 1; d <= totalDaysInMonth; d++) {
+                            doc.rect(startX, ty, cw_day, row_h);
+                            doc.text(String(d), startX + 4, ty + 3, { align: "center" });
+                           
                             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                             const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                             
@@ -3134,15 +3134,8 @@
                             doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h); doc.text(udM, startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
 
                         } else {
-                            doc.rect(startX + cw_day, ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
-                        }
-                        ty += row_h;
-                    }
+                                ty += row_h;
+                            }
                     
                     if (startX === 10) {
                         grandUndertimeH = Math.floor(totalUndertimeMins / 60);
