@@ -1105,13 +1105,15 @@
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
+                const empStation = (currentUser.station || "").toUpperCase().trim();
                 const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                } else if (empStation.includes("DARMO")) {
+                    // Check if station is DARMO, then find the user where unit matches exactly and role is MARPO
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).eq('role', 'MARPO').maybeSingle();
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
