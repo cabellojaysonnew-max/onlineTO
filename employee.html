@@ -1101,26 +1101,47 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             try {
-           let chiefName = "_________________________";
+let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                const empStation = (currentUser.station || "").toUpperCase().trim();
                 const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('users').select('full_name').eq('station', currentUser.station).ilike('position', '%MARPO%').maybeSingle();
-                    if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
-                    chiefPos = "MARPO";
                 } else {
-                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
-                    chiefPos = "DIVISION CHIEF";
-                }
+                    let foundMarpo = false;
+                    
+                    // 1. Hanapin muna ang MARPO gamit ang eksaktong UNIT ni Employee
+                    if (empUnit && empUnit !== "NA" && empUnit !== "NULL") {
+                        const { data: mData } = await supabase.from('users')
+                            .select('full_name')
+                            .ilike('unit', empUnit) // Ginawang ilike para kahit magkaiba ang malaki/maliit na letra ay mabasa
+                            .eq('role', 'MARPO')
+                            .maybeSingle();
+
+                        if (mData && mData.full_name) { 
+                            chiefName = mData.full_name.toUpperCase(); 
+                            chiefPos = "MARPO";
+                            foundMarpo = true;
+                        }
+                    }
+
+                    // 2. Kung walang nahanap na MARPO, diretso sa DIVISION CHIEF (Fallback)
+                    if (!foundMarpo) {
+                        const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                        const { data: chiefData } = await supabase.from('users')
+                            .select('full_name')
+                            .eq('division', baseDiv)
+                            .eq('role', 'CHIEF')
+                            .maybeSingle();
+                            
+                        if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
+                        chiefPos = "DIVISION CHIEF";
+                    }
+                } 
+                
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
                     if (index > 0) doc.addPage();
