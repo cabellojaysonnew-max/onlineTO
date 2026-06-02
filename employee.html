@@ -1101,7 +1101,7 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             try {
-                let chiefName = "_________________________";
+              let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
@@ -1111,8 +1111,8 @@
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-                    // EXACT LOGIC MO BOSS: Hanapin ang MARPO na kapareho ng unit ng current user
+                } else if (empStation.includes("DARMO")) {
+                    // Diretsong hahanapin ang MARPO sa users table na kapareho ng unit ng employee
                     const { data: mData } = await supabase.from('users')
                         .select('full_name')
                         .eq('unit', currentUser.unit)
@@ -1122,11 +1122,13 @@
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
+                    // Default Division Chief routing
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
                     const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
                     if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
-                }
+                }  
+                
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
                     if (index > 0) doc.addPage();
