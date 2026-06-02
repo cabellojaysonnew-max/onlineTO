@@ -3086,9 +3086,26 @@ window.modifyPendingTO = async function(toNo) {
                                 schedType = "Flexi";
                             }
 
-                            let special = "";
-                            const hol = (holidays || []).find(h => h.date === dateStr);
-                            if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+let special = "";
+const hol = (holidays || []).find(h => {
+    if (h.date !== dateStr) return false;
+    
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true; // Both = everyone
+    if (hasNaga) return station === "DARPO-CS1"; // Naga only
+    if (hasCamSur) return station !== "DARPO-CS1"; // CamSur only
+    
+    return true;
+});
+
+if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             
                             const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
                             if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
