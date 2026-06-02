@@ -1908,12 +1908,13 @@
                     </div>`;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
             });
-            if (others.length > 0) {
+            
           // Load full group and preserve TO number
             editingToNo = toNo;
             personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
             
             window.renderPersonnel();
+            
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const savedDivs = myTo.division.split(',').map(d => d.trim());
                 document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
