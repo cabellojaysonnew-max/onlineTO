@@ -2376,13 +2376,28 @@
                 }
             }
 
-            const rDetail = document.querySelector('input[name="ldetail"]:checked');
+           const rDetail = document.querySelector('input[name="ldetail"]:checked');
             const specify = document.getElementById('leave-specify');
             let detailStr = rDetail ? rDetail.value : "See Remarks";
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
-            const fullRemarks = `${detailStr} | Commutation: ${comm}`;
-
+            
+            // --- START OF LEAVE ROUTING REVISION ---
+            let leaveRouteStatus = "PENDING_CHIEF"; // Default fall-through to Division Chief
+            const finalUnit = currentUser.unit ? String(currentUser.unit).toUpperCase().trim() : "";
+            const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+            
+            if (finalUnit === "PARPO") {
+                leaveRouteStatus = "PENDING_PARPO";
+            } else if (isMARPO) {
+                leaveRouteStatus = "PENDING_CHIEF";
+            } else if (finalUnit && finalUnit !== "NA") {
+                leaveRouteStatus = "PENDING_UNIT_HEAD";
+            }
+            
+            // Embed the routing status tag at the start of the remarks string for Admin Console processing
+            const fullRemarks = `${leaveRouteStatus} | ${detailStr} | Commutation: ${comm}`;
+            // --- END OF LEAVE ROUTING REVISION ---
             const dates_to_check = [];
             let curr = new Date(start);
             const eDate = new Date(end);
@@ -2914,26 +2929,43 @@
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${validationId}`;
                 const dtr_qr = await urlToBase64(qrUrl);
 
+// --- START OF FORM 48 SIGNATORIES REVISION ---
                 let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+                const empStation = (currentUser.station || "").toUpperCase().trim();
+                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
-                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
+                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                } else if (empStation.includes("DARMO")) {
+                    // DARMO employees matching by station get their specific station's MARPO
+                    const { data: mData } = await supabase.from('users')
+                        .select('full_name')
+                        .eq('station', currentUser.station)
+                        .ilike('position', '%MARPO%')
+                        .maybeSingle();
+                        
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
+                    // All other employees fallback to Division Chief
                     const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
+                    const { data: chiefData } = await supabase.from('users')
+                        .select('full_name')
+                        .eq('division', baseDiv)
+                        .eq('role', 'CHIEF')
+                        .maybeSingle();
+                        
                     if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
+                // --- END OF FORM 48 SIGNATORIES REVISION ---
+                
 
+                
                 let grandUndertimeH = 0;
                 let grandUndertimeM = 0;
 
