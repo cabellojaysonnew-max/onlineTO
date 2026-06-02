@@ -1101,42 +1101,43 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             try {
-// Palitan ang buong logic ng signatories sa loob ng generateForm48
-                let chiefName = "_________________________";
+let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
+                const empUnit = (currentUser.unit || "").trim();
                 
-                // I-debug natin ang query:
-                try {
-                    // Check if PARPO
-                    if (currentUser.unit === "PARPO" || currentUser.division === "PARPO" || (currentUser.position && currentUser.position.includes("MARPO"))) {
-                        chiefName = "RICARDO C. GARCIA";
-                        chiefPos = "PARPO II";
-                    } 
-                    // Check kung may MARPO sa unit
-                    else {
-                        const { data: mData, error } = await supabase.from('users')
-                            .select('full_name')
-                            .eq('unit', currentUser.unit)
-                            .eq('role', 'MARPO')
-                            .maybeSingle();
+                // I-debug natin kung ano ang unit na hinahanap
+                console.log("Current User Unit for search:", empUnit);
+
+                if (currentUser.unit === "PARPO" || currentUser.division === "PARPO" || (currentUser.position && currentUser.position.toUpperCase().includes("MARPO"))) {
+                    chiefName = "RICARDO C. GARCIA";
+                    chiefPos = "PARPO II";
+                } else {
+                    // Dito natin hahanapin ang MARPO
+                    const { data: mData, error } = await supabase.from('users')
+                        .select('full_name')
+                        .eq('unit', empUnit)
+                        .eq('role', 'MARPO')
+                        .maybeSingle();
                         
-                        if (mData && mData.full_name) {
-                            chiefName = mData.full_name.toUpperCase();
-                            chiefPos = "MARPO";
-                        } else {
-                            // Default Fallback
-                            const { data: chiefData } = await supabase.from('users')
-                                .select('full_name')
-                                .eq('division', currentUser.division)
-                                .eq('role', 'CHIEF')
-                                .maybeSingle();
-                            if (chiefData && chiefData.full_name) {
-                                chiefName = chiefData.full_name.toUpperCase();
-                            }
+                    if (mData && mData.full_name) { 
+                        console.log("MARPO Found:", mData.full_name);
+                        chiefName = mData.full_name.toUpperCase(); 
+                        chiefPos = "MARPO";
+                    } else {
+                        console.log("MARPO Error or Not Found:", error);
+                        // Fallback sa Division Chief
+                        const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                        const { data: chiefData } = await supabase.from('users')
+                            .select('full_name')
+                            .eq('division', baseDiv)
+                            .eq('role', 'CHIEF')
+                            .maybeSingle();
+                            
+                        if (chiefData && chiefData.full_name) { 
+                            chiefName = chiefData.full_name.toUpperCase(); 
+                            chiefPos = "DIVISION CHIEF";
                         }
                     }
-                } catch (e) {
-                    console.log("Signatory Error:", e);
                 }
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
