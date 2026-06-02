@@ -1102,61 +1102,62 @@
             
             try {
 // --- START OF FORM 48 SIGNATORIES REVISION ---
+let chiefName = "_________________________";
+let chiefPos = "DIVISION CHIEF";
+const empDiv = (currentUser.division || "").toUpperCase().trim();
+const empUnit = (currentUser.unit || "").toUpperCase().trim();
+const empStation = (currentUser.station || "").toUpperCase().trim();
 
+// Pinag-isa na natin ang variable para walang PDF Error na mag-pop up
+const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+
+if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO) {
+    chiefName = "RICARDO C. GARCIA";
+    chiefPos = "PARPO II";
+} else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
+    
+    // DARMO employees get their specific unit's MARPO matching 'unit' to 'unit'
+    if (empUnit) {
+        const { data: mData } = await supabase.from('users')
+            .select('full_name, role')
+            .ilike('unit', empUnit)
+            .in('role', ['MARPO', 'UNIT_HEAD']) // CRITICAL: Para mismong Head/MARPO ang makuha
+            .limit(1)
+            .maybeSingle();
+            
+        if (mData && mData.full_name) { 
+            chiefName = mData.full_name.toUpperCase(); 
+            // Dynamically set title based on their role in the users table
+            chiefPos = mData.role === 'UNIT_HEAD' ? 'UNIT HEAD' : 'MARPO';
+        } else {
+            // FALLBACK: If MARPO isn't found for this unit, fallback to Division Chief
+            const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+            const { data: chiefData } = await supabase.from('users')
+                .select('full_name')
+                .eq('division', baseDiv)
+                .eq('role', 'CHIEF')
+                .limit(1)
+                .maybeSingle();
                 
-                let chiefName = "_________________________";
-                let chiefPos = "DIVISION CHIEF";
-                const empDiv = (currentUser.division || "").toUpperCase().trim();
-                const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                const empStation = (currentUser.station || "").toUpperCase().trim();
-                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
-
-                if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO) {
-                    chiefName = "RICARDO C. GARCIA";
-                    chiefPos = "PARPO II";
-                } else if (empStation.includes("DARMO") || empUnit.includes("DARMO")) {
-                    // DARMO employees get their specific unit's MARPO using case-insensitive search
-                    const safeUnit = currentUser.unit ? String(currentUser.unit).trim() : "";
-                    const { data: mData } = await supabase.from('users')
-                        .select('full_name, role')
-                        .ilike('unit', safeUnit)
-                        .limit(1)
-                        .maybeSingle();
-                        
-                    if (mData && mData.full_name) { 
-                        chiefName = mData.full_name.toUpperCase(); 
-                        // Dynamically set title based on their role in the users table
-                        chiefPos = mData.role === 'UNIT_HEAD' ? 'UNIT HEAD' : 'MARPO';
-                    } else {
-                        // FALLBACK: If MARPO isn't found for this unit, fallback to Division Chief
-                        const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                        const { data: chiefData } = await supabase.from('users')
-                            .select('full_name')
-                            .eq('division', baseDiv)
-                            .eq('role', 'CHIEF')
-                            .limit(1)
-                            .maybeSingle();
-                            
-                        if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
-                        chiefPos = "DIVISION CHIEF";
-                    }
-                } else {
-                    // All other employees fallback to Division Chief
-                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users')
-                        .select('full_name')
-                        .eq('division', baseDiv)
-                        .eq('role', 'CHIEF')
-                        .limit(1)
-                        .maybeSingle();
-                        
-                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
-                    chiefPos = "DIVISION CHIEF";
-                }
-
-               
-                
+            if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
+            chiefPos = "DIVISION CHIEF";
+        }
+    }
+} else {
+    // All other employees fallback to Division Chief
+    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+    const { data: chiefData } = await supabase.from('users')
+        .select('full_name')
+        .eq('division', baseDiv)
+        .eq('role', 'CHIEF')
+        .limit(1)
+        .maybeSingle();
+        
+    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
+    chiefPos = "DIVISION CHIEF";
+}
 // --- END OF FORM 48 SIGNATORIES REVISION ---
+                
 
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
