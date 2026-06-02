@@ -427,8 +427,10 @@
         
         let tevData = []; // Combined Grouped TEV Items
         let currentTevToNo = null;
+        let editingToNo = null; // Track if editing a pending TO
 
         // ACTIVITY LOG HELPER
+
         window.logActivity = async function(toNo, action, details) {
             try {
                 if(!toNo) return;
@@ -1672,7 +1674,7 @@
                     } else {
                         finalDiv = selectedDivs.join(', ');
                     }
-                }
+        }
             }
 
             isSubmitting = true;
@@ -1680,6 +1682,11 @@
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
             try {
+                // If editing, clear old data first
+                if (editingToNo) {
+                    await supabase.from('itinerary').delete().eq('to_no', editingToNo);
+                    await supabase.from('travel_orders').delete().eq('to_no', editingToNo);
+                }
                 for (let conflict of conflictsToProcess) {
                     if (conflict.status.includes("PENDING")) {
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
@@ -1717,10 +1724,11 @@
                     }
                 }
 
-                const finalToNo = await window.generateToNo(toNoDiv); 
+
+                const finalToNo = editingToNo ? editingToNo : await window.generateToNo(toNoDiv); 
                 const transport = document.getElementById('to-transport').value;
                 let routeStatus = "PENDING_CHIEF";
-                
+        
                 const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
                 const isPARPOUnit = finalUnit && String(finalUnit).toUpperCase() === "PARPO";
                 const isGovVeh = transport === "GOV'T VEHICLE";
@@ -1782,9 +1790,10 @@
                 window.renderPersonnel();
                 itineraryDraft = [];
                 conflictsToProcess = [];
+                editingToNo = null; // Reset editing state
                 window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
                 
-            } catch(e) { 
+            } catch(e) {
                 alert("Error: " + e.message); 
             } finally {
                 isSubmitting = false;
@@ -1868,53 +1877,105 @@
             document.getElementById('dropDayModal').style.display = 'flex';
         };
 
-        window.executeDropDay = async function(toNo, targetDate) {
+    window.executeDropDay = async function(toNo, targetDate) {
             if(!confirm(`Are you sure you want to drop ${targetDate}?`)) return;
             document.getElementById('dropDayModal').style.display = 'none';
+            
+            // Check 2-day rule
+            const target = new Date(targetDate.trim());
+            const today = new Date(todayStr);
+            const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+            if (diffDays > 2) return alert("Dropping can only be done within 2 days prior to the Travel date.");
+            
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo);
             if (!itin.some(i => i.travel_date === targetDate.trim())) return alert("Date not found in this TO.");
             if (itin.length === 1) {
                 alert("This TO only has one day. Dropping it will cancel the entire TO for you.");
                 return window.cancelApprovedTO(toNo);
             }
-            const { data: others } = await supabase.from('travel_orders').select('emp_id').eq('to_no', toNo).neq('emp_id', currentUser.emp_id);
-            if (!others || others.length === 0) {
+            const { data: fullGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
+            const othersGroup = fullGroup.filter(t => t.emp_id !== currentUser.emp_id);
+            const divergingUser = fullGroup.find(t => t.emp_id === currentUser.emp_id);
+            
+            if (othersGroup.length === 0) {
                 await supabase.from('itinerary').delete().eq('to_no', toNo).eq('travel_date', targetDate.trim());
                 await window.logActivity(toNo, 'DAY_DROPPED', `Dropped ${targetDate.trim()} from TO`);
                 alert(`Day ${targetDate.trim()} dropped successfully.`);
                 window.loadStatus();
             } else {
-                alert("Group TO detected. You will be split into your own TO number with the remaining days.");
-                const remainingDays = itin.filter(day => day.travel_date !== targetDate.trim());
-                const remainderToNo = await window.generateToNo(currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN");
-                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
-                const { data: origTO } = await supabase.from('travel_orders').select('*').eq('to_no', toNo).eq('emp_id', currentUser.emp_id).maybeSingle();
-                const { id, ...restOrig } = origTO;
-                await supabase.from('travel_orders').insert({ ...restOrig, to_no: remainderToNo, status: 'APPROVED' });
-                const batchRemainderItin = remainingDays.map(({ id, ...restItin }) => ({ ...restItin, to_no: remainderToNo }));
-                await supabase.from('itinerary').insert(batchRemainderItin);
-                await window.logActivity(remainderToNo, 'SPLIT_CREATED', `Split from ${toNo} due to dropping ${targetDate.trim()}`);
+                alert("Group TO detected. The original TO will be cancelled and two new independent Travel Orders will be generated.");
+                
+                // 1. Void the Original
+                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
+                
+                // 2. Spawn Unaffected Group's TO
+                const groupToNo = await window.generateToNo(othersGroup[0].division ? othersGroup[0].division.split(',')[0].trim() : "GEN");
+                const batchGroupTO = othersGroup.map(({ id, created_at, ...rest }) => ({ ...rest, to_no: groupToNo, status: 'APPROVED' }));
+                await supabase.from('travel_orders').insert(batchGroupTO);
+                
+                const batchGroupItin = itin.map(({ id, created_at, ...rest }) => ({ ...rest, to_no: groupToNo }));
+                await supabase.from('itinerary').insert(batchGroupItin);
+                
+                // 3. Spawn Diverging User's TO
+                const soloToNo = await window.generateToNo(divergingUser.division ? divergingUser.division.split(',')[0].trim() : "GEN");
+                const { id: dId, created_at: dCa, ...soloRest } = divergingUser;
+                await supabase.from('travel_orders').insert({ ...soloRest, to_no: soloToNo, status: 'APPROVED' });
+                
+                const remainingDates = itin.filter(day => day.travel_date !== targetDate.trim());
+                const batchSoloItin = remainingDates.map(({ id, created_at, ...rest }) => ({ ...rest, to_no: soloToNo }));
+                await supabase.from('itinerary').insert(batchSoloItin);
+                
+                // 4. Log the Split
+                await window.logActivity(toNo, 'SPLIT_CANCELLED', `Group TO split due to date drop by ${currentUser.full_name}`);
+                await window.logActivity(groupToNo, 'SPLIT_CREATED', `Spawned from ${toNo} (Unaffected Group)`);
+                await window.logActivity(soloToNo, 'SPLIT_CREATED', `Spawned from ${toNo} (Diverging User dropped ${targetDate.trim()})`);
+                
+                await supabase.from('notifications').insert({
+                    emp_id: currentUser.emp_id,
+                    message: `Original TO ${toNo} split. Unaffected group moved to ${groupToNo}. Your new TO is ${soloToNo}.`,
+                    sender: 'System'
+                });
+                
+                alert(`Split successful. Your new TO number is ${soloToNo}`);
                 window.loadStatus();
             }
         };
-
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification?\n(Warning: If this is a group TO, modifying it will separate YOU from the group draft to prevent overwriting others.)")) return;
+        
+window.modifyPendingTO = async function(toNo) {
+            if(!confirm("Load this TO back into draft for modification?\n\nWARNING: Modifying this TO affects the ENTIRE GROUP. You will be able to change all details and remove personnel. Submitting will overwrite the original data for everyone. Proceed?")) return;
+            
             const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
             const myTo = toGroup.find(t => t.emp_id === currentUser.emp_id);
             if (!myTo) return;
-            const others = toGroup.filter(t => t.emp_id !== currentUser.emp_id);
+            
+            // Load full group and preserve TO number
+            editingToNo = toNo;
+            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
+            
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            
             document.getElementById('to-transport').value = myTo.transport;
             document.getElementById('dep-time-group').style.display = myTo.transport === "GOV'T VEHICLE" ? 'block' : 'none';
             document.getElementById('to-outside-bicol').checked = myTo.remarks && myTo.remarks.includes("OUTSIDE BICOL");
-            if (itin.length > 0) { document.getElementById('itin-from').value = itin[0].travel_date; document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; }
-            const container = document.getElementById('dynamic-itin-fields'); container.innerHTML = ''; itineraryDraft = [];
+            
+            if (itin.length > 0) { 
+                document.getElementById('itin-from').value = itin[0].travel_date; 
+                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; 
+            }
+            
+            const container = document.getElementById('dynamic-itin-fields'); 
+            container.innerHTML = ''; 
+            itineraryDraft = [];
+            
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+            
             let pbddOptions = '';
             if (userUnit) pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; });
+            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { 
+                if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; 
+            });
+            
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
                 const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions}</select>` : '';
@@ -1932,23 +1993,19 @@
                     </div>`;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
             });
-            if (others.length > 0) {
-                personnelDraft = [{ emp_id: myTo.emp_id, name: myTo.emp_name, unit: myTo.unit }];
-                await supabase.from('travel_orders').delete().eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
-            } else {
-                personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
-                await supabase.from('itinerary').delete().eq('to_no', toNo);
-                await supabase.from('travel_orders').delete().eq('to_no', toNo);
-            }
+            
             window.renderPersonnel();
+            
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
                 const savedDivs = myTo.division.split(',').map(d => d.trim());
                 document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
             }
-            await window.logActivity(toNo, 'MODIFIED', 'Pending Travel Order Modified/Drafted by ' + currentUser.full_name);
+            
+            alert(`Draft loaded for TO ${toNo}. Modifications will apply to ALL personnel listed.`);
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
+        
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2354,7 +2411,22 @@
             while (cur <= eDate) {
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
-                const isHoliday = cachedHolidays.some(h => h.date === dateStr);
+const isHoliday = cachedHolidays.some(h => {
+    if (h.date !== dateStr) return false;
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true;
+    if (hasNaga) return station === "DARPO-CS1";
+    if (hasCamSur) return station !== "DARPO-CS1";
+    
+    return true;
+});
+
                 
                 let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
 
@@ -2450,7 +2522,20 @@
             let detailStr = rDetail ? rDetail.value : "See Remarks";
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
-            const fullRemarks = `${detailStr} | Commutation: ${comm}`;
+            
+            let routeStatus = "PENDING_CHIEF";
+            const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
+            const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+            
+            if (isPARPOUnit) {
+                routeStatus = "PENDING_PARPO";
+            } else if (isMARPO) {
+                routeStatus = "PENDING_CHIEF";
+            } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
+                routeStatus = "PENDING_UNIT_HEAD";
+            }
+            
+            const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
 
             const dates_to_check = [];
             let curr = new Date(start);
@@ -2878,7 +2963,23 @@
                     
                     const dayItins = (itins || []).filter(i => i.travel_date === dateStr);
                     const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                    const holiday = (holidays || []).find(h => h.date === dateStr);
+const holiday = (holidays || []).find(h => {
+    if (h.date !== dateStr) return false;
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true;
+    if (hasNaga) return station === "DARPO-CS1";
+    if (hasCamSur) return station !== "DARPO-CS1";
+    
+    return true;
+});
+
+                    
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
                     let activityHtml = "";
@@ -2987,13 +3088,14 @@
                 let chiefPos = "DIVISION CHIEF";
                 const empDiv = (currentUser.division || "").toUpperCase().trim();
                 const empUnit = (currentUser.unit || "").toUpperCase().trim();
+                const empStation = (currentUser.station || "").toUpperCase().trim();
                 const isMARPO_Signatory = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
                 if (empUnit === "PARPO" || empDiv === "PARPO" || isMARPO_Signatory) {
                     chiefName = "RICARDO C. GARCIA";
                     chiefPos = "PARPO II";
-                } else if (empUnit.includes("DARMO")) {
-                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).maybeSingle();
+                } else if (empStation.includes("DARMO")) {
+                    const { data: mData } = await supabase.from('users').select('full_name').eq('unit', currentUser.unit).eq('role', 'MARPO').maybeSingle();
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
@@ -3002,7 +3104,6 @@
                     if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
                     chiefPos = "DIVISION CHIEF";
                 }
-
                 let grandUndertimeH = 0;
                 let grandUndertimeM = 0;
 
@@ -3046,11 +3147,11 @@
                     let row_h = 4.2;
                     let totalUndertimeMins = 0;
 
-                    for (let d = 1; d <= 31; d++) {
-                        doc.rect(startX, ty, cw_day, row_h);
-                        doc.text(String(d), startX + 4, ty + 3, { align: "center" });
-
-                        if (d <= endDt.getDate()) {
+                            const totalDaysInMonth = endDt.getDate();
+                            for (let d = 1; d <= totalDaysInMonth; d++) {
+                            doc.rect(startX, ty, cw_day, row_h);
+                            doc.text(String(d), startX + 4, ty + 3, { align: "center" });
+                           
                             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                             const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                             
@@ -3085,9 +3186,26 @@
                                 schedType = "Flexi";
                             }
 
-                            let special = "";
-                            const hol = (holidays || []).find(h => h.date === dateStr);
-                            if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
+let special = "";
+const hol = (holidays || []).find(h => {
+    if (h.date !== dateStr) return false;
+    
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true; // Both = everyone
+    if (hasNaga) return station === "DARPO-CS1"; // Naga only
+    if (hasCamSur) return station !== "DARPO-CS1"; // CamSur only
+    
+    return true;
+});
+
+if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             
                             const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
                             if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
@@ -3146,17 +3264,8 @@
                             
                             doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h); doc.text(udH, startX + cw_day + (cw_time * 4) + 5.5, ty + 3, { align: "center" });
                             doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h); doc.text(udM, startX + cw_day + (cw_time * 4) + cw_u + 5.5, ty + 3, { align: "center" });
-
-                        } else {
-                            doc.rect(startX + cw_day, ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + cw_time, ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 2), ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 3), ty, cw_time, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 4), ty, cw_u, row_h);
-                            doc.rect(startX + cw_day + (cw_time * 4) + cw_u, ty, cw_u, row_h);
-                        }
-                        ty += row_h;
-                    }
+                            ty += row_h;
+                            }
                     
                     if (startX === 10) {
                         grandUndertimeH = Math.floor(totalUndertimeMins / 60);
