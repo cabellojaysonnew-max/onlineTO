@@ -2342,7 +2342,22 @@ window.modifyPendingTO = async function(toNo) {
             while (cur <= eDate) {
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
-                const isHoliday = cachedHolidays.some(h => h.date === dateStr);
+const isHoliday = cachedHolidays.some(h => {
+    if (h.date !== dateStr) return false;
+    const coverage = String(h.coverage || "").toUpperCase();
+    const station = String(currentUser.station || "").toUpperCase().trim();
+    
+    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    const hasNaga = coverage.includes("NAGA");
+    const hasCamSur = coverage.includes("CAMARINES SUR");
+    
+    if (hasNaga && hasCamSur) return true;
+    if (hasNaga) return station === "DARPO-CS1";
+    if (hasCamSur) return station !== "DARPO-CS1";
+    
+    return true;
+});
+
                 
                 let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
 
