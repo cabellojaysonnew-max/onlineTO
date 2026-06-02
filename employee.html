@@ -1872,23 +1872,41 @@
             }
         };
         
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification?\n(Warning: If this is a group TO, modifying it will separate YOU from the group draft to prevent overwriting others.)")) return;
+window.modifyPendingTO = async function(toNo) {
+            if(!confirm("Load this TO back into draft for modification?\n\nWARNING: Modifying this TO affects the ENTIRE GROUP. You will be able to change all details and remove personnel. Submitting will overwrite the original data for everyone. Proceed?")) return;
+            
             const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
             const myTo = toGroup.find(t => t.emp_id === currentUser.emp_id);
             if (!myTo) return;
-            const others = toGroup.filter(t => t.emp_id !== currentUser.emp_id);
+            
+            // Load full group and preserve TO number
+            editingToNo = toNo;
+            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
+            
             const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
+            
             document.getElementById('to-transport').value = myTo.transport;
             document.getElementById('dep-time-group').style.display = myTo.transport === "GOV'T VEHICLE" ? 'block' : 'none';
             document.getElementById('to-outside-bicol').checked = myTo.remarks && myTo.remarks.includes("OUTSIDE BICOL");
-            if (itin.length > 0) { document.getElementById('itin-from').value = itin[0].travel_date; document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; }
-            const container = document.getElementById('dynamic-itin-fields'); container.innerHTML = ''; itineraryDraft = [];
+            
+            if (itin.length > 0) { 
+                document.getElementById('itin-from').value = itin[0].travel_date; 
+                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; 
+            }
+            
+            const container = document.getElementById('dynamic-itin-fields'); 
+            container.innerHTML = ''; 
+            itineraryDraft = [];
+            
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+            
             let pbddOptions = '';
             if (userUnit) pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; });
+            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { 
+                if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; 
+            });
+            
             itin.forEach((i, idx) => {
                 const cardId = `itin-card-${idx}`;
                 const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions}</select>` : '';
@@ -1907,10 +1925,6 @@
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
             });
             
-          // Load full group and preserve TO number
-            editingToNo = toNo;
-            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
-            
             window.renderPersonnel();
             
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
@@ -1918,10 +1932,11 @@
                 document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
             }
             
-            alert(`Draft loaded for TO ${toNo}. Modifications will apply to all personnel listed.`);
+            alert(`Draft loaded for TO ${toNo}. Modifications will apply to ALL personnel listed.`);
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
 
+        
         window.generateOfficialPDF = async function(toNo) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'a4'); 
