@@ -1101,55 +1101,43 @@
             const doc = new jsPDF('p', 'mm', 'a4');
             
             try {
-let chiefName = "_________________________";
+// Palitan ang buong logic ng signatories sa loob ng generateForm48
+                let chiefName = "_________________________";
                 let chiefPos = "DIVISION CHIEF";
-                const empDiv = (currentUser.division || "").toUpperCase().trim();
-                const empUnit = (currentUser.unit || "").toUpperCase().trim();
-                const empStation = (currentUser.station || "").toUpperCase().trim();
-
-                // 1. RULE: Kung UNIT = PARPO, automatic PARPO II
-                if (empUnit === "PARPO" || empDiv === "PARPO") {
-                    chiefName = "RICARDO C. GARCIA";
-                    chiefPos = "PARPO II";
-                } 
-                // 2. RULE: Kung EMPLOYEE ay MARPO (check position/role), automatic PARPO II
-                else if (currentUser.position && currentUser.position.toUpperCase().includes("MARPO")) {
-                    chiefName = "RICARDO C. GARCIA";
-                    chiefPos = "PARPO II";
-                }
-                // 3. RULE: DARMO Station -> Hanapin ang MARPO na kapareho ang unit
-                else if (empStation.includes("DARMO")) {
-                    // DEBUG: I-log natin sa console kung ano ang hinahanap natin
-                    console.log("Searching for MARPO with unit:", empUnit);
-                    
-                    const { data: mData } = await supabase.from('users')
-                        .select('full_name')
-                        .ilike('unit', empUnit) // Case-insensitive matching
-                        .eq('role', 'MARPO')
-                        .maybeSingle();
+                
+                // I-debug natin ang query:
+                try {
+                    // Check if PARPO
+                    if (currentUser.unit === "PARPO" || currentUser.division === "PARPO" || (currentUser.position && currentUser.position.includes("MARPO"))) {
+                        chiefName = "RICARDO C. GARCIA";
+                        chiefPos = "PARPO II";
+                    } 
+                    // Check kung may MARPO sa unit
+                    else {
+                        const { data: mData, error } = await supabase.from('users')
+                            .select('full_name')
+                            .eq('unit', currentUser.unit)
+                            .eq('role', 'MARPO')
+                            .maybeSingle();
                         
-                    if (mData && mData.full_name) {
-                        chiefName = mData.full_name.toUpperCase();
-                        chiefPos = "MARPO";
-                        console.log("Found MARPO:", chiefName);
-                    } else {
-                        console.log("MARPO not found for unit:", empUnit, ", Falling back to Division Chief");
+                        if (mData && mData.full_name) {
+                            chiefName = mData.full_name.toUpperCase();
+                            chiefPos = "MARPO";
+                        } else {
+                            // Default Fallback
+                            const { data: chiefData } = await supabase.from('users')
+                                .select('full_name')
+                                .eq('division', currentUser.division)
+                                .eq('role', 'CHIEF')
+                                .maybeSingle();
+                            if (chiefData && chiefData.full_name) {
+                                chiefName = chiefData.full_name.toUpperCase();
+                            }
+                        }
                     }
+                } catch (e) {
+                    console.log("Signatory Error:", e);
                 }
-
-                // 4. FALLBACK: Division Chief (kung hindi PARPO, hindi MARPO, o walang mahanap na MARPO)
-                if (chiefName === "_________________________") {
-                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users')
-                        .select('full_name')
-                        .ilike('division', baseDiv)
-                        .eq('role', 'CHIEF')
-                        .maybeSingle();
-                    if (chiefData && chiefData.full_name) { 
-                        chiefName = chiefData.full_name.toUpperCase(); 
-                        chiefPos = "DIVISION CHIEF";
-                    }
-                }                
                 // LOOP THROUGH EACH DAY to create a separate page/form
                 tevData.forEach((day, index) => {
                     if (index > 0) doc.addPage();
