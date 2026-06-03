@@ -1153,7 +1153,8 @@
             container.innerHTML = html;
         };
 
-        window.generateTEVPDF = async function() {
+
+window.generateTEVPDF = async function() {
             window.saveTevState();
             
             const purpose = document.getElementById('tev-purpose').value.trim();
@@ -1207,6 +1208,7 @@
                     curY += 8;
                     let startY = curY;
                     
+                    // Top Header Box (Independent)
                     doc.rect(15, curY, 180, 15);
                     doc.line(15, curY+5, 195, curY+5);
                     doc.line(15, curY+10, 195, curY+10);
@@ -1226,8 +1228,12 @@
                     doc.setFont("helvetica", "bold"); doc.text(empDiv, 57, curY + 13.5);
                     
                     curY += 15;
+                    
+                    // Start of continuous table
+                    let itemsStartY = curY;
+
                     // Particulars Header
-                    doc.rect(15, curY, 180, 5);
+                    doc.line(15, curY+5, 195, curY+5);
                     doc.line(145, curY, 145, curY+5);
                     doc.text("PARTICULARS", 80, curY + 3.5, {align: "center"});
                     doc.text("AMOUNT", 170, curY + 3.5, {align: "center"});
@@ -1235,7 +1241,7 @@
 
                     // Date Subheader for this specific day
                     let dayTotalAmount = 0;
-                    doc.rect(15, curY, 180, 5);
+                    doc.line(15, curY+5, 195, curY+5);
                     doc.line(145, curY, 145, curY+5);
                     doc.setFont("helvetica", "bold");
                     const formatDestDate = new Date(day.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -1244,7 +1250,7 @@
 
                     doc.setFont("helvetica", "normal");
                     for (let item of day.items) {
-                        doc.rect(15, curY, 180, 5);
+                        doc.line(15, curY+5, 195, curY+5);
                         doc.line(145, curY, 145, curY+5);
                         doc.text(item.particular.toUpperCase(), 143, curY + 3.5, {align: "right"});
                         let amt = parseFloat(item.amount) || 0;
@@ -1254,7 +1260,7 @@
                     }
 
                     // Total Row
-                    doc.rect(15, curY, 180, 5);
+                    doc.line(15, curY+5, 195, curY+5);
                     doc.line(145, curY, 145, curY+5);
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
                     doc.text("T O T A L", 140, curY + 3.8, {align: "right"});
@@ -1262,56 +1268,63 @@
                     doc.text(dayTotalAmount.toFixed(2), 193, curY + 3.8, {align: "right"});
                     curY += 5;
 
-                    // Purpose
-                    doc.rect(15, curY, 180, 30);
+                    // Purpose Row
+                    doc.line(15, curY+25, 195, curY+25); // Purpose bottom border
                     doc.setFont("helvetica", "bold"); doc.text("PURPOSE", 17, curY + 5);
                     doc.setFont("helvetica", "normal");
                     
                     let pLines = doc.splitTextToSize(purpose, 175);
-                    let py = curY + 12;
+                    let py = curY + 11;
                     for(let line of pLines) {
                         doc.text(line, 17, py);
                         py += 4.5;
+                        if (py > curY + 23) break; // Keep within cell boundaries
                     }
-                    curY += 30;
+                    curY += 25;
 
-                    // Cert
-                    doc.rect(15, curY, 180, 15);
+                    // Cert Row
+                    doc.line(15, curY+13, 195, curY+13); // Cert bottom border
                     doc.setFontSize(8);
-                    const certStr = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited\npurpose; that above goods and services were acquired from parties not issuing receipts; And\nthat I am fully aware that willful falsification of statements is punishable by law.";
-                    doc.text(certStr, 17, curY + 5);
-                    curY += 15;
+                    const certStr = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that above goods and services were acquired from parties not issuing receipts; And that I am fully aware that willful falsification of statements is punishable by law.";
+                    doc.text(certStr, 17, curY + 4.5);
+                    curY += 13;
 
-                    // Signature Block exactly like image
-                    doc.rect(15, curY, 180, 25);
-                    doc.line(15, curY+6, 195, curY+6); 
-                    doc.line(15, curY+16, 195, curY+16);
-                    doc.line(15, curY+20, 195, curY+20); 
+                    // Signature Block (Expanded to 35 Height)
+                    let sigHeight = 35;
+                    doc.line(15, curY+sigHeight, 195, curY+sigHeight); // Absolute bottom of table
+                    
+                    // Internal columns
+                    doc.line(35, curY, 35, curY+sigHeight); // Signature label col
+                    doc.line(115, curY, 115, curY+sigHeight); // Mid divider
 
-                    doc.line(35, curY, 35, curY+25); // Signature label col
-                    doc.line(115, curY, 115, curY+25); // Mid divider
+                    // Internal rows for spacing
+                    doc.line(15, curY+6, 195, curY+6); // Below "Certified/Noted" headers
+                    doc.line(15, curY+24, 195, curY+24); // Gives 18 units for signature height
+                    doc.line(15, curY+29, 195, curY+29); // Below Printed Name
 
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
                     doc.text("Certified Correct:", 37, curY + 4);
                     doc.text("Noted by:", 117, curY + 4);
 
-                    doc.text("Signature", 25, curY + 12, {align: "center"});
-                    doc.text("Printed", 25, curY + 17, {align: "center"});
-                    doc.text("Name", 25, curY + 19, {align: "center"});
+                    doc.text("Signature", 25, curY + 16, {align: "center"});
+                    doc.text("Printed", 25, curY + 27.5, {align: "center"});
+                    doc.text("Name", 25, curY + 32.5, {align: "center"});
 
                     doc.setFont("helvetica", "bold");
-                    doc.text(currentUser.full_name.toUpperCase(), 75, curY + 15, {align: "center"});
-                    doc.text(chiefName.toUpperCase(), 155, curY + 15, {align: "center"});
+                    doc.text(currentUser.full_name.toUpperCase(), 75, curY + 22, {align: "center"});
+                    doc.text(chiefName.toUpperCase(), 155, curY + 22, {align: "center"});
 
                     doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-                    doc.text("Employee", 75, curY + 19, {align: "center"});
-                    doc.text("Immediate Supervisor", 155, curY + 19, {align: "center"});
+                    doc.text("Employee", 75, curY + 27.5, {align: "center"});
+                    doc.text("Immediate Supervisor", 155, curY + 27.5, {align: "center"});
 
-                    doc.text(`Date: ${formatDestDate}`, 75, curY + 23.5, {align: "center"});
-                    doc.text(`Date: ${formatDestDate}`, 155, curY + 23.5, {align: "center"});
+                    doc.text(`Date: ${formatDestDate}`, 75, curY + 33, {align: "center"});
+                    doc.text(`Date: ${formatDestDate}`, 155, curY + 33, {align: "center"});
 
-                    // Big Outer frame correction
-                    doc.rect(15, startY, 180, (curY + 25) - startY);
+                    curY += sigHeight;
+
+                    // Single Big Outer Frame to seal the entire grid cleanly without double-stroking
+                    doc.rect(15, itemsStartY, 180, curY - itemsStartY);
                 });
 
                 window.closeTevModal();
@@ -1322,7 +1335,7 @@
         };
 
 
-
+        
         window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
@@ -2293,18 +2306,35 @@ window.modifyPendingTO = async function(toNo) {
             } catch (e) { alert("PDF Error: " + e.message); }
         };
 
-        window.cancelLeaveApp = async function(leaveId) {
+    window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
+                // Fetch the leave application to verify the start date
+                const { data: leaveApp, error: fetchError } = await supabase
+                    .from('leave_ledger')
+                    .select('start_date')
+                    .eq('id', leaveId)
+                    .single();
+
+                if (fetchError) throw fetchError;
+
+                // Compare start date with the current date (todayStr)
+                if (leaveApp.start_date < todayStr) {
+                    alert("You can only cancel a leave application on or before the leave start date. No further revisions are allowed.");
+                    return;
+                }
+
+                // Proceed with deletion if the date is valid
                 const { error } = await supabase.from('leave_ledger').delete().eq('id', leaveId);
                 if (error) throw error;
+                
                 alert("Leave application successfully cancelled and deleted.");
                 window.loadStatus();
             } catch(e) {
                 alert("Error: " + e.message);
             }
         };
-
+        
         window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
@@ -3391,6 +3421,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     </script>
 </body>
 </html>
+
 </xmp>
 
 
