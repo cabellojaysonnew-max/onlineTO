@@ -2209,7 +2209,7 @@ window.modifyPendingTO = async function(toNo) {
                 drawCheck("LIVE IN", 110, curY, false);
                 drawCheck("LIVE OUT", 135, curY, false);
 
-                const renderSigs = (list, imgs, startX, width) => {
+              const renderSigs = (list, imgs, startX, width, roleLabel) => {
                     if (list.length === 0) return;
                     const count = list.length;
                     const step = width / count;
@@ -2231,7 +2231,16 @@ window.modifyPendingTO = async function(toNo) {
                             doc.setFontSize(fontSize);
                         }
                         
+                        doc.setFont("helvetica", "bold");
                         doc.text(name, cx, 166, { align: 'center' });
+
+                        // Draw individual lines and roles dynamically for however many approvers exist
+                        let lineStart = cx - (step / 2) + 2;
+                        let lineEnd = cx + (step / 2) - 2;
+                        doc.line(lineStart, 168, lineEnd, 168);
+                        doc.setFont("helvetica", "normal"); 
+                        doc.setFontSize(7);
+                        doc.text(roleLabel, cx, 172, { align: 'center' });
                     }
                 };
 
@@ -2239,9 +2248,8 @@ window.modifyPendingTO = async function(toNo) {
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommending Approval:", 20, 156);
                     
-                    // Division Chief Signature
-                    renderSigs(dc_list, dc_imgs, 20, 60);
-                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("DIVISION CHIEF", 52, 172, {align: 'center'});
+                    // Division Chief Signatures (Dynamically handles multiple)
+                    renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
                     
                     // PARPO II Signature
                     if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 142, 30, 30); } catch(e){} }
@@ -2257,11 +2265,9 @@ window.modifyPendingTO = async function(toNo) {
                     doc.setFont("helvetica", "bold"); doc.setFontSize(10);
                     doc.text("Recommended by:", 20, 156);
                     
-                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 20, 60);
-                    renderSigs(dc_list, dc_imgs, 95, 60);
-
-                    doc.line(25, 168, 80, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text(isMARPO ? "" : "MARPO/UNIT HEAD", 52, 172, {align: 'center'});
-                    doc.line(100, 168, 155, 168); doc.text("DIVISION CHIEF", 127, 172, {align: 'center'});
+                    // Dynamically splits space for Unit Heads and Chiefs
+                    if (!isMARPO) renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD");
+                    renderSigs(dc_list, dc_imgs, 100, 80, "DIVISION CHIEF");
 
                     if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 182, 30, 30); } catch(e){} }
                     doc.setFont("helvetica", "bold"); doc.setFontSize(11);
