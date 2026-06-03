@@ -1985,10 +1985,11 @@ window.modifyPendingTO = async function(toNo) {
             alert(`Draft loaded for TO ${toNo}. Modifications will apply to ALL personnel listed.`);
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
-
         
 window.generateOfficialPDF = async function(toNo) {
-    window.cancelLeaveApp = async function(leaveId) {
+};
+
+window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
                 // Fetch the leave application to verify the start date
