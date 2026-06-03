@@ -3548,6 +3548,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
         let currentUser = null;
         let currentTab = 'pending'; 
+        let currentLeaveSubTab = 'pending';
         let reportFilter = 'day'; 
         let reportData = [];
         let analyticsData = {};
@@ -3738,17 +3739,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
-                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Analytics</span></button>
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
+                    <button onclick="switchTab('leaves')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'leaves' ? 'text-emerald-600 font-bold' : 'text-gray-400'}"><span class="text-lg">🍃</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Leaves</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
                 </nav>
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
                     <div class="space-x-2 flex">
-                        <button onclick="processBatch('DISAPPROVED')" class="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold">Deny</button>
-                        <button onclick="processBatch('OFFICIAL_TIME')" class="px-3 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-xs font-bold leading-tight">Official Time</button>
+                        <button onclick="processBatch('DISAPPROVED')" class="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold shadow-sm">Deny</button>
                         <button onclick="processBatch('APPROVE')" class="px-3 py-2 dar-green text-white rounded-lg text-xs font-bold shadow-md">Approve</button>
                     </div>
                 </div>
@@ -3783,6 +3784,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 hideBatchActionBar();
                 if (currentTab === 'approved') loadStatusTab('APPROVED');
                 else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
+                else if (currentTab === 'leaves') loadLeavesTab();
                 else if (currentTab === 'reports') loadReportsTab();
                 else loadAnalyticsTab();
             }
@@ -3793,6 +3795,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             selectedPendingOrders.clear(); 
             renderMain(); 
         }
+
+        window.switchLeaveSubTab = function(subTab) {
+            currentLeaveSubTab = subTab;
+            selectedPendingOrders.clear();
+            loadLeavesTab();
+        }
+
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; }
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; }
 
@@ -3809,6 +3818,40 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             const hashedNew = await hashPassword(n);
             await supabaseClient.from('users').update({ password: hashedNew }).eq('username', currentUser.username);
             alert("Updated!"); hideChangePassword();
+        }
+
+        // --- LEAVE ROUTING HELPER FUNCTIONS ---
+        function getLeaveStatus(remarks) {
+            const m = remarks.match(/ROUTING_STATUS:\s*([^\s|]+)/);
+            return m ? m[1].toUpperCase() : 'PENDING_CHIEF';
+        }
+
+        function setLeaveStatus(remarks, newStatus) {
+            if (remarks.includes('ROUTING_STATUS:')) {
+                return remarks.replace(/ROUTING_STATUS:\s*([^\s|]+)/, `ROUTING_STATUS: ${newStatus}`);
+            }
+            return remarks + ` | ROUTING_STATUS: ${newStatus}`;
+        }
+
+        function getLeaveAppPayload(u, leaveRec) {
+            const role = u.role ? u.role.trim().toUpperCase() : "";
+            const currentStatus = getLeaveStatus(leaveRec.remarks || "");
+            let nextStatus = currentStatus;
+            let transType = "APPLICATION";
+
+            if (role === "UNIT_HEAD" || role === "UNIT HEAD") {
+                nextStatus = "PENDING_CHIEF";
+            } else if (role === "CHIEF" || role === "MARPO") {
+                nextStatus = "PENDING_HRMO";
+            } else if (role === "HRMO" || role === "ADMIN") {
+                nextStatus = "APPROVED";
+                transType = "APPROVED";
+            }
+
+            return {
+                transaction_type: transType,
+                remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus)
+            };
         }
 
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
@@ -3884,7 +3927,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
             const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") return true;
+            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN" || role === "HRMO") return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
@@ -3899,9 +3942,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         };
 
         // --- BATCH ACTION LOGIC ---
-        window.toggleBatchSelection = function(to_no, isChecked) {
-            if (isChecked) selectedPendingOrders.add(to_no);
-            else selectedPendingOrders.delete(to_no);
+        window.toggleBatchSelection = function(id, isChecked) {
+            if (isChecked) selectedPendingOrders.add(id);
+            else selectedPendingOrders.delete(id);
             updateBatchActionBar();
         }
 
@@ -3937,56 +3980,69 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                 hideBatchActionBar();
 
+                let denyReason = "";
                 if (action === 'DISAPPROVED') {
-                    let p = { status: "DISAPPROVED", received: prompt("Reason for denying ALL selected:") };
-                    if (!p.received) { loadPendingTab(); return; }
-                    const content = document.getElementById('mainContent');
-                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
-                    
-                    const updatePromises = Array.from(selectedPendingOrders).map(async (to_no) => {
-                        const { error } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                        if(error) throw error;
-                        await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
-                    });
-                    await Promise.all(updatePromises);
+                    denyReason = prompt("Reason for denying ALL selected:");
+                    if (!denyReason) { 
+                        if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab(); 
+                        return; 
+                    }
+                }
 
-                } else {
-                    const toNos = Array.from(selectedPendingOrders);
+                const content = document.getElementById('mainContent');
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+
+                const toNos = Array.from(selectedPendingOrders).filter(id => id.startsWith('TO:')).map(id => id.split(':')[1]);
+                const leaveIds = Array.from(selectedPendingOrders).filter(id => id.startsWith('LEAVE:')).map(id => id.split(':')[1]);
+
+                // Batch TOs
+                if (toNos.length > 0) {
                     const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').in('to_no', toNos);
-                    if (error) throw error;
+                    if (!error) {
+                        const updatePromises = toNos.map(async (to_no) => {
+                            if (action === 'DISAPPROVED') {
+                                await supabaseClient.from('travel_orders').update({ status: "DISAPPROVED", received: denyReason }).eq('to_no', to_no);
+                                await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
+                            } else {
+                                const toRec = (toDataList || []).find(t => t.to_no === to_no);
+                                const p = getAppPayload(currentUser, toRec);
+                                if (Object.keys(p).length === 0) return; 
+                                await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                                await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                            }
+                        });
+                        await Promise.all(updatePromises);
+                    }
+                }
 
-                    const content = document.getElementById('mainContent');
-                    content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Batch...</p>`;
+                // Batch Leaves
+                if (leaveIds.length > 0) {
+                    const { data: lResData, error } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
+                    if (!error) {
+                        const leavePromises = leaveIds.map(async (id) => {
+                            const leaveData = (lResData || []).find(l => l.id === id);
+                            if (!leaveData) return;
 
-                    const updatePromises = toNos.map(async (to_no) => {
-                        const toRec = (toDataList || []).find(t => t.to_no === to_no);
-                        const p = getAppPayload(currentUser, toRec);
-                        
-                        if (Object.keys(p).length === 0) return null; 
-
-                        if (action === 'OFFICIAL_TIME') {
-                            p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
-                        }
-
-                        const { error: updError } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                        if(updError) throw updError;
-                        await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
-                        return true;
-                    });
-
-                    const results = await Promise.all(updatePromises);
-                    const validUpdates = results.filter(r => r !== null);
-                    
-                    if (validUpdates.length === 0) {
-                        alert("No valid approval actions configured for your role (" + currentUser.role + ").");
+                            if (action === 'DISAPPROVED') {
+                                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied: ${denyReason}`;
+                                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
+                                await window.logActivity(id, 'LEAVE_DENIED', `Batch denied by ${currentUser.fullName}. Reason: ${denyReason}`);
+                            } else {
+                                const p = getLeaveAppPayload(currentUser, leaveData);
+                                if (!p || Object.keys(p).length === 0) return;
+                                await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                                await window.logActivity(id, 'LEAVE_APPROVED', `Leave status advanced to ${getLeaveStatus(p.remarks)} by ${currentUser.fullName}`);
+                            }
+                        });
+                        await Promise.all(leavePromises);
                     }
                 }
 
                 selectedPendingOrders.clear();
-                loadPendingTab();
+                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
             } catch (err) {
                 alert("Batch processing error: " + err.message);
-                loadPendingTab();
+                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
             }
         }
 
@@ -4040,7 +4096,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 hdr.className = "dar-green text-white p-4 font-bold text-center relative";
                 hdr.innerHTML = `Approve Dates <button onclick="hidePendingDateModal()" class="absolute right-4 text-xl leading-none">✕</button>`;
                 btn.className = "w-full dar-green text-white font-bold py-3 rounded-xl mt-2";
-                txt.innerText = "Select dates to " + (action === 'OFFICIAL_TIME' ? 'Approve (Official Time)' : 'Approve') + " (Unselected dates will be removed):";
+                txt.innerText = "Select dates to Approve (Unselected dates will be removed):";
                 reasonInput.classList.add('hidden');
                 
                 const checkApproveReasonVisibility = () => {
@@ -4126,8 +4182,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     if (error) throw error;
                     const p = getAppPayload(currentUser, toData[0]);
                     
-                    if (action === 'OFFICIAL_TIME') p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
-                    
                     if (approveReason) {
                         p.remarks = approveReason;
                     }
@@ -4135,7 +4189,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     if (Object.keys(p).length === 0) throw new Error("Approval failed: Role not configured.");
 
                     await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
                     
                     if (approveReason) {
                         await supabaseClient.from('notifications').insert({
@@ -4152,46 +4206,38 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             }
         };
 
-        window.processDirectTO = async function(to_no, action) {
+        window.processDirectLeave = async function(id, action) {
             try {
-                let p;
-                if (action === 'DISAPPROVED') {
-                    p = { status: "DISAPPROVED", received: prompt("Reason for denying:") };
-                    if (!p.received) return;
-                } else {
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').eq('to_no', to_no).limit(1);
-                    if (error) throw error;
-                    p = getAppPayload(currentUser, toData && toData.length > 0 ? toData[0] : null);
-                    
-                    if (action === 'OFFICIAL_TIME') {
-                        p.to_header = 'APPROVED BUT NOT VALID FOR SALARY AND TEV CLAIMS';
-                    }
-                }
-                
-                // Guard against blank payload if role mapping failed
-                if (Object.keys(p).length === 0) {
-                    alert("Approval failed: Your role (" + currentUser.role + ") is not configured to approve this status.");
-                    return;
-                }
+                const { data: leaveData, error } = await supabaseClient.from('leave_ledger').select('*').eq('id', id).single();
+                if (error || !leaveData) throw new Error("Leave record not found.");
 
                 const content = document.getElementById('mainContent');
-                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing...</p>`;
-                
-                const { error: updErr } = await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                if (updErr) throw updErr;
-                
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-emerald-600 font-bold animate-pulse">Processing Leave...</p>`;
+
                 if (action === 'DISAPPROVED') {
-                    await window.logActivity(to_no, 'DISAPPROVED', `Disapproved by ${currentUser.fullName}. Reason: ${p.received}`);
+                    const reason = prompt("Reason for denying:");
+                    if (!reason) { loadLeavesTab(); return; }
+                    
+                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied: ${reason}`;
+                    await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
+                    await window.logActivity(id, 'LEAVE_DENIED', `Leave denied by ${currentUser.fullName}. Reason: ${reason}`);
                 } else {
-                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}${action === 'OFFICIAL_TIME' ? ' (Official Time)' : ''}`);
+                    const p = getLeaveAppPayload(currentUser, leaveData);
+                    if (!p || Object.keys(p).length === 0) {
+                        alert("Approval failed: Your role is not configured to approve this status.");
+                        loadLeavesTab();
+                        return;
+                    }
+                    
+                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                    await window.logActivity(id, 'LEAVE_APPROVED', `Leave status advanced to ${getLeaveStatus(p.remarks)} by ${currentUser.fullName}`);
                 }
-                
-                loadPendingTab();
-            } catch (err) {
-                alert("Error processing TO: " + err.message);
-                loadPendingTab();
+                loadLeavesTab();
+            } catch(e) {
+                alert("Error: " + e.message);
+                loadLeavesTab();
             }
-        }
+        };
 
         function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
@@ -4252,18 +4298,24 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             return {};
         }
 
-        // --- PENDING TAB ---
+        // --- PENDING TAB (TO ONLY) ---
         async function loadPendingTab() {
             selectedPendingOrders.clear();
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Syncing Inbox...</p>`;
-            const [oRes, iRes] = await Promise.all([supabaseClient.from('travel_orders').select('*'), supabaseClient.from('itinerary').select('*')]);
+            
+            const [oRes, iRes] = await Promise.all([
+                supabaseClient.from('travel_orders').select('*'),
+                supabaseClient.from('itinerary').select('*')
+            ]);
+            
+            let pendingItems = [];
+
+            // -- TOs --
             let grp = {};
             (oRes.data || []).forEach(o => { if (!grp[o.to_no]) grp[o.to_no] = []; grp[o.to_no].push(o); });
-            let pendingOrders = [];
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
-                let showOnlyDatesForUnits = null;
                 
                 for (let o of list) {
                     const s = (o.status || "").trim().toUpperCase();
@@ -4282,7 +4334,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
-                            showOnlyDatesForUnits = unitsCanSign; 
                         }
                     }
                 }
@@ -4297,8 +4348,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         dt = fullItinerary.length === 1 ? end : `${start} - ${end}`;
                     }
                     
-                    const itinEncoded = encodeURIComponent(JSON.stringify(fullItinerary));
-                    
+                    const itinEncoded = encodeURIComponent(JSON.stringify(fullItinerary)).replace(/'/g, "%27");
                     const itinDetailsHTML = fullItinerary.map(i => {
                         const d = new Date(i.travel_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
                         return `<div class="mt-1.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
@@ -4312,17 +4362,22 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                 </div>`;
                     }).join('');
 
-                    pendingOrders.push({ 
-                        to_no, 
+                    pendingItems.push({ 
+                        type: 'TO',
+                        id: to_no, 
                         names: list.map(g => g.emp_name), 
                         itinDetailsHTML: itinDetailsHTML, 
                         report_to: list[0].report_to || 'N/A', 
                         dateStr: dt,
-                        itinEncoded: itinEncoded
+                        itinEncoded: itinEncoded,
+                        created_at: list[0].created_at
                     });
                 }
             }
-            if (pendingOrders.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
+
+            pendingItems.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (pendingItems.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
             else {
                 let h = `
                 <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 flex justify-between items-center shadow-sm border-b">
@@ -4330,28 +4385,29 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
                         <span>Select All</span>
                     </label>
-                    <span class="text-xs text-gray-500 font-bold">${pendingOrders.length} Pending</span>
+                    <span class="text-xs text-gray-500 font-bold">${pendingItems.length} Pending</span>
                 </div>
                 <div class="p-4 space-y-4 pb-32">`;
                 
-                pendingOrders.forEach(o => { 
+                pendingItems.forEach(o => { 
                     h += `
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border flex gap-3 relative">
+                    <div class="p-4 rounded-2xl shadow-sm border-2 border-blue-200 bg-blue-50/20 flex gap-3 relative mb-4">
                         <div class="pt-1">
-                            <input type="checkbox" value="${o.to_no}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('${o.to_no}', this.checked)">
+                            <input type="checkbox" value="TO:${o.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('TO:${o.id}', this.checked)">
                         </div>
                         <div class="flex-grow overflow-hidden">
-                            <div class="flex justify-between items-start">
-                                <span class="text-[10px] font-black text-gray-300 uppercase">${o.to_no}</span>
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-[10px] font-bold text-white px-2 py-1 rounded shadow-sm tracking-wide uppercase bg-blue-600">
+                                    ✈️ TRAVEL ORDER - ${o.id}
+                                </span>
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
                             ${o.itinDetailsHTML}
-                            <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t pt-1">👤 Report To: ${o.report_to}</p>
-                            <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Total Range: ${o.dateStr}</p>
-                            <div class="mt-3 pt-3 border-t border-gray-100 flex gap-2">
-                                <button onclick="initiateDirectTO('${o.to_no}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform">DENY</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'OFFICIAL_TIME', '${o.itinEncoded}')" class="px-1 py-2 bg-yellow-50 text-yellow-600 rounded-lg text-[10px] font-bold shadow-sm w-1/3 active:scale-95 transition-transform leading-tight">OFFICIAL TIME</button>
-                                <button onclick="initiateDirectTO('${o.to_no}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/3 active:scale-95 transition-transform">APPROVE</button>
+                            <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t border-blue-100 pt-1">👤 Report To: ${o.report_to}</p>
+                            <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Range: ${o.dateStr}</p>
+                            <div class="mt-3 pt-3 flex gap-2">
+                                <button onclick="initiateDirectTO('${o.id}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="initiateDirectTO('${o.id}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
@@ -4360,37 +4416,35 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             }
         }
 
-        // --- APPROVED / DENIED TAB (DETAILED) ---
+        // --- APPROVED / DENIED TAB (TO ONLY) ---
         async function loadStatusTab(tabStatus) {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-gray-400">Loading...</p>`;
             
             const [oRes, iRes] = await Promise.all([
-                supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }), 
+                supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }).limit(3000), 
                 supabaseClient.from('itinerary').select('*')
             ]);
             
-            let h = `<div class="p-4 space-y-3 pb-32">`;
-            let count = 0;
+            let combinedRecords = [];
             const maxLimit = tabStatus === 'APPROVED' ? 50 : 9999;
             
+            // Push TOs
+            const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
             for (let i = 0; i < (oRes.data || []).length; i++) {
-                if (count >= maxLimit) break;
                 const o = oRes.data[i];
-                
                 if (checkScope(o.division, o.unit)) {
                     let show = false;
                     let displayStatus = o.status;
                     let borderColor = tabStatus === 'APPROVED' ? 'border-dar-green' : 'border-red-500';
                     let textColor = 'text-gray-400';
-                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
 
                     if (tabStatus === 'APPROVED') {
                         if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
                             if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
                         } else if (r === 'CHIEF') {
                             if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN') {
+                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN' || r === 'HRMO') {
                             if (o.status === 'APPROVED') show = true;
                         }
 
@@ -4410,15 +4464,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             }
                         }
                     } else if (tabStatus === 'DISAPPROVED') {
-                        if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED') {
+                        if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED' || o.status.includes('DISAPPROVED') || o.status.includes('CANCELLED')) {
                             show = true;
                             displayStatus = o.status;
                             textColor = 'text-red-500';
+                            borderColor = 'border-red-500';
                         }
                     }
 
                     if (show) {
-                        count++;
                         const myI = (iRes.data || []).filter(item => item.to_no === o.to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                         const ds = [...new Set(myI.map(item => item.destination))].join(', ') || 'N/A';
                         const purpose = [...new Set(myI.map(item => item.purpose))].join(', ') || 'N/A';
@@ -4433,32 +4487,146 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         if (tabStatus === 'APPROVED') {
                             const datesEncoded = encodeURIComponent(JSON.stringify(myI.map(item => item.travel_date)));
                             actionBtns = `
-                                <div class="mt-3 pt-3 border-t border-gray-100 flex justify-end space-x-2">
+                                <div class="mt-3 pt-3 flex justify-end space-x-2">
                                     <button onclick="showCancelModal('${o.to_no}', '${datesEncoded}')" class="px-5 py-2 bg-red-50 text-red-600 rounded-xl text-[11px] font-bold shadow-sm">Cancel TO</button>
                                 </div>`;
                         }
-                        
-                        h += `<div class="bg-white p-4 rounded-xl border-l-4 ${borderColor} shadow-sm">
-                                <div class="flex justify-between mb-1">
-                                    <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
-                                    <span class="text-[9px] text-gray-400">${o.to_no}</span>
-                                </div>
-                                <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
-                                <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
-                                <p class="text-[11px] text-gray-500 break-words whitespace-normal mt-0.5">🎯 ${purpose}</p>
-                                <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
-                                <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
-                                ${actionBtns}
-                              </div>`;
+
+                        combinedRecords.push({
+                            type: 'TO',
+                            created_at: o.created_at,
+                            html: `<div class="bg-blue-50/30 p-4 rounded-xl border border-blue-200 border-l-4 ${borderColor} shadow-sm mb-4">
+                                    <div class="flex justify-between items-center mb-2 border-b border-blue-100 pb-2">
+                                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded shadow-sm tracking-wide uppercase">✈️ TRAVEL ORDER - ${o.to_no}</span>
+                                        <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
+                                    </div>
+                                    <p class="font-bold text-gray-800 text-base">${o.emp_name}</p>
+                                    <p class="text-[11px] text-gray-500 mt-1">📍 ${ds}</p>
+                                    <p class="text-[11px] text-gray-500 break-words whitespace-normal mt-0.5">🎯 ${purpose}</p>
+                                    <p class="text-[11px] text-gray-500 truncate mt-0.5">👤 Report To: ${o.report_to}</p>
+                                    <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${dt}</p>
+                                    ${actionBtns}
+                                  </div>`
+                        });
                     }
                 }
             }
-            
-            if (count === 0) {
+
+            combinedRecords.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (combinedRecords.length === 0) {
                 content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">📄</span><p class="font-bold mt-2 text-xs uppercase">No Records</p></div>`;
             } else {
+                let h = `<div class="p-4 space-y-3 pb-32">`;
+                const toRender = combinedRecords.slice(0, maxLimit);
+                toRender.forEach(r => { h += r.html; });
                 content.innerHTML = h + `</div>`;
             }
+        }
+
+        // --- LEAVES HUB ---
+        async function loadLeavesTab() {
+            selectedPendingOrders.clear();
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-emerald-600">Syncing Leaves...</p>`;
+
+            const [lRes, empRes] = await Promise.all([
+                supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED']).order('created_at', { ascending: false }).limit(3000),
+                supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+            ]);
+
+            let pendingItems = [];
+            const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+
+            for (let l of (lRes.data || [])) {
+                const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
+                if (emp && checkScope(emp.division, emp.unit)) {
+                    let show = false;
+                    let displayStatus = l.transaction_type;
+                    let textColor = 'text-gray-400';
+                    let borderColor = 'border-emerald-500';
+
+                    const s = getLeaveStatus(l.remarks || "");
+
+                    if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
+                        if ((r === "UNIT_HEAD" || r === "UNIT HEAD") && s === "PENDING_UNIT_HEAD") show = true;
+                        else if ((r === "CHIEF" || r === "MARPO") && s === "PENDING_CHIEF") show = true;
+                        else if ((r === "HRMO" || r === "ADMIN") && s === "PENDING_HRMO") show = true;
+                    } 
+                    else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
+                        show = true;
+                        textColor = 'text-emerald-600';
+                    } 
+                    else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'CANCELLED' || l.transaction_type.includes('DISAPPROVED'))) {
+                        show = true;
+                        textColor = 'text-red-500';
+                        borderColor = 'border-red-500';
+                    }
+
+                    if (show) {
+                        let btns = '';
+                        if (currentLeaveSubTab === 'pending') {
+                            btns = `
+                                <div class="mt-3 pt-3 flex gap-2">
+                                    <button onclick="processDirectLeave('${l.id}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                    <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
+                                </div>
+                            `;
+                        }
+
+                        pendingItems.push({
+                            type: 'LEAVE',
+                            id: l.id,
+                            created_at: l.created_at,
+                            html: `<div class="bg-emerald-50/30 p-4 rounded-xl border border-emerald-200 border-l-4 ${borderColor} shadow-sm mb-4">
+                                    ${currentLeaveSubTab === 'pending' ? `<div class="pt-1 mb-2"><input type="checkbox" value="LEAVE:${l.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('LEAVE:${l.id}', this.checked)"></div>` : ''}
+                                    <div class="flex justify-between items-center mb-2 border-b border-emerald-100 pb-2">
+                                        <span class="text-[10px] font-bold text-white px-2 py-0.5 rounded shadow-sm tracking-wide uppercase bg-emerald-600">🍃 LEAVE APP</span>
+                                        <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus === 'APPLICATION' ? s : displayStatus}</span>
+                                    </div>
+                                    <p class="font-bold text-gray-800 text-base">${emp.full_name}</p>
+                                    <div class="mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                                        <span class="text-[10px] text-emerald-700 font-bold">🍃 ${l.type}</span><br>
+                                        <span class="text-[9px] text-gray-500 mt-0.5 leading-tight break-words whitespace-normal">${l.remarks || 'No remarks provided'}</span>
+                                    </div>
+                                    <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${l.start_date} to ${l.end_date} (${l.debit} days)</p>
+                                    ${btns}
+                                  </div>`
+                        });
+                    }
+                }
+            }
+
+            pendingItems.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+            let h = `
+                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
+                    <h2 class="font-extrabold text-lg text-emerald-700 mb-3 text-center tracking-tighter uppercase">Leave Hub</h2>
+                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
+                        <button onclick="switchLeaveSubTab('pending')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'pending' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Pending</button>
+                        <button onclick="switchLeaveSubTab('approved')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'approved' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Approved</button>
+                        <button onclick="switchLeaveSubTab('denied')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'denied' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Denied</button>
+                    </div>
+                    ${currentLeaveSubTab === 'pending' && pendingItems.length > 0 ? `
+                        <div class="flex justify-between items-center mt-2">
+                            <label class="flex items-center space-x-2 cursor-pointer text-sm font-bold text-gray-700">
+                                <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
+                                <span>Select All</span>
+                            </label>
+                            <span class="text-xs text-gray-500 font-bold">${pendingItems.length} Leaves</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="p-4 space-y-3 pb-32">
+            `;
+
+            if (pendingItems.length === 0) {
+                h += `<div class="flex flex-col items-center justify-center py-10 opacity-50"><span class="text-4xl">🍃</span><p class="font-bold mt-2 text-xs uppercase text-center">No Records Found</p></div>`;
+            } else {
+                pendingItems.forEach(r => { h += r.html; });
+            }
+
+            content.innerHTML = h + `</div>`;
         }
 
         // --- REPORTS (WHEREABOUTS) ---
