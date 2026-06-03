@@ -1986,7 +1986,7 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
-window.generateOfficialPDF = async function(toNo) {
+    window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -2287,7 +2287,7 @@ window.generateOfficialPDF = async function(toNo) {
         await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-
+        
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
             try {
