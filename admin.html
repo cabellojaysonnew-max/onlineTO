@@ -136,6 +136,7 @@
 
         let currentUser = null;
         let currentTab = 'pending'; 
+        let currentLeaveSubTab = 'pending';
         let reportFilter = 'day'; 
         let reportData = [];
         let analyticsData = {};
@@ -326,11 +327,12 @@
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">📥</span><span class="text-[9px] uppercase tracking-tighter">Pending</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-xl">✅</span><span class="text-[9px] uppercase tracking-tighter">Approved</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-xl">❌</span><span class="text-[9px] uppercase tracking-tighter">Denied</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📋</span><span class="text-[9px] uppercase tracking-tighter">Reports</span></button>
-                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-xl">📊</span><span class="text-[9px] uppercase tracking-tighter">Analytics</span></button>
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
+                    <button onclick="switchTab('leaves')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'leaves' ? 'text-emerald-600 font-bold' : 'text-gray-400'}"><span class="text-lg">🍃</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Leaves</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
                 </nav>
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
@@ -370,6 +372,7 @@
                 hideBatchActionBar();
                 if (currentTab === 'approved') loadStatusTab('APPROVED');
                 else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
+                else if (currentTab === 'leaves') loadLeavesTab();
                 else if (currentTab === 'reports') loadReportsTab();
                 else loadAnalyticsTab();
             }
@@ -380,6 +383,13 @@
             selectedPendingOrders.clear(); 
             renderMain(); 
         }
+
+        window.switchLeaveSubTab = function(subTab) {
+            currentLeaveSubTab = subTab;
+            selectedPendingOrders.clear();
+            loadLeavesTab();
+        }
+
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; }
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; }
 
@@ -419,7 +429,7 @@
 
             if (role === "UNIT_HEAD" || role === "UNIT HEAD") {
                 nextStatus = "PENDING_CHIEF";
-            } else if (role === "CHIEF" || role === "MARPO" || role === "PARPO") {
+            } else if (role === "CHIEF" || role === "MARPO") {
                 nextStatus = "PENDING_HRMO";
             } else if (role === "HRMO" || role === "ADMIN") {
                 nextStatus = "APPROVED";
@@ -561,7 +571,10 @@
                 let denyReason = "";
                 if (action === 'DISAPPROVED') {
                     denyReason = prompt("Reason for denying ALL selected:");
-                    if (!denyReason) { loadPendingTab(); return; }
+                    if (!denyReason) { 
+                        if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab(); 
+                        return; 
+                    }
                 }
 
                 const content = document.getElementById('mainContent');
@@ -614,10 +627,10 @@
                 }
 
                 selectedPendingOrders.clear();
-                loadPendingTab();
+                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
             } catch (err) {
                 alert("Batch processing error: " + err.message);
-                loadPendingTab();
+                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
             }
         }
 
@@ -787,11 +800,11 @@
                 if (error || !leaveData) throw new Error("Leave record not found.");
 
                 const content = document.getElementById('mainContent');
-                content.innerHTML = `<p class="flex items-center justify-center h-full text-dar-green font-bold animate-pulse">Processing Leave...</p>`;
+                content.innerHTML = `<p class="flex items-center justify-center h-full text-emerald-600 font-bold animate-pulse">Processing Leave...</p>`;
 
                 if (action === 'DISAPPROVED') {
                     const reason = prompt("Reason for denying:");
-                    if (!reason) { loadPendingTab(); return; }
+                    if (!reason) { loadLeavesTab(); return; }
                     
                     const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied: ${reason}`;
                     await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
@@ -800,17 +813,17 @@
                     const p = getLeaveAppPayload(currentUser, leaveData);
                     if (!p || Object.keys(p).length === 0) {
                         alert("Approval failed: Your role is not configured to approve this status.");
-                        loadPendingTab();
+                        loadLeavesTab();
                         return;
                     }
                     
                     await supabaseClient.from('leave_ledger').update(p).eq('id', id);
                     await window.logActivity(id, 'LEAVE_APPROVED', `Leave status advanced to ${getLeaveStatus(p.remarks)} by ${currentUser.fullName}`);
                 }
-                loadPendingTab();
+                loadLeavesTab();
             } catch(e) {
                 alert("Error: " + e.message);
-                loadPendingTab();
+                loadLeavesTab();
             }
         };
 
@@ -873,17 +886,15 @@
             return {};
         }
 
-        // --- PENDING TAB ---
+        // --- PENDING TAB (TO ONLY) ---
         async function loadPendingTab() {
             selectedPendingOrders.clear();
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-gray-400 font-bold animate-pulse">Syncing Inbox...</p>`;
             
-            const [oRes, iRes, lRes, empRes] = await Promise.all([
+            const [oRes, iRes] = await Promise.all([
                 supabaseClient.from('travel_orders').select('*'),
-                supabaseClient.from('itinerary').select('*'),
-                supabaseClient.from('leave_ledger').select('*').eq('transaction_type', 'APPLICATION'),
-                supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+                supabaseClient.from('itinerary').select('*')
             ]);
             
             let pendingItems = [];
@@ -952,36 +963,6 @@
                 }
             }
 
-            // -- LEAVES --
-            (lRes.data || []).forEach(l => {
-                const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
-                if (!emp) return;
-                const s = getLeaveStatus(l.remarks || "");
-                const dMatch = checkScope(emp.division, emp.unit);
-                const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-
-                let show = false;
-                if ((r === "UNIT_HEAD" || r === "UNIT HEAD") && s === "PENDING_UNIT_HEAD" && dMatch) show = true;
-                else if ((r === "CHIEF" || r === "MARPO") && s === "PENDING_CHIEF" && dMatch) show = true;
-                else if (r === "PARPO" && s === "PENDING_PARPO" && dMatch) show = true;
-                else if ((r === "HRMO" || r === "ADMIN") && s === "PENDING_HRMO") show = true;
-
-                if (show) {
-                    pendingItems.push({
-                        type: 'LEAVE',
-                        id: l.id,
-                        names: [emp.full_name],
-                        itinDetailsHTML: `<div class="mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                                            <span class="text-[10px] text-emerald-700 font-bold">🍃 ${l.type}</span><br>
-                                            <span class="text-[9px] text-gray-500 mt-0.5 leading-tight break-words whitespace-normal">${l.remarks || 'No remarks provided'}</span>
-                                          </div>`,
-                        report_to: 'N/A',
-                        dateStr: `${l.start_date} to ${l.end_date} (${l.debit} days)`,
-                        created_at: l.created_at
-                    });
-                }
-            });
-
             pendingItems.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
             if (pendingItems.length === 0) content.innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-50"><span class="text-4xl">✨</span><p class="font-bold mt-2 text-xs uppercase">Inbox Clear</p></div>`;
@@ -997,40 +978,24 @@
                 <div class="p-4 space-y-4 pb-32">`;
                 
                 pendingItems.forEach(o => { 
-                    let btns = '';
-                    if (o.type === 'TO') {
-                        btns = `
-                            <button onclick="initiateDirectTO('${o.id}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                            <button onclick="initiateDirectTO('${o.id}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
-                        `;
-                    } else {
-                        btns = `
-                            <button onclick="processDirectLeave('${o.id}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                            <button onclick="processDirectLeave('${o.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
-                        `;
-                    }
-
-                    let cardClass = o.type === 'TO' ? 'border-blue-200 bg-blue-50/20' : 'border-emerald-200 bg-emerald-50/20';
-                    let badgeClass = o.type === 'TO' ? 'bg-blue-600' : 'bg-emerald-600';
-                    let titleText = o.type === 'TO' ? '✈️ TRAVEL ORDER - ' + o.id : '🍃 LEAVE APPLICATION';
-
                     h += `
-                    <div class="p-4 rounded-2xl shadow-sm border-2 ${cardClass} flex gap-3 relative mb-4">
+                    <div class="p-4 rounded-2xl shadow-sm border-2 border-blue-200 bg-blue-50/20 flex gap-3 relative mb-4">
                         <div class="pt-1">
-                            <input type="checkbox" value="${o.type}:${o.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('${o.type}:${o.id}', this.checked)">
+                            <input type="checkbox" value="TO:${o.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('TO:${o.id}', this.checked)">
                         </div>
                         <div class="flex-grow overflow-hidden">
                             <div class="flex justify-between items-start mb-2">
-                                <span class="text-[10px] font-bold text-white px-2 py-1 rounded shadow-sm uppercase ${badgeClass}">
-                                    ${titleText}
+                                <span class="text-[10px] font-bold text-white px-2 py-1 rounded shadow-sm tracking-wide uppercase bg-blue-600">
+                                    ✈️ TRAVEL ORDER - ${o.id}
                                 </span>
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
                             ${o.itinDetailsHTML}
-                            ${o.type === 'TO' ? `<p class="text-[11px] text-gray-500 truncate mt-1.5 border-t border-blue-100 pt-1">👤 Report To: ${o.report_to}</p>` : ''}
+                            <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t border-blue-100 pt-1">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Range: ${o.dateStr}</p>
                             <div class="mt-3 pt-3 flex gap-2">
-                                ${btns}
+                                <button onclick="initiateDirectTO('${o.id}', 'DISAPPROVED', '${o.itinEncoded}')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                <button onclick="initiateDirectTO('${o.id}', 'APPROVE', '${o.itinEncoded}')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
                             </div>
                         </div>
                     </div>`; 
@@ -1039,16 +1004,14 @@
             }
         }
 
-        // --- APPROVED / DENIED TAB (DETAILED) ---
+        // --- APPROVED / DENIED TAB (TO ONLY) ---
         async function loadStatusTab(tabStatus) {
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-gray-400">Loading...</p>`;
             
-            const [oRes, iRes, lRes, empRes] = await Promise.all([
+            const [oRes, iRes] = await Promise.all([
                 supabaseClient.from('travel_orders').select('*').order('created_at', { ascending: false }).limit(3000), 
-                supabaseClient.from('itinerary').select('*'),
-                supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPROVED', 'DISAPPROVED', 'CANCELLED']).order('created_at', { ascending: false }).limit(3000),
-                supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+                supabaseClient.from('itinerary').select('*')
             ]);
             
             let combinedRecords = [];
@@ -1137,45 +1100,6 @@
                 }
             }
 
-            // Push Leaves
-            for (let l of (lRes.data || [])) {
-                const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
-                if (emp && checkScope(emp.division, emp.unit)) {
-                    let show = false;
-                    let displayStatus = l.transaction_type;
-                    let textColor = 'text-gray-400';
-                    let borderColor = 'border-emerald-500';
-
-                    if (tabStatus === 'APPROVED' && l.transaction_type === 'APPROVED') {
-                        show = true;
-                        textColor = 'text-dar-green';
-                    } else if (tabStatus === 'DISAPPROVED' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'CANCELLED' || l.transaction_type.includes('DISAPPROVED'))) {
-                        show = true;
-                        textColor = 'text-red-500';
-                        borderColor = 'border-red-500';
-                    }
-
-                    if (show) {
-                        combinedRecords.push({
-                            type: 'LEAVE',
-                            created_at: l.created_at,
-                            html: `<div class="bg-emerald-50/30 p-4 rounded-xl border border-emerald-200 border-l-4 ${borderColor} shadow-sm mb-4">
-                                    <div class="flex justify-between items-center mb-2 border-b border-emerald-100 pb-2">
-                                        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shadow-sm tracking-wide uppercase">🍃 LEAVE APP</span>
-                                        <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus}</span>
-                                    </div>
-                                    <p class="font-bold text-gray-800 text-base">${emp.full_name}</p>
-                                    <div class="mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                                        <span class="text-[10px] text-emerald-700 font-bold">🍃 ${l.type}</span><br>
-                                        <span class="text-[9px] text-gray-500 mt-0.5 leading-tight break-words whitespace-normal">${l.remarks || 'No remarks provided'}</span>
-                                    </div>
-                                    <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${l.start_date} to ${l.end_date} (${l.debit} days)</p>
-                                  </div>`
-                        });
-                    }
-                }
-            }
-            
             combinedRecords.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
             if (combinedRecords.length === 0) {
@@ -1186,6 +1110,111 @@
                 toRender.forEach(r => { h += r.html; });
                 content.innerHTML = h + `</div>`;
             }
+        }
+
+        // --- LEAVES HUB ---
+        async function loadLeavesTab() {
+            selectedPendingOrders.clear();
+            const content = document.getElementById('mainContent');
+            content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-emerald-600">Syncing Leaves...</p>`;
+
+            const [lRes, empRes] = await Promise.all([
+                supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED']).order('created_at', { ascending: false }).limit(3000),
+                supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+            ]);
+
+            let pendingItems = [];
+            const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+
+            for (let l of (lRes.data || [])) {
+                const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
+                if (emp && checkScope(emp.division, emp.unit)) {
+                    let show = false;
+                    let displayStatus = l.transaction_type;
+                    let textColor = 'text-gray-400';
+                    let borderColor = 'border-emerald-500';
+
+                    const s = getLeaveStatus(l.remarks || "");
+
+                    if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
+                        if ((r === "UNIT_HEAD" || r === "UNIT HEAD") && s === "PENDING_UNIT_HEAD") show = true;
+                        else if ((r === "CHIEF" || r === "MARPO") && s === "PENDING_CHIEF") show = true;
+                        else if ((r === "HRMO" || r === "ADMIN") && s === "PENDING_HRMO") show = true;
+                    } 
+                    else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
+                        show = true;
+                        textColor = 'text-emerald-600';
+                    } 
+                    else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'CANCELLED' || l.transaction_type.includes('DISAPPROVED'))) {
+                        show = true;
+                        textColor = 'text-red-500';
+                        borderColor = 'border-red-500';
+                    }
+
+                    if (show) {
+                        let btns = '';
+                        if (currentLeaveSubTab === 'pending') {
+                            btns = `
+                                <div class="mt-3 pt-3 flex gap-2">
+                                    <button onclick="processDirectLeave('${l.id}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
+                                    <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
+                                </div>
+                            `;
+                        }
+
+                        pendingItems.push({
+                            type: 'LEAVE',
+                            id: l.id,
+                            created_at: l.created_at,
+                            html: `<div class="bg-emerald-50/30 p-4 rounded-xl border border-emerald-200 border-l-4 ${borderColor} shadow-sm mb-4">
+                                    ${currentLeaveSubTab === 'pending' ? `<div class="pt-1 mb-2"><input type="checkbox" value="LEAVE:${l.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('LEAVE:${l.id}', this.checked)"></div>` : ''}
+                                    <div class="flex justify-between items-center mb-2 border-b border-emerald-100 pb-2">
+                                        <span class="text-[10px] font-bold text-white px-2 py-0.5 rounded shadow-sm tracking-wide uppercase bg-emerald-600">🍃 LEAVE APP</span>
+                                        <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus === 'APPLICATION' ? s : displayStatus}</span>
+                                    </div>
+                                    <p class="font-bold text-gray-800 text-base">${emp.full_name}</p>
+                                    <div class="mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                                        <span class="text-[10px] text-emerald-700 font-bold">🍃 ${l.type}</span><br>
+                                        <span class="text-[9px] text-gray-500 mt-0.5 leading-tight break-words whitespace-normal">${l.remarks || 'No remarks provided'}</span>
+                                    </div>
+                                    <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${l.start_date} to ${l.end_date} (${l.debit} days)</p>
+                                    ${btns}
+                                  </div>`
+                        });
+                    }
+                }
+            }
+
+            pendingItems.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+            let h = `
+                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
+                    <h2 class="font-extrabold text-lg text-emerald-700 mb-3 text-center tracking-tighter uppercase">Leave Hub</h2>
+                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
+                        <button onclick="switchLeaveSubTab('pending')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'pending' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Pending</button>
+                        <button onclick="switchLeaveSubTab('approved')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'approved' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Approved</button>
+                        <button onclick="switchLeaveSubTab('denied')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'denied' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Denied</button>
+                    </div>
+                    ${currentLeaveSubTab === 'pending' && pendingItems.length > 0 ? `
+                        <div class="flex justify-between items-center mt-2">
+                            <label class="flex items-center space-x-2 cursor-pointer text-sm font-bold text-gray-700">
+                                <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
+                                <span>Select All</span>
+                            </label>
+                            <span class="text-xs text-gray-500 font-bold">${pendingItems.length} Leaves</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="p-4 space-y-3 pb-32">
+            `;
+
+            if (pendingItems.length === 0) {
+                h += `<div class="flex flex-col items-center justify-center py-10 opacity-50"><span class="text-4xl">🍃</span><p class="font-bold mt-2 text-xs uppercase text-center">No Records Found</p></div>`;
+            } else {
+                pendingItems.forEach(r => { h += r.html; });
+            }
+
+            content.innerHTML = h + `</div>`;
         }
 
         // --- REPORTS (WHEREABOUTS) ---
