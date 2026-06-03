@@ -1986,7 +1986,7 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
-    window.generateOfficialPDF = async function(toNo) {
+  window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
@@ -2109,8 +2109,9 @@ window.modifyPendingTO = async function(toNo) {
         doc.setFontSize(10); 
         doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
         doc.setFont("helvetica", "normal");
-        // Decreased right margin mapping line limit to 190 instead of 160
-        let nameLinesCount = renderFlexibleText(names, 40, 48, 150, 190, 10, 4);
+        
+        // Increased right margin: mapped line limit to 175, adjusting maxWidth accordingly
+        let nameLinesCount = renderFlexibleText(names, 40, 48, 135, 175, 10, 4);
 
         let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
 
@@ -2120,7 +2121,8 @@ window.modifyPendingTO = async function(toNo) {
         
         doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
         doc.setFont("helvetica", "normal"); 
-        let statLinesCount = renderFlexibleText(stations, 110, nextY, 80, 190, 10, 2);
+        // Increased right margin: mapped line limit to 175, adjusting maxWidth accordingly
+        let statLinesCount = renderFlexibleText(stations, 110, nextY, 65, 175, 10, 2);
 
         let maxSubLines = Math.max(posLinesCount, statLinesCount);
         let transY = nextY + ((maxSubLines - 1) * 4.5) + 7;
@@ -2151,8 +2153,8 @@ window.modifyPendingTO = async function(toNo) {
         doc.setFont("helvetica", "normal"); doc.setFontSize(7);
         let destY = destLabelY;
         
-        // Expanded to 140 width to take up more right side space
-        const destMaxWidth = 140;
+        // Reduced to 125 width to increase right margin
+        const destMaxWidth = 125;
 
         itin_list.forEach(it => {
             const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
@@ -2186,24 +2188,38 @@ window.modifyPendingTO = async function(toNo) {
         doc.text("DEPARTURE DATE:", 20, curY);
         doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
-        doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 190, curY+1);
+        
+        // Changed end line X from 190 to 175
+        doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 175, curY+1);
 
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-        doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 190, curY+1);
+        // Changed end line X from 190 to 175
+        doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 175, curY+1);
         
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
         curY += 4;
-        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-
+        
         const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
         
-        // Purpose line wrap adjusted to 170 to expand to the new 190 right margin boundary
-        const purpLines = doc.splitTextToSize(uniquePurposes || "", 170);
+        // New Font Shrinking Logic for Purpose to prevent vertical/horizontal overlap
+        let purpFontSize = 9;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(purpFontSize);
+        
+        // Wrapped to 155 to give a clean right margin ending at 175
+        let purpLines = doc.splitTextToSize(uniquePurposes || "", 155);
+        
+        while (purpLines.length > 3 && purpFontSize > 5) {
+            purpFontSize -= 0.5;
+            doc.setFontSize(purpFontSize);
+            purpLines = doc.splitTextToSize(uniquePurposes || "", 155);
+        }
+
         purpLines.forEach((line) => {
             doc.text(line, 20, curY);
-            doc.line(20, curY + 1, 190, curY + 1);
+            // Changed line limit from 190 to 175
+            doc.line(20, curY + 1, 175, curY + 1);
             curY += 4.5; 
         });
         curY += 2;
