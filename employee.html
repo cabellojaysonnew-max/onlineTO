@@ -629,6 +629,17 @@
             if(!dateObj) return "";
             return dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true });
         };
+
+        // HAVERSINE DISTANCE CALCULATOR HELPER
+        const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+            const R = 6371e3; // Earth's radius in meters
+            const p1 = lat1 * Math.PI / 180;
+            const p2 = lat2 * Math.PI / 180;
+            const dp = (lat2 - lat1) * Math.PI / 180;
+            const dl = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        };
         
         // UNDERTIME CALCULATION HELPER
         const calcUndertime = (timeLogs, schedule, schedType) => {
@@ -936,14 +947,32 @@
                     }
                 } catch(e) { console.log("Geocoding failed", e); }
                 
-                let outOfBoundsStr = "";
+            let outOfBoundsStr = "";
                 if (todayDestination) {
+                    // Check against Travel Order destination
                     if (!addressStr.toLowerCase().includes(todayDestination.toLowerCase()) && !placeName.toLowerCase().includes(todayDestination.toLowerCase())) {
                         outOfBoundsStr = " (Outside Destination)";
                         placeName = placeName + outOfBoundsStr;
                     }
-                }
-                
+                } else if (String(currentUser.station).toUpperCase().includes('DARMO')) {
+                    // Check DARMO employees against their designated darmo_locations table
+                    try {
+                        const { data: darmoLoc } = await supabase.from('darmo_locations')
+                            .select('latitude, longitude')
+                            .in('darmo_name', [currentUser.station, currentUser.unit])
+                            .limit(1)
+                            .maybeSingle();
+
+                        if (darmoLoc && darmoLoc.latitude != null && darmoLoc.longitude != null) {
+                            const distMeters = calculateDistanceMeters(lat, lng, darmoLoc.latitude, darmoLoc.longitude);
+                            // Strictly 50 meters tolerance radius
+                            if (distMeters > 50) { 
+                                outOfBoundsStr = " (Outside DARMO Location)";
+                                placeName = placeName + outOfBoundsStr;
+                            }
+                        }
+                    } catch(e) { console.error("DARMO location check failed", e); }
+                }                
                 document.getElementById('btn-clock-text').innerText = "Saving Log...";
                 
                 try {
