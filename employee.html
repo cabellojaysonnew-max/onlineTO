@@ -1084,7 +1084,8 @@
             container.innerHTML = html;
         };
 
-      window.generateTEVPDF = async function() {
+
+window.generateTEVPDF = async function() {
             window.saveTevState();
             
             const purpose = document.getElementById('tev-purpose').value.trim();
@@ -1128,128 +1129,134 @@
                     if (index > 0) doc.addPage();
 
                     let curY = 20;
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(14);
                     doc.text("CERTIFICATION OF EXPENSES NOT REQUIRING RECEIPTS", 105, curY, {align: "center"});
                     
-                    curY += 5;
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+                    curY += 6;
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
                     doc.text("Pursuant to COA Circular No. 2017-001 dated June 19, 2017", 105, curY, {align: "center"});
 
-                    curY += 8;
+                    curY += 10;
                     
-                    // --- BOX 1: EMPLOYEE INFO ---
-                    doc.rect(15, curY, 180, 18); 
-                    doc.line(55, curY, 55, curY + 18);
-                    doc.line(145, curY, 145, curY + 9);
-                    doc.line(165, curY, 165, curY + 9);
-                    doc.line(15, curY + 9, 195, curY + 9);
-                    doc.line(15, curY + 13.5, 55, curY + 13.5);
+                    // --- EMPLOYEE INFO TABLE ---
+                    doc.rect(15, curY, 180, 16);
+                    doc.line(15, curY+8, 195, curY+8);   // mid horizontal
+                    doc.line(55, curY, 55, curY+16);     // vert 1
+                    doc.line(135, curY, 135, curY+16);   // vert 2
+                    doc.line(165, curY, 165, curY+16);   // vert 3
 
-                    doc.setFontSize(8.5);
-                    doc.text("Name of Employee", 35, curY + 5.5, {align: "center"});
-                    doc.setFont("helvetica", "bold"); doc.text(currentUser.full_name.toUpperCase(), 58, curY + 5.5);
-                    
+                    doc.setFontSize(9);
+                    doc.text("Name of Employee", 17, curY + 5.5);
+                    doc.setFont("helvetica", "bold"); 
+                    doc.text(currentUser.full_name.toUpperCase(), 57, curY + 5.5);
                     doc.setFont("helvetica", "normal"); 
-                    doc.text("Employee", 155, curY + 4, {align: "center"}); 
-                    doc.text("No.", 155, curY + 7.5, {align: "center"});
-                    doc.setFont("helvetica", "bold"); doc.text(currentUser.emp_id || "", 180, curY + 5.5, {align: "center"});
+                    doc.text("Employee No.", 137, curY + 5.5);
+                    doc.text(currentUser.emp_id || "", 167, curY + 5.5); 
                     
-                    doc.setFont("helvetica", "normal"); 
-                    doc.text("Office", 35, curY + 12, {align: "center"});
+                    doc.text("Office", 17, curY + 13.5);
                     let officeName = empUnit === "PARPO" || empDiv === "PARPO" ? "OFFICE OF THE PARPO II" : empUnit;
-                    doc.setFont("helvetica", "bold"); doc.text(officeName.toUpperCase(), 58, curY + 12);
+                    doc.setFont("helvetica", "bold"); 
+                    doc.text(officeName.toUpperCase(), 57, curY + 13.5);
                     
-                    doc.setFont("helvetica", "normal"); doc.text("Division", 35, curY + 16.5, {align: "center"});
-                    doc.setFont("helvetica", "bold"); doc.text(empDiv, 58, curY + 16.5);
+                    doc.setFont("helvetica", "normal"); 
+                    doc.text("Division", 137, curY + 13.5);
+                    doc.setFont("helvetica", "bold"); 
+                    doc.text(empDiv, 167, curY + 13.5); 
                     
-                    curY += 18;
+                    curY += 20;
 
-                    // --- BOX 2: PARTICULARS TABLE ---
-                    doc.rect(15, curY, 180, 7);
-                    doc.line(145, curY, 145, curY + 7);
+                    // --- PARTICULARS HEADER ---
+                    doc.rect(15, curY, 180, 8);
+                    doc.line(155, curY, 155, curY+8);
+                    
                     doc.setFont("helvetica", "bold");
-                    doc.text("PARTICULARS", 80, curY + 5, {align: "center"});
-                    doc.text("AMOUNT", 170, curY + 5, {align: "center"});
-                    curY += 7;
+                    doc.text("PARTICULARS", 85, curY + 5.5, {align: "center"});
+                    doc.text("AMOUNT", 175, curY + 5.5, {align: "center"});
+                    curY += 8;
 
+                    // Date Subheader
                     let dayTotalAmount = 0;
                     doc.rect(15, curY, 180, 7);
-                    doc.line(145, curY, 145, curY + 7);
-                    doc.setFont("helvetica", "bold");
+                    doc.line(155, curY, 155, curY+7);
                     const formatDestDate = new Date(day.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-                    doc.text(formatDestDate, 18, curY + 5);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(formatDestDate, 17, curY + 5);
                     curY += 7;
 
+                    // --- ITEMS ---
                     doc.setFont("helvetica", "normal");
                     for (let item of day.items) {
-                        doc.rect(15, curY, 180, 7);
-                        doc.line(145, curY, 145, curY + 7);
-                        doc.text(item.particular.toUpperCase(), 142, curY + 5, {align: "right"});
+                        let partLines = doc.splitTextToSize(item.particular.toUpperCase(), 135);
+                        let rowHeight = Math.max(7, partLines.length * 5 + 2);
+                        
+                        doc.rect(15, curY, 180, rowHeight);
+                        doc.line(155, curY, 155, curY+rowHeight);
+                        
+                        doc.text(partLines, 17, curY + 5);
+                        
                         let amt = parseFloat(item.amount) || 0;
                         dayTotalAmount += amt;
-                        doc.text(amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}), 192, curY + 5, {align: "right"});
-                        curY += 7;
+                        doc.text(amt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits:2}), 193, curY + 5, {align: "right"});
+                        
+                        curY += rowHeight;
                     }
 
-                    doc.rect(15, curY, 180, 7);
-                    doc.line(145, curY, 145, curY + 7);
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text("T O T A L", 140, curY + 5, {align: "right"});
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text(dayTotalAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}), 192, curY + 5, {align: "right"});
-                    curY += 7;
+                    // --- TOTAL ROW ---
+                    doc.rect(15, curY, 180, 8);
+                    doc.line(155, curY, 155, curY+8);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text("T O T A L", 145, curY + 5.5, {align: "right"});
+                    doc.setFont("helvetica", "normal");
+                    doc.text(dayTotalAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits:2}), 193, curY + 5.5, {align: "right"});
+                    curY += 12;
 
-                    // --- BOX 3: PURPOSE ---
-                    doc.rect(15, curY, 180, 22);
-                    doc.setFont("helvetica", "bold"); doc.text("PURPOSE", 18, curY + 5);
+                    // --- PURPOSE ---
+                    doc.rect(15, curY, 180, 25);
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+                    doc.text("PURPOSE:", 17, curY + 6);
                     doc.setFont("helvetica", "normal");
                     
-                    let pLines = doc.splitTextToSize(purpose, 174);
-                    let py = curY + 10;
+                    let pLines = doc.splitTextToSize(purpose, 175);
+                    let py = curY + 12;
                     for(let line of pLines) {
-                        doc.text(line, 18, py);
-                        py += 4.5;
+                        doc.text(line, 17, py);
+                        py += 5;
                     }
-                    curY += 22;
+                    curY += 30;
 
-                    // --- BOX 4: CERTIFICATION ---
-                    doc.rect(15, curY, 180, 16);
-                    doc.setFontSize(8.5);
-                    const certStr = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited\npurpose; that above goods and services were acquired from parties not issuing receipts; And\nthat I am fully aware that willful falsification of statements is punishable by law.";
-                    doc.text(certStr, 18, curY + 5);
-                    curY += 16;
+                    // --- CERTIFICATION ---
+                    doc.setFontSize(9);
+                    const certStr = "I hereby certify that the above expenses are incurred as they are necessary for the above-cited purpose; that the\nabove goods and services were acquired from parties not issuing receipts; and that I am fully aware that willful\nfalsification of statements is punishable by law.";
+                    let certLines = doc.splitTextToSize(certStr, 180);
+                    doc.text(certLines, 15, curY);
+                    curY += (certLines.length * 5) + 5;
 
-                    // --- BOX 5: SIGNATURES (Amplified space) ---
-                    let sigHeight = 40; 
-                    doc.rect(15, curY, 180, sigHeight);
-                    
-                    doc.line(15, curY + 6, 195, curY + 6); 
-                    doc.line(15, curY + 24, 195, curY + 24); // 18 units for signature space
-                    doc.line(15, curY + 30, 195, curY + 30); // printed name row
-                    doc.line(15, curY + 35, 195, curY + 35); // position row
+                    // --- SIGNATORIES ---
+                    doc.rect(15, curY, 180, 35);
+                    doc.line(105, curY, 105, curY+35); // middle divider
 
-                    doc.line(35, curY, 35, curY + sigHeight); // Signature label col
-                    doc.line(115, curY, 115, curY + sigHeight); // Mid divider
+                    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+                    doc.text("Certified Correct:", 17, curY + 6);
+                    doc.text("Noted by:", 107, curY + 6);
+
+                    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+                    doc.text(currentUser.full_name.toUpperCase(), 60, curY + 23, {align: "center"});
+                    doc.text(chiefName.toUpperCase(), 150, curY + 23, {align: "center"});
+
+                    doc.line(25, curY + 24, 95, curY + 24);
+                    doc.line(115, curY + 24, 185, curY + 24);
 
                     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-                    doc.text("Certified Correct:", 38, curY + 4);
-                    doc.text("Noted by:", 118, curY + 4);
+                    doc.text("Employee", 60, curY + 28, {align: "center"});
+                    doc.text(chiefPos, 150, curY + 28, {align: "center"});
 
-                    doc.text("Signature", 25, curY + 16, {align: "center"});
-                    doc.text("Printed", 25, curY + 28, {align: "center"});
-                    doc.text("Name", 25, curY + 33.5, {align: "center"});
-                    doc.text("Date", 25, curY + 38.5, {align: "center"});
+                    // Date field
+                    doc.text("Date:", 25, curY + 33);
+                    doc.text(formatDestDate, 40, curY + 33); 
+                    doc.line(35, curY + 34, 75, curY + 34);
 
-                    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-                    doc.text(currentUser.full_name.toUpperCase(), 75, curY + 28, {align: "center"});
-                    doc.text(chiefName.toUpperCase(), 155, curY + 28, {align: "center"});
-
-                    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-                    doc.text("Employee", 75, curY + 33.5, {align: "center"});
-                    doc.text("Immediate Supervisor", 155, curY + 33.5, {align: "center"});
-                    
-                    doc.text(formatDestDate, 75, curY + 38.5, {align: "center"});
-                    doc.text(formatDestDate, 155, curY + 38.5, {align: "center"});
+                    doc.text("Date:", 115, curY + 33);
+                    doc.line(125, curY + 34, 165, curY + 34);
                 });
 
                 window.closeTevModal();
@@ -1259,6 +1266,7 @@
             }
         };
 
+        
         window.loadCredits = async function() {
             const container = document.getElementById('leave-balances-container');
             const ctoContainer = document.getElementById('cto-posting-container');
