@@ -2302,7 +2302,7 @@ window.generateOfficialPDF = async function(toNo) {
             renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
             
             // Force aligned Signature positions mapping exactly to renderSigs Y-axes (Y=171, 173, 177)
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 148, 24, 24); } catch(e){} }
+            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 153, 20, 20); } catch(e){} }
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); 
             doc.text("RICARDO C. GARCIA", 127, 171, {align: 'center'});
             doc.line(100, 173, 155, 173); 
@@ -2332,7 +2332,6 @@ window.generateOfficialPDF = async function(toNo) {
         await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-
         
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
