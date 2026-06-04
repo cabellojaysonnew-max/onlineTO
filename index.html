@@ -1365,161 +1365,145 @@ window.generateTEVPDF = async function() {
 
 
         
-        window.loadCredits = async function() {
-            const container = document.getElementById('leave-balances-container');
-            const ctoContainer = document.getElementById('cto-posting-container');
-            container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
-            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+window.loadCredits = async function() {
+    const container = document.getElementById('leave-balances-container');
+    const ctoContainer = document.getElementById('cto-posting-container');
+    container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
+
+    // 1. FETCH BASELINE FROM HR (Employees Table)
+    const { data: emp } = await supabase.from('employees')
+        .select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance')
+        .eq('emp_id', currentUser.emp_id)
+        .maybeSingle();
+
+    // Initialize as REAL NUMBERS so we can do math on them
+    let currentVL = emp && emp.vl_balance ? parseFloat(emp.vl_balance) : 0;
+    let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
+    let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
+    let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
+    let currentCTO = emp && emp.cto_balance ? parseFloat(emp.cto_balance).toFixed(3) : "0.000";
+
+    // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
+    const { data: ledgers } = await supabase.from('leave_ledger')
+        .select('*')
+        .eq('emp_id', currentUser.emp_id)
+        .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION'])
+        .order('start_date', { ascending: false });
+
+    // 3. GENERATE DUAL-COLUMN LEDGER AND DO THE MATH
+    let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
+        <tr style="background: var(--dar-green); color: white;">
+            <th style="padding: 8px 5px; text-align: left;">Date</th>
+            <th style="padding: 8px 5px; text-align: left;">Type / Remarks</th>
+            <th style="padding: 8px 5px; text-align: center;">Earned (+)</th>
+            <th style="padding: 8px 5px; text-align: center;">Used (-)</th>
+        </tr>`;
+    let hasDeductions = false;
+
+    if (ledgers && ledgers.length > 0) {
+        ledgers.forEach(l => {
+            let rawCredit = parseFloat(l.credit);
+            let rawDebit = parseFloat(l.debit);
             
-            const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('*')
-                .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION'])
-                .order('created_at', { ascending: true });
-            
-            // Default to Employee table if no ledger history exists
-            let vl_net = emp && emp.vl_balance ? parseFloat(emp.vl_balance) : 0;
-            let sl_net = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
-            let spl_net = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
-            let wl_net = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
+            let cVal = isNaN(rawCredit) ? 0 : Math.abs(rawCredit);
+            let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
-            if (isNaN(vl_net)) vl_net = 0;
-            if (isNaN(sl_net)) sl_net = 0;
-            if (isNaN(spl_net)) spl_net = 0;
-            if (isNaN(wl_net)) wl_net = 0;
-            
-            let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
-                <tr style="background: var(--dar-green); color: white;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Days</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
-                </tr>`;
-            let hasDeductions = false;
-
-            if (ledgers && ledgers.length > 0) {
-                // Find the absolute latest manual input to override history before it
-                let latestManual = [...ledgers].reverse().find(l => String(l.remarks || '').toUpperCase().includes('MANUAL BALANCE SETTING'));
-
-                if (latestManual) {
-                    const remarks = String(latestManual.remarks || '').toUpperCase();
-                    const vlMatch = remarks.match(/VL:\s*([0-9.-]+)/i);
-                    const slMatch = remarks.match(/SL:\s*([0-9.-]+)/i);
-                    const splMatch = remarks.match(/SPL:\s*([0-9.-]+)/i);
-                    const wlMatch = remarks.match(/WL:\s*([0-9.-]+)/i);
-                    
-                    vl_net = vlMatch ? parseFloat(vlMatch[1]) || 0 : 0;
-                    sl_net = slMatch ? parseFloat(slMatch[1]) || 0 : 0;
-                    spl_net = splMatch ? parseFloat(splMatch[1]) || 0 : 0;
-                    wl_net = wlMatch ? parseFloat(wlMatch[1]) || 0 : 0;
-                } else {
-                    vl_net = 0; sl_net = 0; spl_net = 0; wl_net = 0; 
+            // ---> THE FIX: APPLY THE MATH TO THE BALANCES <---
+            // We ignore 'APPLICATION' (pending) so it only deducts when finalized
+            if (l.transaction_type !== 'APPLICATION') {
+                let leaveType = (l.type || '').toUpperCase();
+                
+                if (leaveType.includes('SPECIAL PRIVILEGE')) {
+                    currentSPL = currentSPL + cVal - dVal;
+                } else if (leaveType.includes('WELLNESS')) {
+                    currentWL = currentWL + cVal - dVal;
+                } else if (leaveType.includes('VL') || leaveType.includes('VACATION')) {
+                    currentVL = currentVL + cVal - dVal;
+                } else if (leaveType.includes('SL') || leaveType.includes('SICK')) {
+                    currentSL = currentSL + cVal - dVal;
                 }
-
-                ledgers.forEach(l => {
-                    const l_type = String(l.type || '').toUpperCase();
-                    const transType = String(l.transaction_type || '').toUpperCase();
-                    const remarks = String(l.remarks || '').toUpperCase();
-                    const idStr = (l_type + " " + transType + " " + remarks);
-                    
-                    // Skip manual balance settings as we already established the baseline
-                    if (remarks.includes('MANUAL BALANCE SETTING')) return;
-
-                    // Parse numericals firmly regardless of text origin
-                    let cVal = Math.abs(parseFloat(String(l.credit || "0"))) || 0;
-                    let dVal = Math.abs(parseFloat(String(l.debit || "0"))) || 0;
-
-                    let netChange = cVal - dVal;
-
-                    if (idStr.includes('SICK') || idStr.match(/\bSL\b/) || idStr.includes('(SL)')) {
-                        sl_net += netChange;
-                    }
-                    else if (idStr.includes('SPECIAL PRIVILEGE') || idStr.match(/\bSPL\b/) || idStr.includes('(SPL)')) {
-                        spl_net += netChange;
-                    }
-                    else if (idStr.includes('WELLNESS') || idStr.match(/\bWL\b/) || idStr.includes('(WL)')) {
-                        wl_net += netChange;
-                    }
-                    else if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => idStr.includes(x)) || idStr.match(/\bVL\b/) || idStr.includes('(VL)')) {
-                        vl_net += netChange;
-                    }
-
-                    if ((cVal > 0 || dVal > 0) && ['CREDIT', 'APPROVED', 'DEDUCTION', 'APPLICATION'].includes(transType)) {
-                        hasDeductions = true;
-                        let valStr = cVal > 0 ? `+${cVal}` : `-${dVal}`;
-                        let tColor = cVal > 0 ? 'var(--success)' : 'var(--danger)';
-                        let displayType = l.type ? l.type : (transType === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
-
-                        deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${l.start_date || l.created_at.split('T')[0]}</td>
-                            <td style="padding: 5px;">${displayType}</td>
-                            <td style="padding: 5px; text-align: center; color: ${tColor}; font-weight:bold;">${valStr}</td>
-                            <td style="padding: 5px; color: gray;">${l.remarks || l.transaction_type}</td>
-                        </tr>`;
-                    }
-                });
             }
-            deductionsHtml += `</table>`;
-            if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No records found.</p>`;
 
-            let currentVL = Math.max(0, vl_net).toFixed(3);
-            let currentSL = Math.max(0, sl_net).toFixed(3);
-            let currentSPL = Math.max(0, spl_net).toFixed(3);
-            let currentWL = Math.max(0, wl_net).toFixed(3);
+            // Show row if it has values OR if it's a Manual Input/Application
+            if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION') {
+                hasDeductions = true;
+                
+                let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
+                let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : '';
 
-            container.innerHTML = `
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL}</span></div>
-                    <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL}</span></div>
-                </div>
-                <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Deductions</h5>
-                ${deductionsHtml}
-            `;
+                let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
+                let debStr = dVal > 0 ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
 
-            const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
-            
-            let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
-                <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
-                    <th style="padding: 5px; text-align: left;">Date</th>
-                    <th style="padding: 5px; text-align: left;">Type</th>
-                    <th style="padding: 5px; text-align: center;">Hrs</th>
-                    <th style="padding: 5px; text-align: left;">Remarks</th>
+                deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
+                    <td style="padding: 8px 5px; vertical-align: top;">
+                        <strong style="color: var(--text-main);">${displayType}</strong> ${statusBadge}<br>
+                        <span style="color: gray; font-size: 9px;">${l.remarks || l.transaction_type}</span>
+                    </td>
+                    <td style="padding: 8px 5px; text-align: center; vertical-align: top; background: #f0fdf4;">${credStr}</td>
+                    <td style="padding: 8px 5px; text-align: center; vertical-align: top; background: #fef2f2;">${debStr}</td>
                 </tr>`;
-            let hasCto = false;
-            
-            if(cto && cto.length > 0) {
-                cto.forEach(c => {
-                    const ttype = (c.transaction_type || '').toUpperCase();
-                    if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
-                        hasCto = true;
-                        let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
-                        let sign = ttype === 'USED' ? '-' : '+';
-                        ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 5px;">${c.date}</td>
-                            <td style="padding: 5px;">${ttype}</td>
-                            <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${c.calculated_hours}</td>
-                            <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
-                        </tr>`;
-                    }
-                });
             }
-            ctoHtml += `</table>`;
+        });
+    }
+    deductionsHtml += `</table>`;
+    
+    if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No leave records found.</p>`;
 
-            if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
-            
-            ctoContainer.innerHTML = `
-                <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-                    <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${emp?.cto_balance || 0} hrs</span>
-                </div>
-                ${ctoHtml}
-            `;
-        };
+    // Render the Finalized Math (Converting back to 3 decimal places)
+    container.innerHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL.toFixed(3)}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL.toFixed(3)}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL.toFixed(3)}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL.toFixed(3)}</span></div>
+        </div>
+        <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Transactions</h5>
+        ${deductionsHtml}
+    `;
 
+    // 4. CTO STATUS HISTORY (Remains exactly the same)
+    const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
+    
+    let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
+        <tr style="background: #fefce8; color: #854d0e; border: 1px solid #fef08a;">
+            <th style="padding: 5px; text-align: left;">Date</th>
+            <th style="padding: 5px; text-align: left;">Type</th>
+            <th style="padding: 5px; text-align: center;">Hrs</th>
+            <th style="padding: 5px; text-align: left;">Remarks</th>
+        </tr>`;
+    let hasCto = false;
+    
+    if(cto && cto.length > 0) {
+        cto.forEach(c => {
+            const ttype = (c.transaction_type || '').toUpperCase();
+            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
+                hasCto = true;
+                let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
+                let sign = ttype === 'USED' ? '-' : '+';
+                ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 5px;">${c.date}</td>
+                    <td style="padding: 5px;">${ttype}</td>
+                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${parseFloat(c.calculated_hours).toFixed(3)}</td>
+                    <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                </tr>`;
+            }
+        });
+    }
+    ctoHtml += `</table>`;
 
+    if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
+    
+    ctoContainer.innerHTML = `
+        <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
+            <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${currentCTO} hrs</span>
+        </div>
+        ${ctoHtml}
+    `;
+};
 
+        
         
         window.showEmployeeQR = function() {
             const container = document.getElementById('my-qr-container');
@@ -2055,10 +2039,44 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
-  window.generateOfficialPDF = async function(toNo) {
+window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
+
+    // HELPER: Groups dates into formats like "March 1-3, 2026" or "March 1, 2026, March 4-5, 2026"
+    const groupConsecutiveDates = (dates) => {
+        if (!dates || !dates.length) return "";
+        const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
+        let result = [];
+        let tempGroup = [sorted[0]];
+
+        for (let i = 1; i < sorted.length; i++) {
+            const prevDate = tempGroup[tempGroup.length - 1];
+            const currDate = sorted[i];
+            const diffDays = Math.ceil(Math.abs(currDate - prevDate) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1 && prevDate.getMonth() === currDate.getMonth()) {
+                tempGroup.push(currDate);
+            } else {
+                result.push(tempGroup);
+                tempGroup = [currDate];
+            }
+        }
+        result.push(tempGroup);
+
+        return result.map(grp => {
+            const first = grp[0];
+            const monthStr = first.toLocaleDateString('en-US', { month: 'long' });
+            const yearStr = first.getFullYear();
+            if (grp.length === 1) {
+                return `${monthStr} ${first.getDate()}, ${yearStr}`;
+            } else {
+                const last = grp[grp.length - 1];
+                return `${monthStr} ${first.getDate()}-${last.getDate()}, ${yearStr}`;
+            }
+        }).join(', ');
+    };
 
     try {
         const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
@@ -2179,7 +2197,6 @@ window.modifyPendingTO = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.text("NAME:", 20, 48); 
         doc.setFont("helvetica", "normal");
         
-        // Increased right margin: mapped line limit to 175, adjusting maxWidth accordingly
         let nameLinesCount = renderFlexibleText(names, 40, 48, 135, 175, 10, 4);
 
         let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
@@ -2190,7 +2207,6 @@ window.modifyPendingTO = async function(toNo) {
         
         doc.setFont("helvetica", "bold"); doc.text("STATION:", 90, nextY);
         doc.setFont("helvetica", "normal"); 
-        // Increased right margin: mapped line limit to 175, adjusting maxWidth accordingly
         let statLinesCount = renderFlexibleText(stations, 110, nextY, 65, 175, 10, 2);
 
         let maxSubLines = Math.max(posLinesCount, statLinesCount);
@@ -2218,15 +2234,21 @@ window.modifyPendingTO = async function(toNo) {
         doc.setFontSize(10); doc.setFont("helvetica", "bold");
         let destLabelY = transY + 17;
         doc.text("DESTINATION:", 20, destLabelY);
-        const formatDestDate = (dateStr) => new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         doc.setFont("helvetica", "normal"); doc.setFontSize(7);
         let destY = destLabelY;
         
-        // Reduced to 125 width to increase right margin
         const destMaxWidth = 125;
 
+        // Grouping Same Destinations Over Same/Consecutive Dates
+        const destMap = new Map();
         itin_list.forEach(it => {
-            const fullDestText = `${formatDestDate(it.travel_date)} - ${it.destination}`;
+            if (!destMap.has(it.destination)) destMap.set(it.destination, []);
+            destMap.get(it.destination).push(it.travel_date);
+        });
+
+        destMap.forEach((dates, dest) => {
+            const formattedDates = groupConsecutiveDates(dates);
+            const fullDestText = `${formattedDates} - ${dest}`;
             const wrappedDestLines = doc.splitTextToSize(fullDestText, destMaxWidth);
             wrappedDestLines.forEach((line) => {
                 doc.text(line, 50, destY);
@@ -2258,36 +2280,44 @@ window.modifyPendingTO = async function(toNo) {
         doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
         
-        // Changed end line X from 190 to 175
         doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 175, curY+1);
 
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-        // Changed end line X from 190 to 175
         doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 175, curY+1);
         
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
         curY += 4;
         
-        const uniquePurposes = [...new Set(itin_list.map(i => i.purpose).filter(Boolean))].join('; ');
+        // Grouping Same Purposes Over Same/Consecutive Dates
+        const purpMap = new Map();
+        itin_list.forEach(it => {
+            if (!it.purpose) return;
+            if (!purpMap.has(it.purpose)) purpMap.set(it.purpose, []);
+            purpMap.get(it.purpose).push(it.travel_date);
+        });
+
+        let groupedPurposes = [];
+        purpMap.forEach((dates, purp) => {
+            const formattedDates = groupConsecutiveDates(dates);
+            groupedPurposes.push(`${formattedDates} - ${purp}`);
+        });
+        const finalPurposeStr = groupedPurposes.join('; ');
         
-        // New Font Shrinking Logic for Purpose to prevent vertical/horizontal overlap
         let purpFontSize = 9;
         doc.setFont("helvetica", "normal"); doc.setFontSize(purpFontSize);
         
-        // Wrapped to 155 to give a clean right margin ending at 175
-        let purpLines = doc.splitTextToSize(uniquePurposes || "", 155);
+        let purpLines = doc.splitTextToSize(finalPurposeStr || "", 155);
         
         while (purpLines.length > 3 && purpFontSize > 5) {
             purpFontSize -= 0.5;
             doc.setFontSize(purpFontSize);
-            purpLines = doc.splitTextToSize(uniquePurposes || "", 155);
+            purpLines = doc.splitTextToSize(finalPurposeStr || "", 155);
         }
 
         purpLines.forEach((line) => {
             doc.text(line, 20, curY);
-            // Changed line limit from 190 to 175
             doc.line(20, curY + 1, 175, curY + 1);
             curY += 4.5; 
         });
@@ -2309,7 +2339,6 @@ window.modifyPendingTO = async function(toNo) {
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    // Lowered image location by +5 margin pts
                     try { doc.addImage(imgs[j], 'PNG', imgX, 155, imgSize, imgSize); } catch(e){} 
                 }
                 
@@ -2322,13 +2351,11 @@ window.modifyPendingTO = async function(toNo) {
                 }
                 
                 doc.setFont("helvetica", "bold");
-                // Lowered by +5 margin pts
                 doc.text(name, cx, 171, { align: 'center' });
 
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-                // Lowered by +5 margin pts
                 doc.line(lineStart, 173, lineEnd, 173);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(7);
@@ -2343,11 +2370,13 @@ window.modifyPendingTO = async function(toNo) {
             // Division Chief Signatures (Dynamically handles multiple)
             renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
             
-            // Scaled PARPO II Signature to 24x24 instead of 30x30
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 115, 145, 24, 24); } catch(e){} }
-            doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-            doc.text("RICARDO C. GARCIA", 127, 166, {align: 'center'});
-            doc.line(100, 168, 155, 168); doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.text("PARPO II", 127, 172, {align: 'center'});
+            // Force aligned Signature positions mapping exactly to renderSigs Y-axes (Y=171, 173, 177)
+            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 153, 20, 20); } catch(e){} }
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8); 
+            doc.text("RICARDO C. GARCIA", 127, 171, {align: 'center'});
+            doc.line(100, 173, 155, 173); 
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7); 
+            doc.text("PARPO II", 127, 177, {align: 'center'});
             
             doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
             doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
