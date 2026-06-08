@@ -1554,6 +1554,9 @@ window.loadCredits = async function() {
             }
         };
 
+
+
+    
         window.generateItinFields = async function() {
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
@@ -1619,8 +1622,8 @@ window.loadCredits = async function() {
                         const isDisapproved = to.status.includes('DISAPPROVED');
                         
                         if (isDisapproved) {
-                            alert(`Conflict: You have a DISAPPROVED TO (${to.to_no}) on ${dateStr}. Overwriting is not allowed. Please select a different date.`);
-                            container.innerHTML = ""; return;
+                            // Do not block or overwrite. Allow new filing to proceed, keeping the denied record intact.
+                            continue;
                         }
 
                         const promptMsg = isApproved ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)` : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
@@ -1653,7 +1656,7 @@ window.loadCredits = async function() {
                 currentDt.setDate(currentDt.getDate() + 1);
             }
         };
-
+    
         window.removeItinCard = function(cardId, date) {
             if(!confirm(`Remove ${date}?`)) return;
             document.getElementById(cardId).remove();
