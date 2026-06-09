@@ -1586,8 +1586,10 @@ window.loadCredits = async function() {
             const start = new Date(fromDate);
             const end = new Date(toDate);
             const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-            if (diffDays > 5) return alert("Maximum of 5 days allowed.");
+            const isOutsideBicol = document.getElementById('to-outside-bicol').checked;
+            if (!isOutsideBicol && diffDays > 5) return alert("Maximum of 5 days allowed for local travels");
 
+            
             const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             let hasPSO = false;
@@ -2172,11 +2174,20 @@ window.generateOfficialPDF = async function(toNo) {
         }
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-        doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+        
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
+            doc.text(`TRAVEL ORDER NO. ________________`, 105, 35, { align: 'center' });
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text(`Provincial Travel Order Number: ${toNo}`, 105, 39, { align: 'center' });
+        } else {
+            doc.text(`TRAVEL ORDER NO. ${toNo}`, 105, 35, { align: 'center' });
+        }
+
         const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-        doc.text(`Date: ${fDate}`, 105, 42, { align: 'center' });
+        doc.text(`Date: ${fDate}`, 105, 43, { align: 'center' });
 
+        
         const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
             let currentSize = defaultSize;
             doc.setFontSize(currentSize);
@@ -2261,12 +2272,16 @@ window.generateOfficialPDF = async function(toNo) {
         
         let curY = Math.max(destY, destLabelY + 5);
 
-        let returnDateStr = itin_list[itin_list.length-1]?.travel_date || "";
+      // Sort explicitly to guarantee earliest and latest are accurate
+        const sortedItin = [...itin_list].sort((a, b) => new Date(a.travel_date) - new Date(b.travel_date));
+        let earliestDate = sortedItin[0]?.travel_date || "";
+        let latestDate = sortedItin[sortedItin.length - 1]?.travel_date || "";
+
         let isContinuous = true;
-        if (itin_list.length > 1) {
-            for (let i = 0; i < itin_list.length - 1; i++) {
-                let d1 = new Date(itin_list[i].travel_date);
-                let d2 = new Date(itin_list[i+1].travel_date);
+        if (sortedItin.length > 1) {
+            for (let i = 0; i < sortedItin.length - 1; i++) {
+                let d1 = new Date(sortedItin[i].travel_date);
+                let d2 = new Date(sortedItin[i+1].travel_date);
                 let diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
                 if (diff !== 1) {
                     isContinuous = false;
@@ -2274,17 +2289,18 @@ window.generateOfficialPDF = async function(toNo) {
                 }
             }
         }
-        if (!isContinuous && itin_list.length > 1) {
+
+        let returnDateStr = latestDate;
+        if (!isContinuous && sortedItin.length > 1) {
             returnDateStr = "PM OF THE SAME DATES";
         }
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
         doc.text("DEPARTURE DATE:", 20, curY);
-        doc.setFont("helvetica", "normal"); doc.text(itin_list[0]?.travel_date || "", 55, curY); doc.line(55, curY+1, 90, curY+1);
+        doc.setFont("helvetica", "normal"); doc.text(earliestDate, 55, curY); doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
         
         doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 175, curY+1);
-
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
         doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 175, curY+1);
@@ -2301,13 +2317,20 @@ window.generateOfficialPDF = async function(toNo) {
             purpMap.get(it.purpose).push(it.travel_date);
         });
 
-        let groupedPurposes = [];
-        purpMap.forEach((dates, purp) => {
-            const formattedDates = groupConsecutiveDates(dates);
-            groupedPurposes.push(`${formattedDates} - ${purp}`);
-        });
-        const finalPurposeStr = groupedPurposes.join('; ');
+  let finalPurposeStr = "";
         
+        if (purpMap.size === 1) {
+            // If there's only 1 unique purpose, summarize it without dating
+            finalPurposeStr = Array.from(purpMap.keys())[0];
+        } else {
+            // Mixed purposes: group by consecutive dates
+            let groupedPurposes = [];
+            purpMap.forEach((dates, purp) => {
+                const formattedDates = groupConsecutiveDates(dates);
+                groupedPurposes.push(`${formattedDates} - ${purp}`);
+            });
+            finalPurposeStr = groupedPurposes.join('; ');
+        }        
         let purpFontSize = 9;
         doc.setFont("helvetica", "normal"); doc.setFontSize(purpFontSize);
         
