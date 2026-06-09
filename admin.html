@@ -421,19 +421,24 @@
             return remarks + ` | ROUTING_STATUS: ${newStatus}`;
         }
 
-        function getLeaveAppPayload(u, leaveRec) {
+            function getLeaveAppPayload(u, leaveRec) {
             const role = u.role ? u.role.trim().toUpperCase() : "";
             const currentStatus = getLeaveStatus(leaveRec.remarks || "");
             let nextStatus = currentStatus;
             let transType = "APPLICATION";
 
-            if (role === "UNIT_HEAD" || role === "UNIT HEAD") {
+            const empUnit = leaveRec.unit ? leaveRec.unit.trim().toUpperCase() : "";
+
+            if (role === "HRMO" || role === "ADMIN") {
+                nextStatus = "APPROVED";
+                transType = "APPROVED";
+            } else if (empUnit === "PARPO") {
+                // PARPO Unit bypasses all other approvals and goes straight to HRMO
+                nextStatus = "PENDING_HRMO";
+            } else if (role === "UNIT_HEAD" || role === "UNIT HEAD") {
                 nextStatus = "PENDING_CHIEF";
             } else if (role === "CHIEF" || role === "MARPO") {
                 nextStatus = "PENDING_HRMO";
-            } else if (role === "HRMO" || role === "ADMIN") {
-                nextStatus = "APPROVED";
-                transType = "APPROVED";
             }
 
             return {
@@ -441,7 +446,7 @@
                 remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus)
             };
         }
-
+        
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
         function showCancelModal(to_no, datesEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
@@ -1136,12 +1141,16 @@
 
                     const s = getLeaveStatus(l.remarks || "");
 
-                    if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
-                        if ((r === "UNIT_HEAD" || r === "UNIT HEAD") && s === "PENDING_UNIT_HEAD") show = true;
-                        else if ((r === "CHIEF" || r === "MARPO") && s === "PENDING_CHIEF") show = true;
-                        else if ((r === "HRMO" || r === "ADMIN") && s === "PENDING_HRMO") show = true;
-                    } 
-                    else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
+            if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
+                        const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
+                        
+                        if ((r === "HRMO" || r === "ADMIN") && (s === "PENDING_HRMO" || isParpoUnit)) {
+                            show = true; // HRMO sees it if status is PENDING_HRMO OR if employee is PARPO unit
+                        } else if (!isParpoUnit) {
+                            if ((r === "UNIT_HEAD" || r === "UNIT HEAD") && s === "PENDING_UNIT_HEAD") show = true;
+                            else if ((r === "CHIEF" || r === "MARPO") && s === "PENDING_CHIEF") show = true;
+                        }
+                    }                    else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
                         show = true;
                         textColor = 'text-emerald-600';
                     } 
