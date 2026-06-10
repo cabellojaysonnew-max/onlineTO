@@ -2752,13 +2752,13 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
             
             if (isPARPOUnit) {
-                routeStatus = "PENDING_PARPO";
+                routeStatus = "PENDING_HRMO"; 
             } else if (isMARPO) {
                 routeStatus = "PENDING_CHIEF";
             } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
                 routeStatus = "PENDING_UNIT_HEAD";
-            }
-            
+            } 
+                
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
 
             const dates_to_check = [];
