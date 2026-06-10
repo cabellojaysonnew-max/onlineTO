@@ -1609,8 +1609,9 @@ window.loadCredits = async function() {
             if (!isOutsideBicol && diffDays > 5) return alert("Maximum of 5 days allowed for local travels");
 
             
-            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+           const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const { data: activeLeaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']);
             let hasPSO = false;
 
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
@@ -1631,11 +1632,15 @@ window.loadCredits = async function() {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
+                if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
+                    alert(`Conflict: A Pending/Approved Leave exists on ${dateStr}. Leave shall prevail, TO application cancelled.`);
+                    container.innerHTML = ""; return;
+                }
+
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
                     hasPSO = true; 
                 }
-
                 for (let to of activeTOs || []) {
                     const { data: itins } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
                     if (itins && itins.length > 0) {
@@ -3218,10 +3223,27 @@ const holiday = (holidays || []).find(h => {
                     
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-                    let activityHtml = "";
+let activityHtml = "";
                     if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
-                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                    if(dayItins?.length) {
+                    
+                    if (leave) {
+                        activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+                    } else if (dayItins?.length > 0 && dayItins.some(i => {
+                        let toInfo = (tos || []).find(t => t.to_no === i.to_no);
+                        return toInfo && toInfo.remarks && toInfo.remarks.includes("EXISTING PSO");
+                    })) {
+                        dayItins.forEach(i => {
+                            let toInfo = (tos || []).find(t => t.to_no === i.to_no);
+                            let headerStr = toInfo ? toInfo.to_header : "";
+                            if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                activityHtml += `<div class="cal-entry entry-to">ON OFFICIAL TIME</div>`;
+                            } else {
+                                activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`;
+                            }
+                        });
+                    } else if (dayPsos?.length > 0) {
+                        dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
+                    } else if (dayItins?.length > 0) {
                         dayItins.forEach(i => {
                             let toInfo = (tos || []).find(t => t.to_no === i.to_no);
                             let headerStr = toInfo ? toInfo.to_header : "";
@@ -3232,8 +3254,6 @@ const holiday = (holidays || []).find(h => {
                             }
                         });
                     }
-                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
-
                     let amIn="", amOut="", pmIn="", pmOut="";
                     const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                     
@@ -3444,22 +3464,36 @@ const hol = (holidays || []).find(h => {
 if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             
                             const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                            if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
-                            
                             const to = (itins || []).find(i => i.travel_date === dateStr);
-                            if(to) {
-                                let toInfo = (tos || []).find(t => t.to_no === to.to_no);
-                                let headerStr = toInfo ? toInfo.to_header : "";
-                                if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
-                                    special = "ON OFFICIAL TIME";
-                                } else {
-                                    special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
-                                }
-                            }
-                            
                             const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-                            if(leave) special = String(leave.type).toUpperCase();
+                            
+                            if (leave) {
+                                special = String(leave.type).toUpperCase();
+                            } else if (to) {
+                                let toInfo = (tos || []).find(t => t.to_no === to.to_no);
+                                let hasPsoFlag = toInfo && toInfo.remarks && toInfo.remarks.includes("EXISTING PSO");
 
+                                if (hasPsoFlag) {
+                                    let headerStr = toInfo ? toInfo.to_header : "";
+                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                        special = "ON OFFICIAL TIME";
+                                    } else {
+                                        special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                                    }
+                                } else if (pso) {
+                                    special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                                } else {
+                                    let headerStr = toInfo ? toInfo.to_header : "";
+                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                        special = "ON OFFICIAL TIME";
+                                    } else {
+                                        special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                                    }
+                                }
+                            } else if (pso) {
+                                special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                            }
+                                
                             if (isWeekend && !special) {
                                 special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
                                 if (dayOfWeek === 5) special = "NO FRIDAY WORK";
