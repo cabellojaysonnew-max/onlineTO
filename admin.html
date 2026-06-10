@@ -1250,45 +1250,57 @@
                     attData = data || [];
                 }
 
-                reportData = [];
+               reportData = [];
                 let seen = new Set();
-                (itR.data || []).forEach(i => {
-                    const p = (toR.data || []).find(x => x.to_no === i.to_no);
-                    if(p && i.travel_date && checkScope(p.division, p.unit)) {
-                        const key = `${p.emp_name}-${i.travel_date}`;
-                        if (!seen.has(key)) {
-                            let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
-                            const dStr = i.travel_date.split('T')[0];
-                            
-                            const logsToday = attData.filter(l => {
-                                if(!l.log_time) return false;
-                                const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
-                                return l.emp_id === p.emp_id && logDateStr === dStr;
-                            });
-                            
-                            const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
+                
+                // First, filter all approved TO records for personnel under the user's scope
+                const scopedTOs = (toR.data || []).filter(t => checkScope(t.division, t.unit));
+                
+                scopedTOs.forEach(p => {
+                    // Find all itinerary dates for this TO number
+                    const myItins = (itR.data || []).filter(i => i.to_no === p.to_no);
+                    
+                    myItins.forEach(i => {
+                        if (i.travel_date) {
+                            const key = `${p.emp_id}-${i.travel_date}`; // Use emp_id for unique tracking
+                            if (!seen.has(key)) {
+                                let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
+                                const dStr = i.travel_date.split('T')[0];
+                                
+                                const logsToday = attData.filter(l => {
+                                    if(!l.log_time) return false;
+                                    const logDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(l.log_time));
+                                    return l.emp_id === p.emp_id && logDateStr === dStr;
+                                });
+                                
+                                const mobileLog = logsToday.find(l => l.place_name || (l.device_id && l.device_id.toUpperCase() !== 'TERMINAL' && l.device_id.length > 5));
 
-                            if (mobileLog) {
-                                const loc = (mobileLog.place_name || '').toLowerCase();
-                                const dest = (i.destination || '').toLowerCase();
-                                
-                                const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
-                                const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
-                                
-                                const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
-                                
-                                if (isMatch) {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-emerald-600 font-bold truncate">📱 Employee Reported to the Destination</span></div>`;
-                                } else {
-                                    mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span></div>`;
+                                if (mobileLog) {
+                                    const loc = (mobileLog.place_name || '').toLowerCase();
+                                    const dest = (i.destination || '').toLowerCase();
+                                    
+                                    const ignoreWords = ['city', 'municipality', 'brgy', 'barangay', 'brgy.', 'prov.', 'province'];
+                                    const destParts = dest.split(/[\s,/-]+/).map(x => x.trim()).filter(x => x.length > 2 && !ignoreWords.includes(x));
+                                    
+                                    const isMatch = dest && dest !== 'n/a' && destParts.some(part => loc.includes(part) || part.includes(loc));
+                                    
+                                    if (isMatch) {
+                                        mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-emerald-600 font-bold truncate">📱 Employee Reported to the Destination</span></div>`;
+                                    } else {
+                                        mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-red-500 font-bold truncate">📱 Remote Attendance Log do not match destination</span></div>`;
+                                    }
                                 }
-                            }
 
-                            reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
-                            seen.add(key);
+                                reportData.push({ type: 'TO', date: new Date(i.travel_date), title: p.emp_name, subtitle: i.destination, purpose: i.purpose, color: 'blue', extraHTML: mobileLogInfo });
+                                seen.add(key);
+                            }
                         }
-                    }
+                    });
                 });
+                
+                
+                
+                
                 (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
                 (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', purpose: s.subject, color: 'orange' }); });
                 (hoR.data || []).forEach(h => { if(h.date) {
