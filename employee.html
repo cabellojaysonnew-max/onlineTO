@@ -2563,7 +2563,9 @@ const isHoliday = cachedHolidays.some(h => {
             }
         };
 
-        window.submitLeave = async function() {
+
+        
+window.submitLeave = async function() {
             if (isSubmitting) return;
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const start = document.getElementById('leave-from').value;
@@ -2572,6 +2574,49 @@ const isHoliday = cachedHolidays.some(h => {
             const comm = document.getElementById('leave-commutation').value;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
+
+            // --- LEAVE BALANCE CHECK LOGIC ---
+            const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
+            let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
+            let currentSPL = empData && empData.spl_balance ? parseFloat(empData.spl_balance) : 0;
+            let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
+
+            const { data: ledgers } = await supabase.from('leave_ledger')
+                .select('type, credit, debit, transaction_type')
+                .eq('emp_id', currentUser.emp_id)
+                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
+
+            if (ledgers) {
+                ledgers.forEach(l => {
+                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+                    let lType = (l.type || '').toUpperCase();
+                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
+                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
+                });
+            }
+
+            if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
+                if (days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
+            } else if (type === "Special Privilege Leave") {
+                if (days > currentSPL) return alert(`Insufficient SPL balance. You only have ${currentSPL.toFixed(3)} days available.`);
+            } else if (type === "Wellness Leave") {
+                if (days > currentWL) return alert(`Insufficient Wellness Leave balance. You only have ${currentWL.toFixed(3)} days available.`);
+            } else if (type === "Sick Leave") {
+                if (days > currentSL) {
+                    let deficit = days - currentSL;
+                    if (deficit > currentVL) {
+                        return alert(`Insufficient Sick & Vacation Leave balances. SL: ${currentSL.toFixed(3)}, VL: ${currentVL.toFixed(3)}.`);
+                    } else {
+                        let proceed = confirm(`Insufficient Sick Leave (${currentSL.toFixed(3)} days). As a last resort, the remaining ${deficit.toFixed(3)} days will be charged to your Vacation Leave. Proceed?`);
+                        if (!proceed) return;
+                    }
+                }
+            }
+            // --------------------------------------
 
             // CTO CHECK LOGIC
             const ctoCheck = document.getElementById('vl-cto-credit');
