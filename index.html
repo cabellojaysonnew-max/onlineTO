@@ -341,9 +341,14 @@
                     <input type="date" id="leave-from" onchange="window.calculateLeaveDays()" onkeydown="return false">
                     <input type="date" id="leave-to" onchange="window.calculateLeaveDays()" onkeydown="return false">
                 </div>
-                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-main);">
-                    <input type="checkbox" id="leave-half-day" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day on Last Day
-                </label>
+                <div style="display: flex; gap: 15px; margin-top: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; color: var(--text-main);">
+                        <input type="checkbox" id="leave-half-day-start" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day Start
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; color: var(--text-main);">
+                        <input type="checkbox" id="leave-half-day-end" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day End
+                    </label>
+                </div>
                 <label style="margin-top: 10px;">Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
                 <h4 style="margin-top: 15px;">4. Commutation</h4>
                 <select id="leave-commutation">
@@ -2599,16 +2604,22 @@ const isHoliday = cachedHolidays.some(h => {
                 cur.setDate(cur.getDate() + 1);
             }
 
-            const halfDayCheck = document.getElementById('leave-half-day');
-            if (halfDayCheck && halfDayCheck.checked) {
-                if (count <= 1) {
-                    alert("No half day leave is allowed unless 1 day and a half. First day must be a whole day.");
-                    halfDayCheck.checked = false;
+const halfStartCheck = document.getElementById('leave-half-day-start');
+            const halfEndCheck = document.getElementById('leave-half-day-end');
+            
+            let deduction = 0;
+            if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
+            if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
+
+            if (deduction > 0) {
+                if ((count - deduction) < 1.5) {
+                    alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
+                    if (halfStartCheck) halfStartCheck.checked = false;
+                    if (halfEndCheck) halfEndCheck.checked = false;
                 } else {
-                    count -= 0.5;
+                    count -= deduction;
                 }
             }
-
             document.getElementById('leave-days-count').innerText = count;
 
             const ctoCheck = document.getElementById('vl-cto-credit');            const isCtoCredited = ctoCheck && ctoCheck.checked;
