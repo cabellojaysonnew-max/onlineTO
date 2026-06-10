@@ -1580,7 +1580,10 @@ window.loadCredits = async function() {
 
 
     
+let itinGenCounter = 0; // Tracks execution to prevent race conditions
+        
         window.generateItinFields = async function() {
+            const currentGenId = ++itinGenCounter;
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
@@ -1612,10 +1615,13 @@ window.loadCredits = async function() {
             const isOutsideBicol = document.getElementById('to-outside-bicol').checked;
             if (!isOutsideBicol && diffDays > 5) return alert("Maximum of 5 days allowed for local travels");
 
-            
-           const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             const { data: activeLeaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']);
+            
+            // PREVENT RACE CONDITION: Abort if a newer date selection triggered while fetching
+            if (currentGenId !== itinGenCounter) return;
+
             let hasPSO = false;
 
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
@@ -1636,12 +1642,18 @@ window.loadCredits = async function() {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
-                    if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
-                    // Skip generating itinerary fields for this specific date
+                if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
+                    // Visually blocks the specific day and skips adding textboxes
+                    container.innerHTML += `
+                        <div class="card" style="border-left: 4px solid var(--danger);">
+                            <h5 style="margin: 0; color: var(--danger); font-size: 13px;">📅 ${dateStr}</h5>
+                            <p style="color: var(--danger); font-size: 11px; margin: 8px 0 0 0; font-weight: bold;">
+                                ⚠️ Leave Conflict: A Pending/Approved Leave exists on this date.
+                            </p>
+                        </div>`;
                     currentDt.setDate(currentDt.getDate() + 1);
-                    continue;
+                    continue; 
                 }
-
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
                     hasPSO = true; 
