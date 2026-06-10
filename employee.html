@@ -272,9 +272,14 @@
                     <input type="date" id="leave-from" onchange="window.calculateLeaveDays()" onkeydown="return false">
                     <input type="date" id="leave-to" onchange="window.calculateLeaveDays()" onkeydown="return false">
                 </div>
-                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-main);">
-                    <input type="checkbox" id="leave-half-day" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day on Last Day
-                </label>
+                <div style="display: flex; gap: 15px; margin-top: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; color: var(--text-main);">
+                        <input type="checkbox" id="leave-half-day-start" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day Start
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; color: var(--text-main);">
+                        <input type="checkbox" id="leave-half-day-end" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day End
+                    </label>
+                </div>
                 <label style="margin-top: 10px;">Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
                 <h4 style="margin-top: 15px;">4. Commutation</h4>
                 <select id="leave-commutation">
@@ -1017,6 +1022,18 @@
                 alert("Leave Application is only available for REGULAR employees.");
                 return;
             }
+
+            // PROMPT PREVENTING ACCIDENTAL ERASURE OF TO DRAFT/MODIFICATION
+            if (id !== 'apply-view' && document.getElementById('apply-view').classList.contains('active') && (editingToNo !== null || itineraryDraft.length > 0)) {
+                if (!confirm("You have an active Travel Order modification or draft. Are you sure you want to leave this tab? Unsaved changes will be lost.")) {
+                    return; // Stops the tab switch if they click Cancel
+                }
+                // Clear the draft if they confirm leaving
+                editingToNo = null;
+                itineraryDraft = [];
+                document.getElementById('dynamic-itin-fields').innerHTML = '';
+            }
+
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
@@ -1027,7 +1044,7 @@
             if (id === 'calendar-view') window.renderCalendar();
             if (id === 'credits-view') window.loadCredits();
         };
-
+        
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
@@ -1317,11 +1334,11 @@ window.loadCredits = async function() {
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
     let currentCTO = emp && emp.cto_balance ? parseFloat(emp.cto_balance).toFixed(3) : "0.000";
 
-    // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
+// 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
         .select('*')
         .eq('emp_id', currentUser.emp_id)
-        .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION'])
+        .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION', 'CANCELLED'])
         .order('start_date', { ascending: false });
 
     // 3. GENERATE DUAL-COLUMN LEDGER AND DO THE MATH
@@ -1343,8 +1360,8 @@ window.loadCredits = async function() {
             let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
             // ---> THE FIX: APPLY THE MATH TO THE BALANCES <---
-            // We ignore 'APPLICATION' (pending) so it only deducts when finalized
-            if (l.transaction_type !== 'APPLICATION') {
+            // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
+            if (l.transaction_type !== 'APPLICATION' && l.transaction_type !== 'CANCELLED') {
                 let leaveType = (l.type || '').toUpperCase();
                 
                 if (leaveType.includes('SPECIAL PRIVILEGE')) {
@@ -1358,16 +1375,20 @@ window.loadCredits = async function() {
                 }
             }
 
-            // Show row if it has values OR if it's a Manual Input/Application
-            if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION') {
+            // Show row if it has values OR if it's a Manual Input/Application/Cancelled
+            if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') {
                 hasDeductions = true;
                 
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
-                let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : '';
+                let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
+                                  (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
-                let debStr = dVal > 0 ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
+                // Cancelled deductions show crossed-out
+                let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
+                             (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
+    
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
                     <td style="padding: 8px 5px; vertical-align: top;">
@@ -1523,8 +1544,9 @@ window.loadCredits = async function() {
             if (!isOutsideBicol && diffDays > 5) return alert("Maximum of 5 days allowed for local travels");
 
             
-            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
+           const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
             const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const { data: activeLeaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']);
             let hasPSO = false;
 
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
@@ -1545,11 +1567,15 @@ window.loadCredits = async function() {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
+                if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
+                    alert(`Conflict: A Pending/Approved Leave exists on ${dateStr}. Please cancel your leave application first before proceeding with this Travel Order.`);
+                    container.innerHTML = ""; return;
+                }
+
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
                     if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
                     hasPSO = true; 
                 }
-
                 for (let to of activeTOs || []) {
                     const { data: itins } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
                     if (itins && itins.length > 0) {
@@ -2103,7 +2129,7 @@ window.generateOfficialPDF = async function(toNo) {
 
         if (od.remarks && od.remarks.includes("EXISTING PSO")) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-            doc.text("WITH EXISTING PSO/RSO, subject for PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
+            doc.text("WITH EXISTING PSO/RSO, subject to PARPO's FINAL APPROVAL", 105, 28, { align: 'center' });
         }
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(14);
@@ -2362,12 +2388,12 @@ window.generateOfficialPDF = async function(toNo) {
 };
         
 window.cancelLeaveApp = async function(leaveId) {
-            if(!confirm("Are you sure you want to cancel and permanently delete this leave application?")) return;
+            if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
                 // Fetch the leave application to verify the start date
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date')
+                    .select('start_date, remarks')
                     .eq('id', leaveId)
                     .single();
 
@@ -2379,11 +2405,14 @@ window.cancelLeaveApp = async function(leaveId) {
                     return;
                 }
 
-                // Proceed with deletion if the date is valid
-                const { error } = await supabase.from('leave_ledger').delete().eq('id', leaveId);
+                // Proceed with marking as CANCELLED
+                const updatedRemarks = leaveApp.remarks ? "CANCELLED - " + leaveApp.remarks : "CANCELLED";
+                const { error } = await supabase.from('leave_ledger')
+                    .update({ transaction_type: 'CANCELLED', remarks: updatedRemarks })
+                    .eq('id', leaveId);
                 if (error) throw error;
                 
-                alert("Leave application successfully cancelled and deleted.");
+                alert("Leave application successfully cancelled.");
                 window.loadStatus();
             } catch(e) {
                 alert("Error: " + e.message);
@@ -2416,12 +2445,14 @@ window.cancelLeaveApp = async function(leaveId) {
                     </div>`;
                 }
                 list.innerHTML = html || "No Travel Orders found.";
+        
             } else {
-                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']).order('created_at', {ascending: false});
+                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED']).order('created_at', {ascending: false});
                 let html = '';
                 for(let app of leaves || []) {
-                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : 'bg-pending';
+                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
+                    const isCancelled = app.transaction_type === 'CANCELLED';
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
@@ -2431,15 +2462,17 @@ window.cancelLeaveApp = async function(leaveId) {
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
                             ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
-                            <button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>
+                            ${!isCancelled ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
                 }
                 list.innerHTML = html || "No Leave Applications found.";
             }
-        };
+            
+            
+            };
 
-        window.updateLeaveInputs = function() {
+   window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
@@ -2469,13 +2502,13 @@ window.cancelLeaveApp = async function(leaveId) {
                     <div class="radio-group">
                         <div class="radio-item"><input type="radio" name="ldetail" value="Monetization" checked> Monetization</div>
                         <div class="radio-item"><input type="radio" name="ldetail" value="Terminal"> Terminal Leave</div>
-                        <div class="radio-item"><input type="radio" name="ldetail" value="CTO"> CTO</div>
                     </div>`;
             } else {
                 container.innerHTML = `<input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             }
         };
 
+        
         window.calculateLeaveDays = async function() {
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
@@ -2530,19 +2563,30 @@ const isHoliday = cachedHolidays.some(h => {
                 cur.setDate(cur.getDate() + 1);
             }
 
-            const halfDayCheck = document.getElementById('leave-half-day');
-            if (halfDayCheck && halfDayCheck.checked) {
-                if (count <= 1) {
-                    alert("No half day leave is allowed unless 1 day and a half. First day must be a whole day.");
-                    halfDayCheck.checked = false;
+const halfStartCheck = document.getElementById('leave-half-day-start');
+            const halfEndCheck = document.getElementById('leave-half-day-end');
+            const selectedLeaveType = document.querySelector('input[name="ltype"]:checked').value;
+            
+            let deduction = 0;
+            if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
+            if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
+            if (deduction > 0) {
+                if ((count - deduction) < 1.5) {
+                    alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
+                    if (halfStartCheck) halfStartCheck.checked = false;
+                    if (halfEndCheck) halfEndCheck.checked = false;
+                } else if ((count - deduction) <= 0) {    
+                    alert("Invalid selection. Total leave days cannot be 0.");
+                    if (halfStartCheck) halfStartCheck.checked = false;
+                    if (halfEndCheck) halfEndCheck.checked = false;
                 } else {
-                    count -= 0.5;
+                    count -= deduction;
                 }
             }
-
             document.getElementById('leave-days-count').innerText = count;
 
-            const ctoCheck = document.getElementById('vl-cto-credit');            const isCtoCredited = ctoCheck && ctoCheck.checked;
+            const ctoCheck = document.getElementById('vl-cto-credit');         
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
@@ -2666,13 +2710,13 @@ const isHoliday = cachedHolidays.some(h => {
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
             
             if (isPARPOUnit) {
-                routeStatus = "PENDING_PARPO";
+                routeStatus = "PENDING_HRMO"; 
             } else if (isMARPO) {
                 routeStatus = "PENDING_CHIEF";
             } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
                 routeStatus = "PENDING_UNIT_HEAD";
-            }
-            
+            } 
+                
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
 
             const dates_to_check = [];
@@ -3000,7 +3044,8 @@ const isHoliday = cachedHolidays.some(h => {
             doc.text("Balance", 22, ty + 28.5); doc.setFont("helvetica", "bold"); doc.text(vl_balance.toFixed(2), 62.5, ty + 28.5, {align: 'center'}); doc.text(sl_balance.toFixed(2), 87.5, ty + 28.5, {align: 'center'});
 
             const hr_sig = await urlToBase64(getAssetUrl("hrmo.png"));
-            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 20, 25, 18); } catch(e){} }
+            // Signature moved down 1 coordinate point:
+            if(hr_sig && app.transaction_type === 'APPROVED') { try { doc.addImage(hr_sig, 'PNG', 45, ty + 21, 25, 18); } catch(e){} }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("SHERALYN L. MIRARAN", 57.5, ty + 38, {align: 'center'}); doc.line(20, ty + 39, 95, ty + 39);
             doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("HRMO II", 57.5, ty + 42, {align: 'center'});
@@ -3120,10 +3165,27 @@ const holiday = (holidays || []).find(h => {
                     
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-                    let activityHtml = "";
+let activityHtml = "";
                     if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
-                    if(dayPsos?.length) dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                    if(dayItins?.length) {
+                    
+                    if (leave) {
+                        activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
+                    } else if (dayItins?.length > 0 && dayItins.some(i => {
+                        let toInfo = (tos || []).find(t => t.to_no === i.to_no);
+                        return toInfo && toInfo.remarks && toInfo.remarks.includes("EXISTING PSO");
+                    })) {
+                        dayItins.forEach(i => {
+                            let toInfo = (tos || []).find(t => t.to_no === i.to_no);
+                            let headerStr = toInfo ? toInfo.to_header : "";
+                            if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                activityHtml += `<div class="cal-entry entry-to">ON OFFICIAL TIME</div>`;
+                            } else {
+                                activityHtml += `<div class="cal-entry entry-to">TO# ${i.to_no} - ${i.destination}</div>`;
+                            }
+                        });
+                    } else if (dayPsos?.length > 0) {
+                        dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
+                    } else if (dayItins?.length > 0) {
                         dayItins.forEach(i => {
                             let toInfo = (tos || []).find(t => t.to_no === i.to_no);
                             let headerStr = toInfo ? toInfo.to_header : "";
@@ -3134,8 +3196,6 @@ const holiday = (holidays || []).find(h => {
                             }
                         });
                     }
-                    if(leave) activityHtml += `<div class="cal-entry entry-leave">${leave.type}</div>`;
-
                     let amIn="", amOut="", pmIn="", pmOut="";
                     const dayLogs = (logsByDate[dateStr] || []).sort((a,b) => a-b);
                     
@@ -3346,22 +3406,36 @@ const hol = (holidays || []).find(h => {
 if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             
                             const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
-                            if(pso) special = `PSO ${pso.pso_no || ''}`.toUpperCase();
-                            
                             const to = (itins || []).find(i => i.travel_date === dateStr);
-                            if(to) {
-                                let toInfo = (tos || []).find(t => t.to_no === to.to_no);
-                                let headerStr = toInfo ? toInfo.to_header : "";
-                                if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
-                                    special = "ON OFFICIAL TIME";
-                                } else {
-                                    special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
-                                }
-                            }
-                            
                             const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
-                            if(leave) special = String(leave.type).toUpperCase();
+                            
+                            if (leave) {
+                                special = String(leave.type).toUpperCase();
+                            } else if (to) {
+                                let toInfo = (tos || []).find(t => t.to_no === to.to_no);
+                                let hasPsoFlag = toInfo && toInfo.remarks && toInfo.remarks.includes("EXISTING PSO");
 
+                                if (hasPsoFlag) {
+                                    let headerStr = toInfo ? toInfo.to_header : "";
+                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                        special = "ON OFFICIAL TIME";
+                                    } else {
+                                        special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                                    }
+                                } else if (pso) {
+                                    special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                                } else {
+                                    let headerStr = toInfo ? toInfo.to_header : "";
+                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                        special = "ON OFFICIAL TIME";
+                                    } else {
+                                        special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
+                                    }
+                                }
+                            } else if (pso) {
+                                special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                            }
+                                
                             if (isWeekend && !special) {
                                 special = dayOfWeek === 0 ? "SUNDAY" : "SATURDAY";
                                 if (dayOfWeek === 5) special = "NO FRIDAY WORK";
