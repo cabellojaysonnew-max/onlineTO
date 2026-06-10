@@ -1091,6 +1091,18 @@
                 alert("Leave Application is only available for REGULAR employees.");
                 return;
             }
+
+            // PROMPT PREVENTING ACCIDENTAL ERASURE OF TO DRAFT/MODIFICATION
+            if (id !== 'apply-view' && document.getElementById('apply-view').classList.contains('active') && (editingToNo !== null || itineraryDraft.length > 0)) {
+                if (!confirm("You have an active Travel Order modification or draft. Are you sure you want to leave this tab? Unsaved changes will be lost.")) {
+                    return; // Stops the tab switch if they click Cancel
+                }
+                // Clear the draft if they confirm leaving
+                editingToNo = null;
+                itineraryDraft = [];
+                document.getElementById('dynamic-itin-fields').innerHTML = '';
+            }
+
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById(id).classList.add('active');
@@ -1101,7 +1113,7 @@
             if (id === 'calendar-view') window.renderCalendar();
             if (id === 'credits-view') window.loadCredits();
         };
-
+        
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
         window.hideChangePassword = function() { document.getElementById('pwdModal').style.display = 'none'; };
 
