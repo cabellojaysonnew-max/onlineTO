@@ -2513,7 +2513,7 @@ window.cancelLeaveApp = async function(leaveId) {
             }
         };
 
-        window.updateLeaveInputs = function() {
+   window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
@@ -2543,13 +2543,13 @@ window.cancelLeaveApp = async function(leaveId) {
                     <div class="radio-group">
                         <div class="radio-item"><input type="radio" name="ldetail" value="Monetization" checked> Monetization</div>
                         <div class="radio-item"><input type="radio" name="ldetail" value="Terminal"> Terminal Leave</div>
-                        <div class="radio-item"><input type="radio" name="ldetail" value="CTO"> CTO</div>
                     </div>`;
             } else {
                 container.innerHTML = `<input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             }
         };
 
+        
         window.calculateLeaveDays = async function() {
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
