@@ -2606,14 +2606,19 @@ const isHoliday = cachedHolidays.some(h => {
 
 const halfStartCheck = document.getElementById('leave-half-day-start');
             const halfEndCheck = document.getElementById('leave-half-day-end');
+            const selectedLeaveType = document.querySelector('input[name="ltype"]:checked').value;
             
             let deduction = 0;
             if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
             if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
 
             if (deduction > 0) {
-                if ((count - deduction) < 1.5) {
-                    alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
+                if (selectedLeaveType !== "Sick Leave" && (count - deduction) < 1.5) {
+                    alert("No half day leave is allowed unless the total leave is at least 1.5 days (Except for Sick Leave).");
+                    if (halfStartCheck) halfStartCheck.checked = false;
+                    if (halfEndCheck) halfEndCheck.checked = false;
+                } else if ((count - deduction) <= 0) {
+                    alert("Invalid selection. Total leave days cannot be 0.");
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
                 } else {
@@ -2622,7 +2627,8 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             }
             document.getElementById('leave-days-count').innerText = count;
 
-            const ctoCheck = document.getElementById('vl-cto-credit');            const isCtoCredited = ctoCheck && ctoCheck.checked;
+            const ctoCheck = document.getElementById('vl-cto-credit');         
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
