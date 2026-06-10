@@ -1636,9 +1636,10 @@ window.loadCredits = async function() {
                 const dateStr = currentDt.toISOString().split('T')[0];
                 const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
-                if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
-                    alert(`Conflict: A Pending/Approved Leave exists on ${dateStr}. Please cancel your leave application first before proceeding with this Travel Order.`);
-                    container.innerHTML = ""; return;
+                    if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
+                    // Skip generating itinerary fields for this specific date
+                    currentDt.setDate(currentDt.getDate() + 1);
+                    continue;
                 }
 
                 if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
