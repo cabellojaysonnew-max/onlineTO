@@ -272,8 +272,10 @@
                     <input type="date" id="leave-from" onchange="window.calculateLeaveDays()" onkeydown="return false">
                     <input type="date" id="leave-to" onchange="window.calculateLeaveDays()" onkeydown="return false">
                 </div>
-                <label>Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
-
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text-main);">
+                    <input type="checkbox" id="leave-half-day" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day on Last Day
+                </label>
+                <label style="margin-top: 10px;">Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
                 <h4 style="margin-top: 15px;">4. Commutation</h4>
                 <select id="leave-commutation">
                     <option value="Not Requested">Not Requested</option>
@@ -2524,13 +2526,23 @@ const isHoliday = cachedHolidays.some(h => {
                     }
                 }
 
-                if (isWorkingDay) count++;
+            if (isWorkingDay) count++;
                 cur.setDate(cur.getDate() + 1);
             }
+
+            const halfDayCheck = document.getElementById('leave-half-day');
+            if (halfDayCheck && halfDayCheck.checked) {
+                if (count <= 1) {
+                    alert("No half day leave is allowed unless 1 day and a half. First day must be a whole day.");
+                    halfDayCheck.checked = false;
+                } else {
+                    count -= 0.5;
+                }
+            }
+
             document.getElementById('leave-days-count').innerText = count;
 
-            const ctoCheck = document.getElementById('vl-cto-credit');
-            const isCtoCredited = ctoCheck && ctoCheck.checked;
+            const ctoCheck = document.getElementById('vl-cto-credit');            const isCtoCredited = ctoCheck && ctoCheck.checked;
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
@@ -2563,14 +2575,12 @@ const isHoliday = cachedHolidays.some(h => {
             }
         };
 
-
-        
-window.submitLeave = async function() {
+            window.submitLeave = async function() {
             if (isSubmitting) return;
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
-            const days = parseInt(document.getElementById('leave-days-count').innerText);
+            const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
