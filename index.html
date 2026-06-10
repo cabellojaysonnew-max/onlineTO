@@ -1633,7 +1633,7 @@ window.loadCredits = async function() {
                 const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
                 
                 if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
-                    alert(`Conflict: A Pending/Approved Leave exists on ${dateStr}. Leave shall prevail, TO application cancelled.`);
+                    alert(`Conflict: A Pending/Approved Leave exists on ${dateStr}. Please cancel your leave application first before proceeding with this Travel Order.`);
                     container.innerHTML = ""; return;
                 }
 
