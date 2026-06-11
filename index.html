@@ -535,7 +535,7 @@
             return bytes.buffer;
         };
 
-        // --- PDF-LIB SECURE SAVE HELPER ---
+       // --- PDF-LIB SECURE SAVE HELPER ---
         window.saveSecurePDF = async function(jsPdfDoc, filename) {
             try {
                 const pdfBytes = jsPdfDoc.output('arraybuffer');
@@ -554,20 +554,29 @@
                 });
 
                 const encryptedBytes = await pdfDoc.save();
-                
                 const blob = new Blob([encryptedBytes], { type: 'application/pdf' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                
+                if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                    window.navigator.msSaveOrOpenBlob(blob, filename);
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    link.target = '_blank';
+                    document.body.appendChild(link);
+                    link.click();
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                    }, 300);
+                }
             } catch (e) {
                 console.error("Encryption failed:", e);
                 jsPdfDoc.save(filename);
             }
         };
-
+        
         // SETUP BIOMETRIC
         window.setupBiometric = async function(empId, hashedPass) {
             if (!window.PublicKeyCredential) return;
@@ -717,7 +726,7 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         };
         
-        // UNDERTIME CALCULATION HELPER
+    // UNDERTIME CALCULATION HELPER
         const calcUndertime = (timeLogs, schedule, schedType) => {
             if (!schedule || timeLogs.length === 0) return { h: 0, m: 0 };
             
@@ -733,44 +742,54 @@
 
             let totalUndertimeMinutes = 0;
 
+            const getMinsFromMid = (dateObj) => {
+                if (!dateObj) return null;
+                const pstStr = dateObj.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
+                const parts = pstStr.split(' ')[1].split(':');
+                return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+            };
+
+            let in1 = getMinsFromMid(amIn);
+            let out1 = getMinsFromMid(amOut);
+            let in2 = getMinsFromMid(pmIn);
+            let out2 = getMinsFromMid(pmOut);
+
             if (schedType === "Fixed") {
                 const schedStartParts = schedule.start_time.split(':');
                 const schedEndParts = schedule.end_time.split(':');
-                const startHour = parseInt(schedStartParts[0]);
-                const startMin = parseInt(schedStartParts[1]);
-                const endHour = parseInt(schedEndParts[0]);
-                const endMin = parseInt(schedEndParts[1]);
+                const startMins = parseInt(schedStartParts[0]) * 60 + parseInt(schedStartParts[1]);
+                const endMins = parseInt(schedEndParts[0]) * 60 + parseInt(schedEndParts[1]);
+                
+                const lunchStart = 12 * 60; // 720
+                const lunchEnd = 13 * 60;   // 780
 
-                if (amIn) {
-                    const pstStr = amIn.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
-                    const inHour = parseInt(pstStr.split(' ')[1].split(':')[0]);
-                    const inMin = parseInt(pstStr.split(' ')[1].split(':')[1]);
-                    if (inHour > startHour || (inHour === startHour && inMin > startMin)) {
-                        totalUndertimeMinutes += ((inHour - startHour) * 60) + (inMin - startMin);
-                    }
+                if (in1 !== null && in1 > startMins) totalUndertimeMinutes += (in1 - startMins);
+                if (out1 !== null && out1 < lunchStart) totalUndertimeMinutes += (lunchStart - out1);
+                if (in2 !== null && in2 > lunchEnd) totalUndertimeMinutes += (in2 - lunchEnd);
+                
+                if (out1 !== null && in2 !== null && (in2 - out1) < 1) {
+                    totalUndertimeMinutes += 1 - (in2 - out1);
                 }
-                if (pmOut) {
-                    const pstStr = pmOut.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
-                    const outHour = parseInt(pstStr.split(' ')[1].split(':')[0]);
-                    const outMin = parseInt(pstStr.split(' ')[1].split(':')[1]);
-                    if (outHour < endHour || (outHour === endHour && outMin < endMin)) {
-                        totalUndertimeMinutes += ((endHour - outHour) * 60) + (endMin - outMin);
-                    }
-                }
+                
+                if (out2 !== null && out2 < endMins) totalUndertimeMinutes += (endMins - out2);
             } else {
                 let workMins = 0;
-                if (amIn && pmOut) {
-                    let diffMins = (pmOut - amIn) / 60000;
-                    const pstIn = amIn.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
-                    const pstOut = pmOut.toLocaleString('en-US', { timeZone: 'Asia/Manila', hour12: false });
-                    const inHour = parseInt(pstIn.split(' ')[1].split(':')[0]);
-                    const outHour = parseInt(pstOut.split(' ')[1].split(':')[0]);
-                    
-                    if (inHour < 12 && outHour > 13) {
-                        diffMins -= 60; // deduct lunch break
-                    }
-                    workMins = diffMins;
+                const calcDur = (start, end) => (start === null || end === null) ? 0 : end - start;
+                let amDur = calcDur(in1, out1 || (out2 && out2 < 780 ? out2 : 720));
+                let pmDur = calcDur(in2 || (in1 && in1 > 780 ? in1 : 780), out2);
+
+                if (in1 !== null && out2 !== null && out1 === null && in2 === null) {
+                    let diff = out2 - in1;
+                    if (in1 < 720 && out2 > 780) diff -= 60;
+                    workMins = diff;
+                } else {
+                    workMins = amDur + pmDur;
                 }
+                
+                if (out1 !== null && in2 !== null && (in2 - out1) < 1) {
+                    workMins -= (1 - (in2 - out1));
+                }
+
                 if (workMins > 0 && workMins < 480) {
                     totalUndertimeMinutes = 480 - workMins;
                 }
@@ -781,7 +800,7 @@
                 m: Math.max(0, Math.floor(totalUndertimeMinutes % 60))
             };
         };
-
+        
         window.handleLogin = async function() {
             const id = document.getElementById('login-id').value.trim();
             const pass = document.getElementById('login-pass').value.trim();
@@ -2469,25 +2488,23 @@ window.generateOfficialPDF = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
         
-window.cancelLeaveApp = async function(leaveId) {
+
+        window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
-                // Fetch the leave application to verify the start date
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date, remarks')
+                    .select('start_date, remarks, type')
                     .eq('id', leaveId)
                     .single();
 
                 if (fetchError) throw fetchError;
 
-                // Compare start date with the current date (todayStr)
-                if (leaveApp.start_date < todayStr) {
-                    alert("You can only cancel a leave application on or before the leave start date. No further revisions are allowed.");
+                if (leaveApp.type.includes("Vacation Leave") && leaveApp.start_date < todayStr) {
+                    alert("Vacation leave can only be cancelled on or before the day of the leave.");
                     return;
                 }
 
-                // Proceed with marking as CANCELLED
                 const updatedRemarks = leaveApp.remarks ? "CANCELLED - " + leaveApp.remarks : "CANCELLED";
                 const { error } = await supabase.from('leave_ledger')
                     .update({ transaction_type: 'CANCELLED', remarks: updatedRemarks })
@@ -2604,8 +2621,7 @@ window.cancelLeaveApp = async function(leaveId) {
                 return;
             }
 
-            const { data: schedOverrides } = await supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', start).lte('start_date', end);
-
+const { data: schedOverrides } = await supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').in('emp_id', [currentUser.emp_id, 'ALL']).gte('end_date', start).lte('start_date', end);
             let count = 0;
             let cur = new Date(sDate);
             while (cur <= eDate) {
@@ -2809,38 +2825,42 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 curr.setDate(curr.getDate() + 1);
             }
 
+       const activeToReq = await supabase.from('travel_orders').select('to_no, status, transport, unit, emp_name').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             const { data: toConflicts } = await supabase.from('itinerary').select('to_no, travel_date')
                 .gte('travel_date', start).lte('travel_date', end)
-                .in('to_no', (await supabase.from('travel_orders').select('to_no').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%')).data.map(t => t.to_no));
+                .in('to_no', (activeToReq.data || []).map(t => t.to_no));
             
-            // SPLIT TO / ROUTE BACK LOGIC 
             if(toConflicts && toConflicts.length > 0) {
-                if(!confirm(`You have a Travel Order overlapping with these dates. Proceeding will CANCEL/SPLIT the TO based on rules. Continue?`)) return;
                 const uniqueToNos = [...new Set(toConflicts.map(t => t.to_no))];
-                
                 for(let to_no of uniqueToNos) {
-                    const { data: toData } = await supabase.from('travel_orders').select('*').eq('to_no', to_no).maybeSingle();
-                    if (!toData) continue;
-
-                    await supabase.from('itinerary')
-                        .delete()
-                        .eq('to_no', to_no)
-                        .gte('travel_date', start)
-                        .lte('travel_date', end);
-
-                    const { data: remaining } = await supabase.from('itinerary').select('id').eq('to_no', to_no);
-
-                    if (!remaining || remaining.length === 0) {
-                        await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
-                        await window.logActivity(to_no, 'CANCELLED', 'Cancelled due to overlapping Leave Application');
+                    const toData = activeToReq.data.find(t => t.to_no === to_no);
+                    const { data: fullItin } = await supabase.from('itinerary').select('id, travel_date').eq('to_no', to_no);
+                    
+                    if (fullItin.length === 1) {
+                        alert(`Conflict: You have a 1-day Travel Order (${to_no}) on ${fullItin[0].travel_date}. You must cancel this TO first before applying for leave.`);
+                        return;
                     } else {
+                        const conflictingDates = toConflicts.filter(c => c.to_no === to_no).map(c => c.travel_date);
+                        if (!confirm(`Conflict: You have a multi-day TO (${to_no}). Do you want to CANCEL the specific days (${conflictingDates.join(', ')}) that conflict with this Leave?`)) {
+                            return;
+                        }
+
+                        await supabase.from('itinerary').delete().eq('to_no', to_no).in('travel_date', conflictingDates);
+                        
                         if (toData.status === 'APPROVED') {
-                            await window.logActivity(to_no, 'SPLIT_MODIFIED', 'Approved TO modified/split due to overlapping Leave Application');
-                            await supabase.from('notifications').insert({
-                                emp_id: currentUser.emp_id,
-                                message: `Approved TO ${to_no} was modified due to a Leave Application. Overlapping days were removed.`,
-                                sender: 'System'
-                            });
+                            await supabase.from('travel_orders').update({status: 'CANCELLED'}).eq('to_no', to_no);
+                            await window.logActivity(to_no, 'CANCELLED', 'Original TO cancelled due to Leave conflict override');
+                            
+                            const newToNo = await window.generateToNo(currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN");
+                            
+                            const { data: origToData } = await supabase.from('travel_orders').select('*').eq('to_no', to_no).maybeSingle();
+                            if (origToData) {
+                                const { id, created_at, ...restTo } = origToData;
+                                await supabase.from('travel_orders').insert({ ...restTo, to_no: newToNo, status: 'APPROVED' });
+                                
+                                await supabase.from('itinerary').update({ to_no: newToNo }).eq('to_no', to_no);
+                                await window.logActivity(newToNo, 'SPLIT_CREATED', 'Generated from Leave conflict override');
+                            }
                         } else {
                             let routeStatus = "PENDING_CHIEF";
                             const isGovVeh = toData.transport === "GOV'T VEHICLE";
@@ -2853,19 +2873,19 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                             } else if (toData.unit && toData.unit.trim() !== "" && toData.unit !== "NA") {
                                 routeStatus = "PENDING_UNIT_HEAD";
                             }
-
-                            await window.logActivity(to_no, 'MODIFIED_ROUTED_BACK', 'Pending TO modified and routed back due to Leave Application overlap');
+                            
                             await supabase.from('travel_orders').update({
                                 status: routeStatus,
                                 unithead_signed: null,
                                 dc_signed: null,
                                 parpo_signed: null
                             }).eq('to_no', to_no);
+                            await window.logActivity(to_no, 'MODIFIED_ROUTED_BACK', 'Pending TO overridden and routed back due to Leave conflict');
                         }
                     }
                 }
             }
-
+                
             isSubmitting = true;
             document.getElementById('btn-submit-leave').innerText = "Processing...";
 
@@ -3204,8 +3224,7 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
                     supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
                     supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
-                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
-                ]);
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').in('emp_id', [currentUser.emp_id, 'ALL']).gte('end_date', startDtStr).lte('start_date', endDtStr)                ]);
 
                 tbody.innerHTML = "";
                 for(let d=1; d<=endDt.getDate(); d++) {
@@ -3345,8 +3364,7 @@ let activityHtml = "";
                     supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
                     supabase.from('holidays').select('*').gte('date', startDtStr).lte('date', endDtStr),
                     supabase.from('leave_ledger').select('start_date, end_date, type').eq('emp_id', currentUser.emp_id).eq('transaction_type', 'APPROVED'),
-                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').eq('emp_id', currentUser.emp_id).gte('end_date', startDtStr).lte('start_date', endDtStr)
-                ]);
+                    supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').in('emp_id', [currentUser.emp_id, 'ALL']).gte('end_date', startDtStr).lte('start_date', endDtStr)                ]);
 
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const mName = monthNames[month];
