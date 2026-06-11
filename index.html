@@ -2489,19 +2489,19 @@ window.generateOfficialPDF = async function(toNo) {
 };
         
 
-        window.cancelLeaveApp = async function(leaveId) {
+window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date, remarks, type')
+                    .select('start_date, remarks, type, transaction_type')
                     .eq('id', leaveId)
                     .single();
 
                 if (fetchError) throw fetchError;
 
-                if (leaveApp.type.includes("Vacation Leave") && leaveApp.start_date < todayStr) {
-                    alert("Vacation leave can only be cancelled on or before the day of the leave.");
+                if (leaveApp.transaction_type === 'APPROVED' && leaveApp.start_date < todayStr) {
+                    alert("Approved leave can only be cancelled on or before the exact date of the leave.");
                     return;
                 }
 
@@ -2548,10 +2548,12 @@ window.generateOfficialPDF = async function(toNo) {
             } else {
                 const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED']).order('created_at', {ascending: false});
                 let html = '';
-                for(let app of leaves || []) {
+for(let app of leaves || []) {
                     const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
                     const isCancelled = app.transaction_type === 'CANCELLED';
+                    const cannotCancel = isApp && app.start_date < todayStr;
+                    
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
@@ -2561,10 +2563,11 @@ window.generateOfficialPDF = async function(toNo) {
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
                             ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
-                            ${!isCancelled ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
+                            ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
                 }
+                        
                 list.innerHTML = html || "No Leave Applications found.";
             }
             
