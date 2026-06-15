@@ -663,8 +663,7 @@
                         document.getElementById('special-div-card').style.display = 'none';
                     }
 
-                    const { data: hols } = await supabase.from('holidays').select('date, description');
-                    cachedHolidays = hols || [];
+                    const { data: hols } = await supabase.from('holidays').select('date, description, coverage');                    cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
                     await window.checkUnapprovedRemarks();
@@ -848,8 +847,7 @@
                     } else {
                         document.getElementById('special-div-card').style.display = 'none';
                     }
-
-                    const { data: hols } = await supabase.from('holidays').select('date, description');
+            const { data: hols } = await supabase.from('holidays').select('date, description, coverage');
                     cachedHolidays = hols || [];
                     window.updateLeaveInputs();
                     
@@ -2636,29 +2634,23 @@ const { data: schedOverrides } = await supabase.from('schedule_override').select
 const isHoliday = cachedHolidays.some(h => {
     if (h.date !== dateStr) return false;
     
-    const coverage = String(h.coverage || "").toUpperCase();
+    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
     const station = String(currentUser.station || "").toUpperCase().trim();
     
-    // Nationwide = All employees
-    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    if (coverage.includes("NATIONWIDE")) return true;
     
-    const hasNaga = coverage.includes("NAGA");
+    const hasNaga = coverage.includes("NAGA CITY");
     const hasCamSur = coverage.includes("CAMARINES SUR");
     
-    // Naga City and Camarines Sur = All employees
     if (hasNaga && hasCamSur) return true;
     
-    // Naga City = Only for DARPO Employees
-    if (hasNaga) {
+    if (hasNaga && !hasCamSur) {
         return station.includes("DARPO") || station === "DARPO-CS1";
     }
-    
-    // Camarines Sur = DARMOs
-    if (hasCamSur) {
+    if (hasCamSur && !hasNaga) {
         return station.includes("DARMO") || station !== "DARPO-CS1";
     }
     
-    // Employees without holiday coverage return false (allowed to take leave, counted as working day)
     return false;
 });
 
@@ -3268,24 +3260,31 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     const dayPsos = (psos || []).filter(p => dateStr >= p.start_date && dateStr <= p.end_date);
 const holiday = (holidays || []).find(h => {
     if (h.date !== dateStr) return false;
-    const coverage = String(h.coverage || "").toUpperCase();
+    
+    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
     const station = String(currentUser.station || "").toUpperCase().trim();
     
-    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
-    const hasNaga = coverage.includes("NAGA");
+    if (coverage.includes("NATIONWIDE")) return true;
+    
+    const hasNaga = coverage.includes("NAGA CITY");
     const hasCamSur = coverage.includes("CAMARINES SUR");
     
     if (hasNaga && hasCamSur) return true;
-    if (hasNaga) return station === "DARPO-CS1";
-    if (hasCamSur) return station !== "DARPO-CS1";
     
-    return true;
+    if (hasNaga && !hasCamSur) {
+        return station.includes("DARPO") || station === "DARPO-CS1";
+    }
+    if (hasCamSur && !hasNaga) {
+        return station.includes("DARMO") || station !== "DARPO-CS1";
+    }
+    
+    return false;
 });
-
+                    
                     
                     const leave = (leaves || []).find(l => dateStr >= l.start_date && dateStr <= l.end_date);
 
-let activityHtml = "";
+                    let activityHtml = "";
                     if(holiday) activityHtml += `<div class="cal-entry entry-holiday">HOLIDAY: ${holiday.description || holiday.type || 'Holiday'}</div>`;
                     
                     if (leave) {
@@ -3507,20 +3506,20 @@ let special = "";
 const hol = (holidays || []).find(h => {
     if (h.date !== dateStr) return false;
     
-    const coverage = String(h.coverage || "").toUpperCase();
+    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
     const station = String(currentUser.station || "").toUpperCase().trim();
     
-    if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    if (coverage.includes("NATIONWIDE")) return true;
     
-    const hasNaga = coverage.includes("NAGA");
+    const hasNaga = coverage.includes("NAGA CITY");
     const hasCamSur = coverage.includes("CAMARINES SUR");
     
     if (hasNaga && hasCamSur) return true;
     
-    if (hasNaga) {
+    if (hasNaga && !hasCamSur) {
         return station.includes("DARPO") || station === "DARPO-CS1";
     }
-    if (hasCamSur) {
+    if (hasCamSur && !hasNaga) {
         return station.includes("DARMO") || station !== "DARPO-CS1";
     }
     
@@ -3704,7 +3703,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             document.getElementById('special-div-card').style.display = 'none';
                         }
 
-                        supabase.from('holidays').select('date, description').then(({data}) => {
+                  supabase.from('holidays').select('date, description, coverage').then(({data}) => {
                             cachedHolidays = data || [];
                             window.updateLeaveInputs();
                         });
