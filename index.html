@@ -2635,18 +2635,31 @@ const { data: schedOverrides } = await supabase.from('schedule_override').select
                 const day = cur.getDay();
 const isHoliday = cachedHolidays.some(h => {
     if (h.date !== dateStr) return false;
+    
     const coverage = String(h.coverage || "").toUpperCase();
     const station = String(currentUser.station || "").toUpperCase().trim();
     
+    // Nationwide = All employees
     if (coverage.includes("NATIONWIDE") || coverage === "") return true;
+    
     const hasNaga = coverage.includes("NAGA");
     const hasCamSur = coverage.includes("CAMARINES SUR");
     
+    // Naga City and Camarines Sur = All employees
     if (hasNaga && hasCamSur) return true;
-    if (hasNaga) return station === "DARPO-CS1";
-    if (hasCamSur) return station !== "DARPO-CS1";
     
-    return true;
+    // Naga City = Only for DARPO Employees
+    if (hasNaga) {
+        return station.includes("DARPO") || station === "DARPO-CS1";
+    }
+    
+    // Camarines Sur = DARMOs
+    if (hasCamSur) {
+        return station.includes("DARMO") || station !== "DARPO-CS1";
+    }
+    
+    // Employees without holiday coverage return false (allowed to take leave, counted as working day)
+    return false;
 });
 
                 
