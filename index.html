@@ -3515,13 +3515,18 @@ const hol = (holidays || []).find(h => {
     const hasNaga = coverage.includes("NAGA");
     const hasCamSur = coverage.includes("CAMARINES SUR");
     
-    if (hasNaga && hasCamSur) return true; // Both = everyone
-    if (hasNaga) return station === "DARPO-CS1"; // Naga only
-    if (hasCamSur) return station !== "DARPO-CS1"; // CamSur only
+    if (hasNaga && hasCamSur) return true;
     
-    return true;
+    if (hasNaga) {
+        return station.includes("DARPO") || station === "DARPO-CS1";
+    }
+    if (hasCamSur) {
+        return station.includes("DARMO") || station !== "DARPO-CS1";
+    }
+    
+    return false;
 });
-
+                                
 if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                             
                             const pso = (psos || []).find(p => dateStr >= p.start_date && dateStr <= p.end_date);
