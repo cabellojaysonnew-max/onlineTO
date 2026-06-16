@@ -1479,18 +1479,16 @@ window.loadCredits = async function() {
 
             // ---> THE FIX: APPLY THE MATH TO THE BALANCES <---
             // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
-            if (l.transaction_type !== 'APPLICATION' && l.transaction_type !== 'CANCELLED') {
-                let leaveType = (l.type || '').toUpperCase();
-                
-                if (leaveType.includes('SPECIAL PRIVILEGE')) {
-                    currentSPL = currentSPL + cVal - dVal;
-                } else if (leaveType.includes('WELLNESS')) {
-                    currentWL = currentWL + cVal - dVal;
-                } else if (leaveType.includes('VL') || leaveType.includes('VACATION')) {
-                    currentVL = currentVL + cVal - dVal;
-                } else if (leaveType.includes('SL') || leaveType.includes('SICK')) {
-                    currentSL = currentSL + cVal - dVal;
-                }
+            if (ledgers) {
+                ledgers.forEach(l => {
+                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+                    let lType = (l.type || '').toUpperCase();
+                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
+                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
+                });
             }
 
             // Show row if it has values OR if it's a Manual Input/Application/Cancelled
@@ -1887,18 +1885,19 @@ window.submitTO = async function() {
                     let pDiv = empRecord.division ? empRecord.division.trim() : finalDiv;
                     let pPos = empRecord.position ? String(empRecord.position).toUpperCase() : "";
 
-                    // For the author making the request, assign the dynamically bonded units
+          // For the author making the request, assign the dynamically bonded units
                     if (p.emp_id === currentUser.emp_id) {
-                        pUnit = finalUnit;
-                        pDiv = finalDiv;
+                        pUnit = finalUnit ? String(finalUnit) : "";
+                        pDiv = finalDiv ? String(finalDiv) : "";
                     }
 
                     if (pUnit === "NA") pUnit = "";
 
                     let pRouteStatus = "PENDING_CHIEF";
-                    const isPARPOUnit = pUnit.toUpperCase() === "PARPO";
-                    const isPMARPO = pPos.includes("MARPO");
+                    const isPARPOUnit = String(pUnit).toUpperCase() === "PARPO";
+                    const isPMARPO = String(pPos).toUpperCase().includes("MARPO");
 
+                    
                     if (isGovVeh) {
                         pRouteStatus = "PENDING_VEHICLE_APPROVER";
                     } else if (isPARPOUnit) {
