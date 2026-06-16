@@ -1718,7 +1718,7 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
         };
 
 
-        window.submitTO = async function() {
+window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             
@@ -1731,9 +1731,10 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
                 reportTos.add(rep);
                 
+                // Safely capture selected units
                 if (it.unitId) {
                     let uVal = document.getElementById(it.unitId).value.trim();
-                    if (uVal && uVal !== 'NA') pbddUnits.add(uVal);
+                    if (uVal) pbddUnits.add(uVal);
                 }
             }
 
@@ -1754,8 +1755,25 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
 
                 if (isPBDD) {
-                    // Extract chosen dynamic units, empty string/NA is excluded leaving finalUnit blank if they chose NA
-                    finalUnit = Array.from(pbddUnits).join(', ');
+                    let units = new Set();
+                    let hasValidUnitSelected = false;
+
+                    // Step 1: Add whatever cross-unit they selected in the dropdowns
+                    pbddUnits.forEach(u => {
+                        if (u !== '') {
+                            units.add(u);
+                            hasValidUnitSelected = true;
+                        }
+                    });
+
+                    // Step 2: If they selected a cross-unit (like EDES), force their ORIGINAL unit (like SIB/SMEDSS) 
+                    // to join the string so BOTH Unit Heads must approve.
+                    if (hasValidUnitSelected && currentUser.unit && currentUser.unit !== 'NA') {
+                        units.add(currentUser.unit);
+                    }
+
+                    // This will output something like "SIB/SMEDSS, EDES" or "" (Blank) if NA was chosen.
+                    finalUnit = Array.from(units).join(', ');
                 }
 
                 if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
@@ -1767,7 +1785,6 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                         if (!selectedDivs.includes(primaryDiv) && selectedDivs.length > 0) {
                             isOtherDivision = true;
                             toNoDiv = selectedDivs[0]; 
-                            // Ensure BOTH the original division and other division are logged to trigger all approvals
                             finalDiv = primaryDiv + ", " + selectedDivs.join(', ');
                         } else {
                             finalDiv = selectedDivs.join(', ');
@@ -1841,7 +1858,7 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     let pDiv = empRecord.division ? empRecord.division.trim() : finalDiv;
                     let pPos = empRecord.position ? String(empRecord.position).toUpperCase() : "";
 
-                    // For the author making the request, assign the dynamically generated units
+                    // For the author making the request, assign the dynamically bonded units
                     if (p.emp_id === currentUser.emp_id) {
                         pUnit = finalUnit;
                         pDiv = finalDiv;
@@ -1860,9 +1877,10 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     } else if (isPMARPO) {
                         pRouteStatus = "PENDING_CHIEF";
                     } else if (pUnit !== "") {
+                        // If pUnit is "SIB/SMEDSS, EDES", it's valid and needs Unit Heads approval
                         pRouteStatus = "PENDING_UNIT_HEAD";
                     } else {
-                        // If Unit is Blank (Like choosing NA) or doesn't exist, it requires Division Chief Approval directly
+                        // If Unit is Blank (Like choosing NA) it bypasses and requires Division Chief Approval directly
                         pRouteStatus = "PENDING_CHIEF"; 
                     }
 
@@ -1914,70 +1932,8 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
         };
 
 
-        window.modifyPendingTO = async function(toNo) {
-            if(!confirm("Load this TO back into draft for modification?\n\nWARNING: Modifying this TO affects the ENTIRE GROUP. You will be able to change all details and remove personnel. Submitting will overwrite the original data for everyone. Proceed?")) return;
-            
-            const { data: toGroup } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
-            const myTo = toGroup.find(t => t.emp_id === currentUser.emp_id);
-            if (!myTo) return;
-            
-            // Load full group and preserve TO number
-            editingToNo = toNo;
-            personnelDraft = toGroup.map(g => ({ emp_id: g.emp_id, name: g.emp_name, unit: g.unit }));
-            
-            const { data: itin } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
-            
-            document.getElementById('to-transport').value = myTo.transport;
-            document.getElementById('dep-time-group').style.display = myTo.transport === "GOV'T VEHICLE" ? 'block' : 'none';
-            document.getElementById('to-outside-bicol').checked = myTo.remarks && myTo.remarks.includes("OUTSIDE BICOL");
-            
-            if (itin.length > 0) { 
-                document.getElementById('itin-from').value = itin[0].travel_date; 
-                document.getElementById('itin-to').value = itin[itin.length - 1].travel_date; 
-            }
-            
-            const container = document.getElementById('dynamic-itin-fields'); 
-            container.innerHTML = ''; 
-            itineraryDraft = [];
-            
-            const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
-            const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
-            
-            // UPDATED: Set NA mapped explicitly to blank
-            let pbddOptions = '';
-            if (userUnit && userUnit !== 'NA') pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { 
-                if (u !== userUnit) pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; 
-            });
-            
-            itin.forEach((i, idx) => {
-                const cardId = `itin-card-${idx}`;
-                const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions}</select>` : '';
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
-                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                             <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
-                             <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="window.removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
-                        </div>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
-                        ${pbddSelect}
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${myTo.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
-                    </div>`;
-                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
-            });
-            
-            window.renderPersonnel();
-            
-            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
-                const savedDivs = myTo.division.split(',').map(d => d.trim());
-                document.querySelectorAll('input[name="special_div"]').forEach(cb => { cb.checked = savedDivs.includes(cb.value); });
-            }
-            
-            alert(`Draft loaded for TO ${toNo}. Modifications will apply to ALL personnel listed.`);
-            window.switchTab('apply-view', document.querySelector('.nav-item'));
-        };
+
+        
 
         
         window.generateToNo = async function(targetDiv) {
