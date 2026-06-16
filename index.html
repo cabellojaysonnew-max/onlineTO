@@ -1459,23 +1459,7 @@ window.loadCredits = async function() {
         .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION', 'CANCELLED'])
         .order('start_date', { ascending: false });
 
-  // 3. APPLY MATH ONCE AND GENERATE DUAL-COLUMN LEDGER
-    if (ledgers && ledgers.length > 0) {
-        ledgers.forEach(l => {
-            // Apply math only for finalized transactions (ignore pending/cancelled)
-            if (l.transaction_type !== 'APPLICATION' && l.transaction_type !== 'CANCELLED') {
-                let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-                let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-                let lType = (l.type || '').toUpperCase();
-                
-                if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
-                else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
-                else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) currentVL = currentVL + cVal - dVal;
-                else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
-            }
-        });
-    }
-
+    // 3. GENERATE DUAL-COLUMN LEDGER AND DO THE MATH
     let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
         <tr style="background: var(--dar-green); color: white;">
             <th style="padding: 8px 5px; text-align: left;">Date</th>
@@ -1487,19 +1471,40 @@ window.loadCredits = async function() {
 
     if (ledgers && ledgers.length > 0) {
         ledgers.forEach(l => {
-            let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-            let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+            let rawCredit = parseFloat(l.credit);
+            let rawDebit = parseFloat(l.debit);
+            
+            let cVal = isNaN(rawCredit) ? 0 : Math.abs(rawCredit);
+            let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
+            // ---> THE FIX: APPLY THE MATH TO THE BALANCES <---
+            // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
+            if (ledgers) {
+                ledgers.forEach(l => {
+                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+                    let lType = (l.type || '').toUpperCase();
+                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
+                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
+                });
+            }
+
+            // Show row if it has values OR if it's a Manual Input/Application/Cancelled
             if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') {
                 hasDeductions = true;
+                
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
                                   (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
+                // Cancelled deductions show crossed-out
                 let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
                              (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
+    
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
                     <td style="padding: 8px 5px; vertical-align: top;">
@@ -2816,7 +2821,18 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 .eq('emp_id', currentUser.emp_id)
                 .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
 
-        if (ledgers) {
+            if (ledgers) {
+                ledgers.forEach(l => {
+                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+                    let lType = (l.type || '').toUpperCase();
+                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
+                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
+                });
+            }
+
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
                 if (days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
             } else if (type === "Special Privilege Leave") {
@@ -2834,6 +2850,8 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     }
                 }
             }
+            // --------------------------------------
+
             // CTO CHECK LOGIC
             const ctoCheck = document.getElementById('vl-cto-credit');
             const isCtoCredited = ctoCheck && ctoCheck.checked;
