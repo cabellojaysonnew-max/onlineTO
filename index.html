@@ -4978,12 +4978,33 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             const content = document.getElementById('mainContent');
             content.innerHTML = `<p class="flex items-center justify-center h-full text-blue-500 font-bold animate-pulse">Building Activity Dashboard...</p>`;
             try {
+                const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+                const [ty, tm, td] = todayStr.split('-').map(Number);
+                const nowManila = new Date(ty, tm - 1, td);
+
+                let startDateStr = todayStr;
+                let endDateStr = todayStr;
+
+                if (reportFilter === 'week') {
+                    const s = new Date(nowManila);
+                    s.setDate(nowManila.getDate() - nowManila.getDay());
+                    const e = new Date(s);
+                    e.setDate(s.getDate() + 6);
+                    startDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(s);
+                    endDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(e);
+                } else if (reportFilter === 'month') {
+                    const s = new Date(ty, tm - 1, 1);
+                    const e = new Date(ty, tm, 0);
+                    startDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(s);
+                    endDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(e);
+                }
+
                 const [toR, itR, psR, soR, hoR] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('*').eq('status', 'APPROVED'),
-                    supabaseClient.from('itinerary').select('*'),
-                    supabaseClient.from('pso_records').select('*'),
-                    supabaseClient.from('so_records').select('*'),
-                    supabaseClient.from('holidays').select('*')
+                    supabaseClient.from('travel_orders').select('*').eq('status', 'APPROVED').order('created_at', { ascending: false }).limit(3000),
+                    supabaseClient.from('itinerary').select('*').gte('travel_date', startDateStr).lte('travel_date', endDateStr),
+                    supabaseClient.from('pso_records').select('*').lte('start_date', endDateStr).gte('end_date', startDateStr),
+                    supabaseClient.from('so_records').select('*').gte('date', startDateStr).lte('date', endDateStr),
+                    supabaseClient.from('holidays').select('*').gte('date', startDateStr).lte('date', endDateStr)
                 ]);
 
                 const validTOEmps = [...new Set((toR.data || []).map(t => t.emp_id).filter(id => id))];
@@ -4992,8 +5013,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     const { data } = await supabaseClient.from('attendance_logs')
                         .select('emp_id, log_time, device_id, place_name')
                         .in('emp_id', validTOEmps)
-                        .order('log_time', { ascending: false })
-                        .limit(2000);
+                        .gte('log_time', `${startDateStr}T00:00:00+08:00`)
+                        .lte('log_time', `${endDateStr}T23:59:59+08:00`)
+                        .order('log_time', { ascending: false });
                     attData = data || [];
                 }
 
@@ -5072,7 +5094,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             updateReportList();
         }
 
-        function setReportFilter(v) { reportFilter = v; renderReportsShell(); }
+        function setReportFilter(v) { reportFilter = v; loadReportsTab(); }
 
         function updateReportList() {
             const container = document.getElementById('reportListContainer');
@@ -5142,7 +5164,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
 
                 const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes] = await Promise.all([
-                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name, unit').in('emp_id', validEmpIds),
+                    supabaseClient.from('travel_orders').select('status, emp_id, to_no, emp_name, unit').in('emp_id', validEmpIds).order('created_at', { ascending: false }).limit(3000),
                     supabaseClient.from('attendance_logs').select('emp_id, log_time, device_id, place_name, spoof_flag').in('emp_id', validEmpIds).gte('log_time', todayMidnightPST),
                     supabaseClient.from('leave_ledger').select('emp_id, type').in('emp_id', validEmpIds).eq('transaction_type', 'APPROVED').lte('start_date', todayStr).gte('end_date', todayStr),
                     supabaseClient.from('itinerary').select('to_no, destination').eq('travel_date', todayStr),
