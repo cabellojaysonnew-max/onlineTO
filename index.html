@@ -1726,7 +1726,8 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
         };
 
-        window.submitTO = async function() {
+
+window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             
@@ -1741,44 +1742,50 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 if (it.unitId) pbddUnits.add(document.getElementById(it.unitId).value);
             }
 
-            let finalDiv = currentUser.division;
-            let finalUnit = currentUser.unit;
-            let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
-            
-            let isOtherDivision = false;
-            let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
-
-            if (isPBDD) {
-                finalUnit = Array.from(pbddUnits).join(', ');
-            }
-
-            if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
-                const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
-                if(checkedBoxes.length > 0) {
-                    const selectedDivs = Array.from(checkedBoxes).map(cb => cb.value.trim());
-                    const primaryDiv = toNoDiv;
-                    
-                    if (!selectedDivs.includes(primaryDiv) && selectedDivs.length > 0) {
-                        isOtherDivision = true;
-                        toNoDiv = selectedDivs[0]; // Set the TO generation target to the OTHER division
-                        // Ensure BOTH the original division and other division are logged to trigger all approvals
-                        finalDiv = primaryDiv + ", " + selectedDivs.join(', ');
-                    } else {
-                        finalDiv = selectedDivs.join(', ');
-                    }
-        }
-            }
-
             isSubmitting = true;
             const submitBtn = document.getElementById('btn-submit-to');
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
             try {
-                // If editing, clear old data first
+                // Fetch full details of all personnel draft to route correctly per their unit and division
+                const empIds = personnelDraft.map(p => p.emp_id);
+                const { data: empDetails } = await supabase.from('employees').select('emp_id, division, unit, position').in('emp_id', empIds);
+
+                let finalDiv = currentUser.division;
+                let finalUnit = currentUser.unit;
+                let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
+                
+                let isOtherDivision = false;
+                let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
+
+                if (isPBDD) {
+                    // Filter out "NA" so it doesn't get assigned as a unit
+                    let units = Array.from(pbddUnits).filter(u => u !== 'NA');
+                    finalUnit = units.length > 0 ? units.join(', ') : "";
+                }
+
+                if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
+                    const checkedBoxes = document.querySelectorAll('input[name="special_div"]:checked');
+                    if(checkedBoxes.length > 0) {
+                        const selectedDivs = Array.from(checkedBoxes).map(cb => cb.value.trim());
+                        const primaryDiv = toNoDiv;
+                        
+                        if (!selectedDivs.includes(primaryDiv) && selectedDivs.length > 0) {
+                            isOtherDivision = true;
+                            toNoDiv = selectedDivs[0]; 
+                            // Ensure BOTH the original division and other division are logged to trigger all approvals
+                            finalDiv = primaryDiv + ", " + selectedDivs.join(', ');
+                        } else {
+                            finalDiv = selectedDivs.join(', ');
+                        }
+                    }
+                }
+
                 if (editingToNo) {
                     await supabase.from('itinerary').delete().eq('to_no', editingToNo);
                     await supabase.from('travel_orders').delete().eq('to_no', editingToNo);
                 }
+                
                 for (let conflict of conflictsToProcess) {
                     if (conflict.status.includes("PENDING")) {
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
@@ -1816,34 +1823,14 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     }
                 }
 
-
                 const finalToNo = editingToNo ? editingToNo : await window.generateToNo(toNoDiv); 
                 const transport = document.getElementById('to-transport').value;
-                let routeStatus = "PENDING_CHIEF";
-        
-                const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
-                const isPARPOUnit = finalUnit && String(finalUnit).toUpperCase() === "PARPO";
                 const isGovVeh = transport === "GOV'T VEHICLE";
-
-                // Strict Priority Routing. Saving both divisions in the DB automatically links it to both Chiefs for the Approver Side.
-                if (isGovVeh) {
-                    routeStatus = "PENDING_VEHICLE_APPROVER";
-                } else if (isPARPOUnit) {
-                    routeStatus = "PENDING_PARPO";
-                } else if (isPBDD && finalUnit === "NA") {
-                    routeStatus = "PENDING_CHIEF";
-                } else if (isMARPO) {
-                    routeStatus = "PENDING_CHIEF";
-                } else if (finalUnit && finalUnit.trim() !== "" && finalUnit !== "NA") {
-                    routeStatus = "PENDING_UNIT_HEAD";
-                } else {
-                    routeStatus = "PENDING_CHIEF";
-                }
 
                 let baseRemarks = [];
                 if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
                 if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
-                if (transport === "GOV'T VEHICLE") {
+                if (isGovVeh) {
                     const depTime = document.getElementById('to-dep-time').value;
                     if (depTime) {
                         let [h, m] = depTime.split(':');
@@ -1853,11 +1840,52 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     }
                 }
 
-                const batchPersonnel = personnelDraft.map(p => ({
-                    to_no: finalToNo, emp_id: p.emp_id, emp_name: p.name, unit: finalUnit, division: finalDiv, 
-                    status: routeStatus, transport, report_to: Array.from(reportTos).join(", "),
-                    remarks: baseRemarks.join(" | ")
-                }));
+                // Iterate through personnel individually to map their specific Unit and Division Logic
+                const batchPersonnel = personnelDraft.map(p => {
+                    let empRecord = empDetails?.find(e => e.emp_id === p.emp_id) || p;
+                    
+                    let pUnit = empRecord.unit ? empRecord.unit.trim() : "";
+                    let pDiv = empRecord.division ? empRecord.division.trim() : finalDiv;
+                    let pPos = empRecord.position ? String(empRecord.position).toUpperCase() : "";
+
+                    // For the author making the request, assign the generated values (PBDD Logic / Special Division)
+                    if (p.emp_id === currentUser.emp_id) {
+                        pUnit = finalUnit;
+                        pDiv = finalDiv;
+                    }
+
+                    if (pUnit === "NA") pUnit = "";
+
+                    let pRouteStatus = "PENDING_CHIEF";
+                    const isPARPOUnit = pUnit.toUpperCase() === "PARPO";
+                    const isPMARPO = pPos.includes("MARPO");
+
+                    // Status calculated exclusively based on this specific employee's unit and position
+                    if (isGovVeh) {
+                        pRouteStatus = "PENDING_VEHICLE_APPROVER";
+                    } else if (isPARPOUnit) {
+                        pRouteStatus = "PENDING_PARPO";
+                    } else if (isPMARPO) {
+                        pRouteStatus = "PENDING_CHIEF";
+                    } else if (pUnit !== "") {
+                        pRouteStatus = "PENDING_UNIT_HEAD";
+                    } else {
+                        // If Unit is Blank/NA, routes up to Division Chief
+                        pRouteStatus = "PENDING_CHIEF"; 
+                    }
+
+                    return {
+                        to_no: finalToNo, 
+                        emp_id: p.emp_id, 
+                        emp_name: p.name, 
+                        unit: pUnit, 
+                        division: pDiv,
+                        status: pRouteStatus, 
+                        transport, 
+                        report_to: Array.from(reportTos).join(", "),
+                        remarks: baseRemarks.join(" | ")
+                    };
+                });
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
                 
@@ -1892,7 +1920,9 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 if(submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "🚀 SUBMIT OFFICIAL REQUEST"; }
             }
         };
+        
 
+        
         window.generateToNo = async function(targetDiv) {
             const year = new Date().getFullYear();
             const div = (targetDiv || currentUser.division || "GEN").split(',')[0].trim().substring(0, 5).toUpperCase();
