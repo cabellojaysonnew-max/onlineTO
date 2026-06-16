@@ -1434,6 +1434,7 @@ window.generateTEVPDF = async function() {
         };
         
 
+
 window.loadCredits = async function() {
     const container = document.getElementById('leave-balances-container');
     const ctoContainer = document.getElementById('cto-posting-container');
@@ -1452,14 +1453,53 @@ window.loadCredits = async function() {
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
     let currentCTO = emp && emp.cto_balance ? parseFloat(emp.cto_balance).toFixed(3) : "0.000";
 
-// 2. FETCH VISUAL HISTORY & ADJUSTMENTS
+    // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
         .select('*')
         .eq('emp_id', currentUser.emp_id)
         .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION', 'CANCELLED'])
         .order('start_date', { ascending: false });
 
-    // 3. GENERATE DUAL-COLUMN LEDGER AND DO THE MATH
+    // ---> THE FIX: APPLY THE MATH TO THE BALANCES CORRECTLY <---
+    // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
+    const currentYear = new Date().getFullYear();
+
+    if (ledgers && ledgers.length > 0) {
+        ledgers.forEach(l => {
+            if (l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') return;
+
+            let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+            let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+            let lType = (l.type || '').toUpperCase();
+            
+            // Extract the transaction year
+            let transDateStr = l.start_date || l.created_at || '';
+            let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
+
+            if (lType.includes('SPECIAL PRIVILEGE')) {
+                // SPL is yearly: Only deduct if the transaction happened this year
+                if (transYear === currentYear) {
+                    currentSPL = currentSPL + cVal - dVal;
+                }
+            }
+            else if (lType.includes('WELLNESS')) {
+                // Wellness is yearly: Only deduct if the transaction happened this year
+                if (transYear === currentYear) {
+                    currentWL = currentWL + cVal - dVal;
+                }
+            }
+            else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) {
+                // VL is cumulative: Always apply math
+                currentVL = currentVL + cVal - dVal;
+            }
+            else if (lType.includes('SL') || lType.includes('SICK')) {
+                // SL is cumulative: Always apply math
+                currentSL = currentSL + cVal - dVal;
+            }
+        });
+    }
+
+    // 3. GENERATE DUAL-COLUMN LEDGER
     let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
         <tr style="background: var(--dar-green); color: white;">
             <th style="padding: 8px 5px; text-align: left;">Date</th>
@@ -1477,20 +1517,6 @@ window.loadCredits = async function() {
             let cVal = isNaN(rawCredit) ? 0 : Math.abs(rawCredit);
             let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
-            // ---> THE FIX: APPLY THE MATH TO THE BALANCES <---
-            // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
-            if (ledgers) {
-                ledgers.forEach(l => {
-                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-                    let lType = (l.type || '').toUpperCase();
-                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
-                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
-                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) currentVL = currentVL + cVal - dVal;
-                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
-                });
-            }
-
             // Show row if it has values OR if it's a Manual Input/Application/Cancelled
             if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') {
                 hasDeductions = true;
@@ -1504,7 +1530,6 @@ window.loadCredits = async function() {
                 let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
                              (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
-    
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
                     <td style="padding: 8px 5px; vertical-align: top;">
@@ -1533,7 +1558,7 @@ window.loadCredits = async function() {
         ${deductionsHtml}
     `;
 
-    // 4. CTO STATUS HISTORY (Remains exactly the same)
+    // 4. CTO STATUS HISTORY
     const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
     
     let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
@@ -1572,7 +1597,7 @@ window.loadCredits = async function() {
         ${ctoHtml}
     `;
 };
-
+        
         
         
         window.showEmployeeQR = function() {
