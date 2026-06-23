@@ -3399,9 +3399,8 @@ const holiday = (holidays || []).find(h => {
                             }
                         });
                     } else if (dayPsos?.length > 0) {
-                        dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">PSO ${p.pso_no || ''}: ${p.subject || 'Duty'}</div>`);
-                    } else if (dayItins?.length > 0) {
-                        dayItins.forEach(i => {
+                        dayPsos.forEach(p => activityHtml += `<div class="cal-entry entry-pso">${p.pso_no || 'SO'}: ${p.subject || 'Duty'}</div>`);
+                    } else if (dayItins?.length > 0) {                        dayItins.forEach(i => {
                             let toInfo = (tos || []).find(t => t.to_no === i.to_no);
                             let headerStr = toInfo ? toInfo.to_header : "";
                             if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
@@ -3641,18 +3640,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                     } else {
                                         special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
                                     }
-                                } else if (pso) {
-                                    special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                               } else if (pso) {
+                                    special = `${pso.pso_no || 'SO'}`.toUpperCase();
                                 } else {
-                                    let headerStr = toInfo ? toInfo.to_header : "";
-                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
+                                    let headerStr = toInfo ? toInfo.to_header : "";                                    if (headerStr && headerStr.toUpperCase().includes("NOT VALID FOR SALARY")) {
                                         special = "ON OFFICIAL TIME";
                                     } else {
                                         special = `TO# ${to.to_no} - ${to.destination}`.toUpperCase();
                                     }
                                 }
-                            } else if (pso) {
-                                special = `PSO ${pso.pso_no || ''}`.toUpperCase();
+                           } else if (pso) {
+                                special = `${pso.pso_no || 'SO'}`.toUpperCase();
                             }
                                 
                             if (isWeekend && !special) {
