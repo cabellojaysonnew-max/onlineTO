@@ -2206,40 +2206,51 @@ window.generateOfficialPDF = async function(toNo) {
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
 
-    // HELPER: Groups dates into formats like "March 1-3, 2026" or "March 1, 2026, March 4-5, 2026"
+// HELPER: Groups dates into formats like "March 1-3 & 5, 2026" or "June 1, 2 & 5, 2026"
     const groupConsecutiveDates = (dates) => {
         if (!dates || !dates.length) return "";
         const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
-        let result = [];
-        let tempGroup = [sorted[0]];
+        
+        const monthYearGroups = {};
+        sorted.forEach(d => {
+            const key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            if (!monthYearGroups[key]) monthYearGroups[key] = [];
+            monthYearGroups[key].push(d.getDate());
+        });
 
-        for (let i = 1; i < sorted.length; i++) {
-            const prevDate = tempGroup[tempGroup.length - 1];
-            const currDate = sorted[i];
-            const diffDays = Math.ceil(Math.abs(currDate - prevDate) / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 1 && prevDate.getMonth() === currDate.getMonth()) {
-                tempGroup.push(currDate);
-            } else {
-                result.push(tempGroup);
-                tempGroup = [currDate];
+        const result = [];
+        for (const [monthYear, days] of Object.entries(monthYearGroups)) {
+            let dayGroups = [];
+            let tempGroup = [days[0]];
+            for (let i = 1; i < days.length; i++) {
+                if (days[i] === days[i-1] + 1) {
+                    tempGroup.push(days[i]);
+                } else {
+                    dayGroups.push(tempGroup);
+                    tempGroup = [days[i]];
+                }
             }
+            dayGroups.push(tempGroup);
+
+            const dayStrings = dayGroups.map(grp => {
+                if (grp.length === 1) return `${grp[0]}`;
+                if (grp.length === 2) return `${grp[0]}, ${grp[1]}`;
+                return `${grp[0]}-${grp[grp.length - 1]}`;
+            });
+
+            let daysStr = "";
+            if (dayStrings.length > 1) {
+                const last = dayStrings.pop();
+                daysStr = dayStrings.join(', ') + ' & ' + last;
+            } else {
+                daysStr = dayStrings[0];
+            }
+
+            const [month, year] = monthYear.split(' ');
+            result.push(`${month} ${daysStr}, ${year}`);
         }
-        result.push(tempGroup);
-
-        return result.map(grp => {
-            const first = grp[0];
-            const monthStr = first.toLocaleDateString('en-US', { month: 'long' });
-            const yearStr = first.getFullYear();
-            if (grp.length === 1) {
-                return `${monthStr} ${first.getDate()}, ${yearStr}`;
-            } else {
-                const last = grp[grp.length - 1];
-                return `${monthStr} ${first.getDate()}-${last.getDate()}, ${yearStr}`;
-            }
-        }).join(', ');
+        return result.join('; ');
     };
-
     try {
         const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
