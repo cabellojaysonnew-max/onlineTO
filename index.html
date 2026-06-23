@@ -2446,18 +2446,21 @@ window.generateOfficialPDF = async function(toNo) {
                 }
             }
         }
-
+        let departureDateStr = earliestDate;
         let returnDateStr = latestDate;
         if (!isContinuous && sortedItin.length > 1) {
-            returnDateStr = "PM OF THE SAME DATES";
+            departureDateStr = "ALL DATES";
+            returnDateStr = "PM OF EACH DATE";
         }
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
         doc.text("DEPARTURE DATE:", 20, curY);
-        doc.setFont("helvetica", "normal"); doc.text(earliestDate, 55, curY); doc.line(55, curY+1, 90, curY+1);
+        doc.setFont("helvetica", "normal"); doc.text(departureDateStr, 55, curY); doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.text("RETURN DATE:", 95, curY);
         
         doc.setFont("helvetica", "normal"); doc.text(returnDateStr, 125, curY); doc.line(125, curY+1, 175, curY+1);
+     
+        
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
         doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 175, curY+1);
