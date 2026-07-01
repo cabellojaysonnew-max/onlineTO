@@ -1641,7 +1641,7 @@ window.loadCredits = async function() {
         
         window.removePersonnel = function(i) { personnelDraft.splice(i,1); window.renderPersonnel(); };
 
-        window.handleStartDateChange = function() {
+window.handleStartDateChange = function() {
             const fromDate = document.getElementById('itin-from').value;
             if (fromDate) {
                 document.getElementById('itin-to').value = fromDate;
@@ -1649,6 +1649,15 @@ window.loadCredits = async function() {
             }
         };
 
+        // ADDED: Missing delete function for the Itinerary Builder
+        window.removeItinCard = function(cardId, dateStr) {
+            const cardElement = document.getElementById(cardId);
+            if (cardElement) {
+                cardElement.remove(); // Removes the UI card
+            }
+            // Removes the dropped day from the submission payload
+            itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
+        };
 
 
     
