@@ -4104,7 +4104,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     currentUser = {
                         username: users.username,
                         fullName: users.full_name,
-                        role: users.role.toUpperCase(),
+                        roles: users.role ? users.role.split(',').map(r => r.trim().toUpperCase()) : [],
                         divisions: users.division ? users.division.split(',').map(d => d.trim().toUpperCase()) : [],
                         units: users.unit ? users.unit.split(',').map(x => x.trim().toUpperCase()) : [],
                         emp_id: users.id
@@ -4174,7 +4174,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     currentUser = { 
                         username: u.username, 
                         fullName: u.full_name, 
-                        role: u.role.toUpperCase(), 
+                        roles: u.role ? u.role.split(',').map(r => r.trim().toUpperCase()) : [], 
                         divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
                         units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [],
                         emp_id: u.id
@@ -4191,7 +4191,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         function renderMain() {
             document.getElementById('app').innerHTML = `
                 <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
-                    <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.role}</p></div>
+                    <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.roles.join(', ')}</p></div>
                     <div class="flex items-center space-x-2"><button onclick="showChangePassword()" class="text-xl px-2">🔒</button><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
@@ -4290,24 +4290,32 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             return remarks + ` | ROUTING_STATUS: ${newStatus}`;
         }
 
-            function getLeaveAppPayload(u, leaveRec) {
-            const role = u.role ? u.role.trim().toUpperCase() : "";
+        function getLeaveAppPayload(u, leaveRec) {
+            const roles = u.roles || [];
             const currentStatus = getLeaveStatus(leaveRec.remarks || "");
             let nextStatus = currentStatus;
             let transType = "APPLICATION";
 
             const empUnit = leaveRec.unit ? leaveRec.unit.trim().toUpperCase() : "";
 
-            if (role === "HRMO" || role === "ADMIN") {
-                nextStatus = "APPROVED";
-                transType = "APPROVED";
-            } else if (empUnit === "PARPO") {
-                // PARPO Unit bypasses all other approvals and goes straight to HRMO
+            // Evaluate state-machine transition based on CURRENT status. 
+            if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
+                nextStatus = empUnit === "PARPO" ? "PENDING_HRMO" : "PENDING_CHIEF";
+            } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
                 nextStatus = "PENDING_HRMO";
-            } else if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
-                nextStatus = "PENDING_CHIEF";
-            } else if (role === "CHIEF") {
-                nextStatus = "PENDING_HRMO";
+            } else if ((currentStatus === "PENDING_HRMO" || currentStatus === "PENDING_CHIEF" || currentStatus === "PENDING_UNIT_HEAD") && roles.some(r => ["HRMO", "ADMIN"].includes(r))) {
+                if (currentStatus === "PENDING_HRMO" || roles.includes("ADMIN")) {
+                    nextStatus = "APPROVED";
+                    transType = "APPROVED";
+                }
+            }
+
+            // Safety net if status logic needs a bump
+            if (nextStatus === currentStatus) {
+                if (roles.includes("ADMIN")) {
+                    nextStatus = "APPROVED";
+                    transType = "APPROVED";
+                }
             }
 
             return {
@@ -4388,14 +4396,14 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
-            const role = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
-            if (role === "PARPO" || role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN" || role === "HRMO") return true;
+            const roles = currentUser.roles || [];
+            if (roles.some(r => ["PARPO", "VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN", "HRMO"].includes(r))) return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
             
-            if (role === "CHIEF") return dMatch;
-            if ((role === "UNIT_HEAD" || role === "UNIT HEAD") && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
+            if (roles.includes("CHIEF")) return dMatch;
+            if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD"].includes(r)) && div && div.toUpperCase().includes("PBDD") && dMatch) return true;
             
             const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
             const uMatch = oUnits.some(u => currentUser.units.includes(u));
@@ -4459,7 +4467,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                 // Batch TOs
                 if (toNos.length > 0) {
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed').in('to_no', toNos);
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed, status').in('to_no', toNos);
                     if (!error) {
                         const updatePromises = toNos.map(async (to_no) => {
                             if (action === 'DISAPPROVED') {
@@ -4703,9 +4711,10 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
         function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
-            const role = u.role ? u.role.trim().toUpperCase() : "";
+            const roles = u.roles || [];
+            const currentStatus = toRecord ? toRecord.status : "";
             
-            if (role === "VEHICLE_APPROVER" || role === "VEHICLE APPROVER" || role === "ADMIN") {
+            if (currentStatus === "PENDING_VEHICLE_APPROVER" && roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r))) {
                 let nextStatus = "PENDING_CHIEF";
                 if (toRecord && toRecord.unit) {
                     const unt = toRecord.unit.trim().toUpperCase();
@@ -4715,7 +4724,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 return { status: nextStatus };
             }
 
-            if (role === "UNIT_HEAD" || role === "UNIT HEAD" || role === "MARPO") {
+            if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
                 if (!toRecord) return {};
                 
                 const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
@@ -4742,14 +4751,14 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 };
             }
 
-            if (role === "CHIEF") {
+            if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
                 return { 
                     status: "PENDING_PARPO", 
                     dc_signed: u.fullName, 
                     dc_signed_time: nowISO 
                 };
             }
-            if (role === "PARPO") {
+            if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
                 return { 
                     status: "APPROVED", 
                     parpo_signed: u.fullName, 
@@ -4783,17 +4792,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     const s = (o.status || "").trim().toUpperCase();
                     const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
                     const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
-                    const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+                    const roles = currentUser.roles || [];
 
                     const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
                     const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
                     const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
                     const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
 
-                    if ((r === "VEHICLE_APPROVER" || r === "VEHICLE APPROVER" || r === "ADMIN") && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (r === "PARPO" && s === "PENDING_PARPO") show = true;
-                    else if (r === "CHIEF" && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD" && dMatch) {
+                    if (roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r)) && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (roles.includes("PARPO") && s === "PENDING_PARPO") show = true;
+                    else if (roles.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
                         }
@@ -4892,7 +4901,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             const maxLimit = tabStatus === 'APPROVED' ? 50 : 9999;
             
             // Push TOs
-            const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+            const roles = currentUser.roles || [];
             for (let i = 0; i < (oRes.data || []).length; i++) {
                 const o = oRes.data[i];
                 if (checkScope(o.division, o.unit)) {
@@ -4902,15 +4911,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     let textColor = 'text-gray-400';
 
                     if (tabStatus === 'APPROVED') {
-                        if (r === 'UNIT_HEAD' || r === 'UNIT HEAD' || r === 'MARPO') {
-                            if (['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'CHIEF') {
-                            if (['PENDING_PARPO', 'APPROVED'].includes(o.status)) show = true;
-                        } else if (r === 'PARPO' || r === 'VEHICLE_APPROVER' || r === 'VEHICLE APPROVER' || r === 'ADMIN' || r === 'HRMO') {
-                            if (o.status === 'APPROVED') show = true;
-                        }
+                        let canSeeApproved = false;
+                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && ['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
+                        if (roles.includes("CHIEF") && ['PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
+                        if (roles.some(r => ["PARPO", "VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN", "HRMO"].includes(r)) && o.status === 'APPROVED') canSeeApproved = true;
 
-                        if (show) {
+                        if (canSeeApproved) {
+                            show = true;
                             if (o.status === 'PENDING_CHIEF') {
                                 displayStatus = 'PENDING CHIEF';
                                 borderColor = 'border-yellow-500';
@@ -4998,7 +5005,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             ]);
 
             let pendingItems = [];
-            const r = currentUser.role ? currentUser.role.trim().toUpperCase() : "";
+            const roles = currentUser.roles || [];
 
             for (let l of (lRes.data || [])) {
                 const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
@@ -5012,13 +5019,18 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                     if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                         const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
-                        
-                        if ((r === "HRMO" || r === "ADMIN") && (s === "PENDING_HRMO" || isParpoUnit)) {
-                            show = true; // HRMO sees it if status is PENDING_HRMO OR if employee is PARPO unit
-                        } else if (!isParpoUnit) {
-                            if ((r === "UNIT_HEAD" || r === "UNIT HEAD" || r === "MARPO") && s === "PENDING_UNIT_HEAD") show = true;
-                            else if (r === "CHIEF" && s === "PENDING_CHIEF") show = true;
+                        let canSeePending = false;
+
+                        if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && (s === "PENDING_HRMO" || isParpoUnit)) {
+                            canSeePending = true;
+                        } 
+                        if (!isParpoUnit) {
+                            if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
+                            if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                         }
+
+                        if(canSeePending) show = true;
+
                     } else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
                         show = true;
                         textColor = 'text-emerald-600';
@@ -5144,16 +5156,14 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                reportData = [];
                 let seen = new Set();
                 
-                // First, filter all approved TO records for personnel under the user's scope
                 const scopedTOs = (toR.data || []).filter(t => checkScope(t.division, t.unit));
                 
                 scopedTOs.forEach(p => {
-                    // Find all itinerary dates for this TO number
                     const myItins = (itR.data || []).filter(i => i.to_no === p.to_no);
                     
                     myItins.forEach(i => {
                         if (i.travel_date) {
-                            const key = `${p.emp_id}-${i.travel_date}`; // Use emp_id for unique tracking
+                            const key = `${p.emp_id}-${i.travel_date}`; 
                             if (!seen.has(key)) {
                                 let mobileLogInfo = `<div class="mt-1 flex items-center space-x-1 truncate"><span class="text-[10px] text-slate-500 font-bold truncate">📱 No Remote Attendance Log</span></div>`;
                                 const dStr = i.travel_date.split('T')[0];
@@ -5188,9 +5198,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         }
                     });
                 });
-                
-                
-                
                 
                 (psR.data || []).forEach(p => { if(p.date && checkScope(p.division, p.unit)) reportData.push({ type: 'PSO', date: new Date(p.date), title: p.emp_name || 'Personnel', subtitle: p.destination || 'Field Work', purpose: p.subject, color: 'purple' }); });
                 (soR.data || []).forEach(s => { if(s.date && checkScope(s.division, s.unit)) reportData.push({ type: 'SO', date: new Date(s.date), title: s.emp_name || 'Personnel', subtitle: s.destination || 'Special Assignment', purpose: s.subject, color: 'orange' }); });
@@ -5282,7 +5289,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 const currentMonth = Number(tM);
                 const isMonday = nowManilaObj.getDay() === 1;
 
-                // Supabase explicit timezone bounds for Philippine Standard Time (UTC+08:00)
                 const todayMidnightPST = `${todayStr}T00:00:00+08:00`;
 
                 const [toRes, logRes, leaveRes, itRes, psoRes, soRes, flagRes, gateRes, schedRes] = await Promise.all([
@@ -5443,7 +5449,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     else toStats.Pending++;
                 });
 
-                // SCOPED INSIGHTS: Based strictly on personnel currently under your jurisdiction
                 const destCounts = {};
                 itinsToday.forEach(i => {
                     if (i.destination && i.destination.toUpperCase() !== 'N/A') {
