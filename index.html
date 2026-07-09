@@ -24,7 +24,8 @@
 </head>
 <body>
 
-    <div id="landing-menu">
+    
+<div id="landing-menu">
         <div class="system-title">DAR PORTALS</div>
         <div class="system-sub">Camarines Sur I</div>
         
@@ -34,8 +35,13 @@
         <button class="btn-launch" onclick="bootSystem('admin_console')">
             💻 ADMIN CONSOLE
         </button>
+        <button class="btn-launch" style="margin-top: 30px; font-size: 12px; border-color: #dc2626; color: #dc2626;" onclick="window.location.reload(true)">
+            🔄 FORCE APP UPDATE
+        </button>
     </div>
 
+    
+    
     <div id="app-container">
         <button id="btn-switch" onclick="returnToMenu()">Switch Portal ↺</button>
         <iframe id="app-iframe"></iframe>
@@ -2720,13 +2726,7 @@ for(let app of leaves || []) {
             } else if (type === "Paternity Leave") {
                 container.innerHTML = `
                     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-                        1. The Paternity Leave Act (Republic Act No. 8187) 7 days paid leave
-                    </p>
-                    <input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
-           } else if (type === "Paternity Leave") {
-                container.innerHTML = `
-                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-                        1. The Paternity Leave Act (Republic Act No. 8187) 7 days paid leave
+                        The Paternity Leave Act (Republic Act No. 8187) 7 days paid leave
                     </p>
                     <input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             } else if (type === "Others") {
@@ -3159,7 +3159,6 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 { name: "Sick Leave", detail: "(Sec. 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
                 { name: "Maternity Leave", detail: "(R.A. No. 11210 / IRR issued by CSC, DOLE and SSS)" },
                 { name: "Paternity Leave", detail: "1. The Paternity Leave Act (Republic Act No. 8187) 7 days paid leave" },
-                { name: "Special Privilege Leave", detail: "(Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
                 { name: "Special Privilege Leave", detail: "(Sec. 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
                 { name: "Solo Parent Leave", detail: "(RA No. 8972 / CSC MC No. 8, s. 2004)" },
                 { name: "Study Leave", detail: "(Sec. 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" },
