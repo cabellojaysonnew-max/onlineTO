@@ -326,16 +326,17 @@
             <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
             <div class="card">
                 <h4>1. Type of Leave</h4>
-                <div class="radio-group">
+            <div class="radio-group">
                     <div class="radio-item"><input type="radio" name="ltype" value="Vacation Leave" onchange="window.updateLeaveInputs()" checked> Vacation</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Sick Leave" onchange="window.updateLeaveInputs()"> Sick</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Mandatory/Forced Leave" onchange="window.updateLeaveInputs()"> Mandatory</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Special Privilege Leave" onchange="window.updateLeaveInputs()"> SPL</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Maternity Leave" onchange="window.updateLeaveInputs()"> Maternity</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Paternity Leave" onchange="window.updateLeaveInputs()"> Paternity</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Wellness Leave" onchange="window.updateLeaveInputs()"> Wellness</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Others" onchange="window.updateLeaveInputs()"> Others</div>
                 </div>
-
+                
                 <h4 style="margin-top: 15px;">2. Details of Leave</h4>
                 <div id="leave-details-container"></div>
 
@@ -2724,6 +2725,12 @@ for(let app of leaves || []) {
                         <div class="radio-item"><input type="radio" name="ldetail" value="Out Patient"> Out Patient</div>
                     </div>
                     <input type="text" id="leave-specify" placeholder="Specify Illness...">`;
+     } else if (type === "Paternity Leave") {
+                container.innerHTML = `
+                    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                        1. The Paternity Leave Act (Republic Act No. 8187) 7 days paid leave
+                    </p>
+                    <input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             } else if (type === "Others") {
                 container.innerHTML = `
                     <div class="radio-group">
@@ -2733,7 +2740,8 @@ for(let app of leaves || []) {
             } else {
                 container.innerHTML = `<input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             }
-        };
+            
+            };
 
         
         window.calculateLeaveDays = async function() {
