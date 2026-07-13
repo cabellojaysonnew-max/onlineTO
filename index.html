@@ -80,18 +80,27 @@
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('landing-menu').style.display = 'flex';
         }
-
-        // ADDED: Deep cache clearing function for PWAs
-        function hardReloadSystem() {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    for(let registration of registrations) {
-                        registration.unregister();
-                    }
-                });
-            }
-            window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+async function hardReloadSystem() {
+    // Remove service workers
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+            await registration.unregister();
         }
+    }
+
+    // Delete all Cache Storage entries
+    if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
+
+    // Reload with cache-busting parameter
+    window.location.href = window.location.pathname + '?v=' + Date.now();
+}
+
+
+        
     </script>
 
 <xmp id="employee_portal" style="display: none;">
