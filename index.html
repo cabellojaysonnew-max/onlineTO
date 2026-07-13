@@ -48,8 +48,8 @@
     </div>
 
     <script>
-        function bootSystem(id) {
-            const code = document.getElementById(id).innerText;
+            function bootSystem(id) {
+            const code = document.getElementById(id).textContent;
             const iframe = document.getElementById('app-iframe');
             iframe.srcdoc = code;
             document.getElementById('landing-menu').style.display = 'none';
@@ -4033,13 +4033,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             } catch(e) { console.error("Log error", e); }
         };
 
-        // PASSWORD HASHING UTILITY
-        async function hashPassword(msg) {
-            const msgUint8 = new TextEncoder().encode(msg);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
+            // PASSWORD HASHING UTILITY
+            async function hashPassword(msg) {
+            if (!msg) return "";
+            return sha256(msg);
+            }
 
         function bufferToBase64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
         function base64ToBuffer(b64) {
@@ -5658,9 +5656,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             });
         }
 
-   // Execute directly instead of relying on window.onload which fails in PWA srcdoc iframes
-        checkSession(); 
-        render();    </script>
+// Execute only when libraries have successfully loaded
+        let bootAttempts = 0;
+        const bootInterval = setInterval(() => {
+            if (window.supabase || bootAttempts > 50) {
+                clearInterval(bootInterval);
+                checkSession();
+                render();
+            }
+            bootAttempts++;
+        }, 50);
+    </script>
 </body>
 </html>
 </xmp>
