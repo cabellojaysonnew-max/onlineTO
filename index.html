@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        // AUTOMATIC REFRESH SCRIPT
+        // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
+        // It forces the browser to pull the latest updates automatically.
+        const APP_VERSION = "v1.1"; 
+        if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
+            localStorage.setItem("dar_app_version", APP_VERSION);
+            window.location.reload(true);
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <!-- MOVED TO MASTER PAGE: Aggressive cache control for the root shell -->
@@ -473,14 +483,14 @@
             } catch(e) { console.error("Log error", e); }
         };
 
-        // SESSION MANAGEMENT HELPER
+ // SESSION MANAGEMENT HELPER
         window.saveSession = function(user) {
+            // REMOVED AUTO-LOGOUT: Session no longer expires.
+            // User will only be logged out when they click Logout.
             localStorage.setItem('dar_session_user', JSON.stringify({
-                user: user,
-                expiry: Date.now() + 15 * 24 * 60 * 60 * 1000 // 15 Days
+                user: user
             }));
         };
-
         window.logoutUser = function() {
             localStorage.removeItem('dar_session_user');
             location.reload();
