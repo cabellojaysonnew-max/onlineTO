@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3891,13 +3891,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     
     <link id="pwa-manifest" rel="manifest">
     
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-    
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js" defer></script>    
     <style>
         .dar-green { background-color: #003811; }
         .text-dar-green { color: #003811; }
@@ -4006,7 +4005,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         // --- SUPABASE CONFIG ---
         const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let supabaseClient;
 
         let currentUser = null;
         let currentTab = 'pending'; 
@@ -5659,8 +5658,14 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 // Execute only when libraries have successfully loaded
         let bootAttempts = 0;
         const bootInterval = setInterval(() => {
-            if (window.supabase || bootAttempts > 50) {
+            if (window.supabase || bootAttempts > 100) {
                 clearInterval(bootInterval);
+                
+                // Initialize the client safely now that the CDN has loaded
+                if (window.supabase && !supabaseClient) {
+                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+                
                 checkSession();
                 render();
             }
