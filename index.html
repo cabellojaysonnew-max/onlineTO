@@ -1,8 +1,12 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- MOVED TO MASTER PAGE: Aggressive cache control for the root shell -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>DAR Integrated System</title>
     <style>
         /* MASTER PAGE STYLES */
@@ -24,8 +28,7 @@
 </head>
 <body>
 
-    
-<div id="landing-menu">
+    <div id="landing-menu">
         <div class="system-title">DAR PORTALS</div>
         <div class="system-sub">Camarines Sur I</div>
         
@@ -35,34 +38,51 @@
         <button class="btn-launch" onclick="bootSystem('admin_console')">
             💻 ADMIN CONSOLE
         </button>
-        <button class="btn-launch" style="margin-top: 30px; font-size: 12px; border-color: #dc2626; color: #dc2626;" onclick="window.location.href = window.location.pathname + '?v=' + new Date().getTime()">
+        <button class="btn-launch" style="margin-top: 30px; font-size: 12px; border-color: #dc2626; color: #dc2626;" onclick="hardReloadSystem()">
             🔄 FORCE APP UPDATE
         </button>
     </div>
 
-    
-    
     <div id="app-container">
         <button id="btn-switch" onclick="returnToMenu()">Switch Portal ↺</button>
         <iframe id="app-iframe"></iframe>
     </div>
 
     <script>
-            function bootSystem(id) {
-            const code = document.getElementById(id).textContent;
+        function bootSystem(id) {
+            const portalElement = document.getElementById(id);
+            
+            // ADDED: Error handling to prevent silent crash if the DOM is missing the admin_console tag
+            if (!portalElement) {
+                alert(`Error: The module '${id}' could not be loaded. Please click 'FORCE APP UPDATE'.`);
+                return;
+            }
+            
+            const code = portalElement.textContent;
             const iframe = document.getElementById('app-iframe');
             iframe.srcdoc = code;
             document.getElementById('landing-menu').style.display = 'none';
             document.getElementById('app-container').style.display = 'block';
         }
+
         function returnToMenu() {
             document.getElementById('app-iframe').srcdoc = '';
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('landing-menu').style.display = 'flex';
         }
+
+        // ADDED: Deep cache clearing function for PWAs
+        function hardReloadSystem() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+            }
+            window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+        }
     </script>
-
-
 
 <xmp id="employee_portal" style="display: none;">
 <!DOCTYPE html>
