@@ -2836,10 +2836,32 @@ window.cancelLeaveApp = async function(leaveId) {
                         <div style="background: #f9fafb; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--dar-gold);">
                             ${itin?.map(i => `<div style="font-size: 10px; border-bottom: 1px solid #eee; padding: 3px 0; line-height: 1.2;"><strong>${i.travel_date}</strong>: ${i.destination} <span style="color: gray; font-style: italic;">(${i.purpose})</span></div>`).join('')}
                         </div>
-                        <div class="action-group" style="margin-top: 0; flex-wrap: wrap;">
-                            ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.withdrawPendingTO('${to.to_no}')">Withdraw</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete All</button>` : ''}
-${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-warning btn-small" onclick="window.dropApprovedTODay('${to.to_no}')" style="background:#f59e0b; color:white;">Drop Day</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print Old</button><button class="btn btn-success btn-small" style="background:#059669;" onclick="window.generateNewOfficialPDF('${to.to_no}')">Print New</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel TO</button>` : ''}                        </div>
-                    </div>`;
+
+                        <div style="margin-top: 8px;">
+                            ${isPending ? `
+                                <div style="display: flex; gap: 8px; width: 100%;">
+                                    <button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button>
+                                    <button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.withdrawPendingTO('${to.to_no}')">Withdraw</button>
+                                    <button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete All</button>
+                                </div>
+                            ` : ''}
+                            ${isApproved ? `
+                                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">🖨️ Print Old</button>
+                                        <button class="btn btn-success btn-small" style="background:#059669;" onclick="window.generateNewOfficialPDF('${to.to_no}')">🖨️ Print New</button>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV</button>
+                                        <button class="btn btn-warning btn-small" onclick="window.dropApprovedTODay('${to.to_no}')" style="background:#f59e0b; color:white;">Drop Day</button>
+                                        <button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel</button>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>`;
+
+
                 }
                 list.innerHTML = html || "No Travel Orders found.";
         
@@ -3974,15 +3996,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             }
         };
 
-        // RESTORE SESSION ON LOAD
-        window.restoreSession = async function() {
-            const sessionData = localStorage.getItem('dar_session_user');
-            if (sessionData) {
-                try {
-                    const session = JSON.parse(sessionData);
-                    if (Date.now() < session.expiry) {
-                        currentUser = session.user;
-                        document.getElementById('user-name').innerText = currentUser.full_name;
+        // RESTORE SESSION ON LOAD
+        window.restoreSession = async function() {
+            const sessionData = localStorage.getItem('dar_session_user');
+            if (sessionData) {
+                try {
+                    const session = JSON.parse(sessionData);
+                    if (session && session.user) {
+                        currentUser = session.user;
+                        document.getElementById('user-name').innerText = currentUser.full_name;
                         document.getElementById('user-info').innerText = `${currentUser.division} | ${currentUser.position}`; 
                         document.getElementById('login-screen').classList.remove('active');
                         document.getElementById('app-screen').classList.add('active');
