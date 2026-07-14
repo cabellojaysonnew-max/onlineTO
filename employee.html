@@ -2733,7 +2733,11 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             if (data) dc_list = data;
         }
 
-        const [img_p2, ...sigs] = await Promise.all([
+        const qrUrl = encodeURIComponent(`https://cabellojaysonnew-max.github.io/onlineTO/verifier.html?to_no=${toNo}`);
+        
+        const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
+            urlToBase64(getAssetUrl("bg_form_new.jpg")),
+            urlToBase64(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qrUrl}`),
             urlToBase64(getAssetUrl("P2.png")), 
             ...uh_list.map(uh => urlToBase64(getAssetUrl(`${uh.username}.png`))),
             ...dc_list.map(dc => urlToBase64(getAssetUrl(`${dc.username}.png`)))
@@ -2741,10 +2745,11 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // ==========================================
-        // COMPRESSED BODY LAYOUT (Matching Image)
-        // Margins: Top 45mm, Bottom 42mm left blank
-        // ==========================================
+        // Render Background and QR Code
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 175, 15, 20, 20); } catch(e){} }
+
+        // OUTER GRID (Exactly matching Image 3 proportions)
         const sx = 10, ew = 190;
         doc.rect(sx, 45, ew, 210); // Master Outer Border
 
