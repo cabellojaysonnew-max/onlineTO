@@ -4536,18 +4536,24 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             } catch(e) { console.log("Biometric auth failed", e); }
         }
 
-        function checkSession() {
+function checkSession() {
             const stored = localStorage.getItem('dar_admin_session');
             if (stored) {
-                const session = JSON.parse(stored);
-                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
-                    currentUser = session.user;
-                } else {
+                try {
+                    const session = JSON.parse(stored);
+                    if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
+                        currentUser = session.user;
+                    } else {
+                        localStorage.removeItem('dar_admin_session');
+                    }
+                } catch (e) {
+                    console.error("Corrupted session data, clearing...", e);
                     localStorage.removeItem('dar_admin_session');
                 }
             }
         }
 
+        
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
         function renderLogin() {
