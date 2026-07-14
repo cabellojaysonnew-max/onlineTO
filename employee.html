@@ -59,22 +59,18 @@
     </div>
 
     <script>
-        function bootSystem(id) {
+ function bootSystem(id) {
             const portalElement = document.getElementById(id);
             
-            // ADDED: Error handling to prevent silent crash if the DOM is missing the admin_console tag
             if (!portalElement) {
                 alert(`Error: The module '${id}' could not be loaded. Please click 'FORCE APP UPDATE'.`);
                 return;
             }
             
-            const code = portalElement.textContent;
+            // FIX: Use innerHTML so the template generates the exact string without breaking scripts
+            const code = portalElement.innerHTML;
             const iframe = document.getElementById('app-iframe');
-            iframe.srcdoc = code;
-            document.getElementById('landing-menu').style.display = 'none';
-            document.getElementById('app-container').style.display = 'block';
-        }
-
+     
         function returnToMenu() {
             document.getElementById('app-iframe').srcdoc = '';
             document.getElementById('app-container').style.display = 'none';
@@ -103,10 +99,10 @@ async function hardReloadSystem() {
         
     </script>
 
-<script type="text/plain" id="employee_portal">
+<template id="employee_portal">
 <!DOCTYPE html>
 <html lang="en">
-<head>
+    <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -4284,7 +4280,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     </script>
 </body>
 </html>
-</script>
+</template>
 
 
 
@@ -4302,7 +4298,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     
 
     
-<script type="text/plain" id="admin_console"><!DOCTYPE html>
+<template id="admin_console">
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6101,6 +6098,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </script>
 </body>
 </html>
-</script>
+</template>
 </body>
 </html>
