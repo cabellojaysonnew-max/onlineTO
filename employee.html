@@ -2671,6 +2671,7 @@ window.generateOfficialPDF = async function(toNo) {
 };
         
 
+
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2740,133 +2741,138 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // OUTER GRID (Exactly matching Image 3 proportions, no header/footer)
+        // ==========================================
+        // COMPRESSED BODY LAYOUT (Matching Image)
+        // Margins: Top 45mm, Bottom 42mm left blank
+        // ==========================================
         const sx = 10, ew = 190;
-        doc.rect(sx, 20, ew, 255);
+        doc.rect(sx, 45, ew, 210); // Master Outer Border
 
-        // ROW 1: TITLE
-        doc.setFillColor(230, 230, 230);
-        doc.rect(sx, 20, ew, 10, 'FD');
+        // ROW 1: Title
+        doc.setFillColor(220, 220, 220);
+        doc.rect(sx, 45, ew, 10, 'FD');
         doc.setFont("helvetica", "bold"); doc.setFontSize(14);
-        doc.text("TRAVEL ORDER", 105, 27, { align: "center" });
+        doc.text("TRAVEL ORDER", 105, 52, { align: "center" });
 
-        // ROW 2: DATE
-        doc.line(sx, 30, sx + ew, 30);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("DATE:", sx + 2, 36);
-        doc.line(35, 37, 95, 37);
+        // ROW 2: Date
+        doc.line(sx, 55, sx + ew, 55);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("DATE:", sx + 2, 60);
+        doc.line(sx + 20, 61, sx + 80, 61);
         const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         doc.setFont("helvetica", "normal");
-        doc.text(fDate, 37, 36);
+        doc.text(fDate, sx + 22, 60);
 
-        // ROW 3: TO NO / APPROVAL
-        doc.line(sx, 40, sx + ew, 40);
-        doc.line(100, 40, 100, 70); // Vertical split
+        // ROW 3: TO No / Date of Approval
+        doc.line(sx, 63, sx + ew, 63);
+        doc.line(sx + 85, 63, sx + 85, 89); // Vertical split
         doc.setFont("helvetica", "bold");
-        doc.text("TRAVEL ORDER NO.:", sx + 2, 46);
-        doc.line(45, 47, 98, 47);
+        doc.text("TRAVEL ORDER NO.:", sx + 2, 68);
+        doc.line(sx + 30, 69, sx + 80, 69);
         doc.setFont("helvetica", "normal");
-        doc.text(toNo, 47, 46);
-
-        doc.setFont("helvetica", "bold");
-        doc.text("DATE OF APPROVAL:", 102, 46);
-        doc.line(135, 47, 198, 47);
-
-        // ROW 4: NAME & STATION
-        doc.line(sx, 50, sx + ew, 50);
-        doc.setFont("helvetica", "bold");
-        doc.text("NAME/POSITION/", sx + 2, 56);
-        doc.text("DESIGNATION:", sx + 2, 60);
-        doc.line(45, 57, 98, 57); doc.line(45, 63, 98, 63); doc.line(45, 69, 98, 69);
+        doc.text(toNo, sx + 32, 68);
         
+        doc.setFont("helvetica", "bold");
+        doc.text("DATE OF APPROVAL:", sx + 87, 68);
+        doc.line(sx + 118, 69, sx + ew - 2, 69);
+
+        // ROW 4: Name/Position & Station
+        doc.line(sx, 71, sx + ew, 71);
+        doc.setFont("helvetica", "bold");
+        doc.text("NAME/POSITION/", sx + 2, 76);
+        doc.text("DESIGNATION:", sx + 2, 80);
+        doc.line(sx + 25, 77, sx + 80, 77);
+        doc.line(sx + 25, 82, sx + 80, 82);
+        doc.line(sx + 25, 87, sx + 80, 87);
         doc.setFont("helvetica", "normal");
-        const namePosLines = doc.splitTextToSize(`${names} / ${positions}`, 52);
-        doc.text(namePosLines, 45, 56);
+        const namePosLines = doc.splitTextToSize(`${names} / ${positions}`, 53);
+        doc.text(namePosLines, sx + 26, 76);
 
         doc.setFont("helvetica", "bold");
-        doc.text("OFFICIAL STATION:", 102, 56);
-        doc.line(135, 57, 198, 57); doc.line(135, 63, 198, 63); doc.line(135, 69, 198, 69);
-        
+        doc.text("OFFICIAL STATION:", sx + 87, 76);
+        doc.line(sx + 115, 77, sx + ew - 2, 77);
+        doc.line(sx + 115, 82, sx + ew - 2, 82);
+        doc.line(sx + 115, 87, sx + ew - 2, 87);
         doc.setFont("helvetica", "normal");
-        const statLines = doc.splitTextToSize(stations, 62);
-        doc.text(statLines, 135, 56);
+        const statLines = doc.splitTextToSize(stations, 73);
+        doc.text(statLines, sx + 116, 76);
 
-        // ROW 5: MEANS OF TRANSPORTATION
-        doc.line(sx, 70, sx + ew, 70);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("MEANS OF TRANSPORTATION:", sx + 2, 76);
+        // ROW 5: Means of Transportation
+        doc.line(sx, 89, sx + ew, 89);
+        doc.setFont("helvetica", "bold");
+        doc.text("MEANS OF TRANSPORTATION:", sx + 2, 95);
         
-        doc.setFont("helvetica", "normal");
         const drawChk = (label, x, y, isChecked) => {
-            doc.rect(x, y - 3, 4, 4);
-            if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 1, y); doc.setFont("helvetica", "normal"); }
-            doc.text(label, x + 6, y);
+            doc.rect(x, y - 3, 3, 3);
+            if (isChecked) { doc.setFont("helvetica", "bold"); doc.text("X", x + 0.5, y - 0.5); doc.setFont("helvetica", "normal"); }
+            doc.text(label, x + 4, y);
         };
-        drawChk("AIR", 60, 76, od.transport === "AIR");
-        drawChk("WATER", 75, 76, od.transport === "WATER");
-        drawChk("LAND", 95, 76, od.transport === "LAND");
-        drawChk("GOVERNMENT VEHICLE", 115, 76, od.transport === "GOV'T VEHICLE");
-        drawChk("OTHERS:", 155, 76, od.transport === "OTHERS");
-        doc.line(172, 77, 198, 77);
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(Please specify)", 185, 80, {align:"center"});
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        drawChk("AIR", sx + 50, 95, od.transport === "AIR");
+        drawChk("WATER", sx + 65, 95, od.transport === "WATER");
+        drawChk("LAND", sx + 85, 95, od.transport === "LAND");
+        drawChk("GOVERNMENT VEHICLE", sx + 105, 95, od.transport === "GOV'T VEHICLE");
+        drawChk("OTHERS:", sx + 142, 95, od.transport === "OTHERS");
+        doc.line(sx + 158, 96, sx + ew - 2, 96);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(Please specify)", sx + 170, 98, {align:"center"});
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
 
-        // ROW 6: DESTINATION
-        doc.line(sx, 82, sx + ew, 82);
-        doc.text("DESTINATION:", sx + 2, 88);
-        doc.line(40, 89, 198, 89);
-        doc.line(40, 94, 198, 94);
+        // ROW 6: Destination
+        doc.line(sx, 99, sx + ew, 99);
+        doc.text("DESTINATION:", sx + 2, 104);
+        doc.line(sx + 25, 105, sx + ew - 2, 105);
+        doc.line(sx + 25, 109, sx + ew - 2, 109);
         
         const destMap = new Map();
         itin_list.forEach(it => {
             if (!destMap.has(it.destination)) destMap.set(it.destination, []);
             destMap.get(it.destination).push(it.travel_date);
         });
-        let destY = 88;
+        let destY = 104;
         doc.setFont("helvetica", "normal");
         destMap.forEach((dates, dest) => {
             const formattedDates = groupConsecutiveDates(dates);
-            doc.text(doc.splitTextToSize(`${formattedDates} - ${dest}`, 155), 42, destY);
-            destY += 5;
+            doc.text(doc.splitTextToSize(`${formattedDates} - ${dest}`, 160), sx + 27, destY);
+            destY += 4;
         });
         
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(specify places to be visited)", 119, 97, {align:"center"});
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(specify places to be visited)", 105, 111, {align:"center"});
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
 
-        // ROW 7: DEPARTURE & RETURN DATES
-        doc.line(sx, 99, sx + ew, 99);
-        doc.line(100, 99, 100, 109); // Vertical split
-        doc.text("DEPARTURE DATE/TIME:", sx + 2, 105);
-        doc.line(45, 106, 98, 106);
-        doc.text("RETURN DATE/TIME:", 102, 105);
-        doc.line(135, 106, 198, 106);
+        // ROW 7: Departure/Return Dates
+        doc.line(sx, 112, sx + ew, 112);
+        doc.line(sx + 85, 112, sx + 85, 120); // Vertical split
+        doc.text("DEPARTURE DATE/TIME:", sx + 2, 117);
+        doc.line(sx + 36, 118, sx + 80, 118);
+        doc.text("RETURN DATE/TIME:", sx + 87, 117);
+        doc.line(sx + 115, 118, sx + ew - 2, 118);
 
         const sortedItin = [...itin_list].sort((a, b) => new Date(a.travel_date) - new Date(b.travel_date));
         doc.setFont("helvetica", "normal");
-        doc.text(sortedItin[0]?.travel_date || "", 47, 105);
-        doc.text(sortedItin[sortedItin.length - 1]?.travel_date || "", 137, 105);
+        doc.text(sortedItin[0]?.travel_date || "", sx + 38, 117);
+        doc.text(sortedItin[sortedItin.length - 1]?.travel_date || "", sx + 117, 117);
 
-        // ROW 8: REPORT TO
-        doc.line(sx, 109, sx + ew, 109);
+        // ROW 8: Report To
+        doc.line(sx, 120, sx + ew, 120);
         doc.setFont("helvetica", "bold");
-        doc.text("REPORT TO:", sx + 2, 115);
-        doc.line(35, 116, 198, 116);
+        doc.text("REPORT TO:", sx + 2, 125);
+        doc.line(sx + 22, 126, sx + ew - 2, 126);
         doc.setFont("helvetica", "normal");
-        doc.text(od.report_to || "", 37, 115);
+        doc.text(od.report_to || "", sx + 24, 125);
 
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(specify name of office/unit)", 116, 119, {align:"center"});
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(specify name of office/unit)", 105, 129, {align:"center"});
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
 
-        // ROW 9: PURPOSE OF TRAVEL
-        doc.line(sx, 121, sx + ew, 121);
-        doc.text("PURPOSE OF TRAVEL:", sx + 2, 127);
-        doc.line(12, 133, 198, 133);
-        doc.line(12, 140, 198, 140);
-        doc.line(12, 147, 198, 147);
-        doc.line(12, 154, 198, 154);
+        // ROW 9: Purpose
+        doc.line(sx, 130, sx + ew, 130);
+        doc.text("PURPOSE OF TRAVEL:", sx + 2, 135);
+        doc.line(sx + 2, 141, sx + ew - 2, 141);
+        doc.line(sx + 2, 146, sx + ew - 2, 146);
+        doc.line(sx + 2, 151, sx + ew - 2, 151);
+        doc.line(sx + 2, 156, sx + ew - 2, 156);
 
         const purpMap = new Map();
         itin_list.forEach(it => {
@@ -2876,23 +2882,22 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         });
         let groupedPurposes = [];
         purpMap.forEach((dates, purp) => { groupedPurposes.push(`${groupConsecutiveDates(dates)} - ${purp}`); });
-        doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-        doc.text(doc.splitTextToSize(groupedPurposes.join('; '), 185), 12, 132);
+        doc.setFont("helvetica", "normal");
+        doc.text(doc.splitTextToSize(groupedPurposes.join('; '), 185), sx + 2, 140);
 
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(specify date of activity/ies, projects or cases to be attended)", 105, 157, {align:"center"});
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(specify date of activity/ies, projects or cases to be attended)", 105, 159, {align:"center"});
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
 
-        // ROW 10: FUND SOURCE
-        doc.line(sx, 159, sx + ew, 159);
+        // ROW 10: Fund Source
+        doc.line(sx, 160, sx + ew, 160);
         doc.text("FUND SOURCE:", sx + 2, 165);
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(Please check)", sx + 2, 169);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(Please check)", sx + 2, 168);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
 
         let fsString = od.fund_source || "";
         let fsArr = fsString.split(',').map(s => s.trim().toUpperCase());
-        
         let isGas = fsArr.includes("GAS");
         let isLtsp = fsArr.includes("LTSP");
         let isAarc = fsArr.includes("AARC");
@@ -2906,85 +2911,91 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         let isOthers = allOthers.length > 0;
         let othersText = allOthers.join(', ');
 
-        drawChk("GAS", 45, 165, isGas); doc.line(58, 166, 85, 166);
-        drawChk("LTSP", 95, 165, isLtsp); doc.line(110, 166, 135, 166);
-        drawChk("AARC", 145, 165, isAarc); doc.line(160, 166, 190, 166);
-
-        drawChk("ALI/PALA", 45, 175, isAli); doc.line(65, 176, 85, 176);
-        drawChk("ARBDSP", 95, 175, isArbdsp); doc.line(115, 176, 135, 176);
-        drawChk("OTHERS:", 145, 175, isOthers); doc.line(163, 176, 190, 176);
         doc.setFont("helvetica", "normal");
-        doc.text(doc.splitTextToSize(othersText, 26), 164, 175);
-        doc.setFont("helvetica", "italic"); doc.setFontSize(6);
-        doc.text("(Please specify)", 176, 179, {align:"center"});
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        drawChk("GAS", sx + 35, 165, isGas); doc.line(sx + 45, 166, sx + 65, 166);
+        drawChk("LTSP", sx + 75, 165, isLtsp); doc.line(sx + 88, 166, sx + 115, 166);
+        drawChk("AARC", sx + 125, 165, isAarc); doc.line(sx + 138, 166, sx + 165, 166);
 
-        // ROW 11: LIVE IN / OUT
-        doc.line(sx, 182, sx + ew, 182);
-        doc.setFont("helvetica", "normal");
-        doc.text("In case of trainings/seminar/workshop/consultation/briefing/conference, check if:", sx + 2, 188);
-        doc.setFont("helvetica", "bold");
-        drawChk("LIVE-IN", 145, 188, false);
-        drawChk("LIVE-OUT", 170, 188, false);
-
-        // ROW 12: SIGNATURES
-        doc.line(sx, 192, sx + ew, 192);
-        doc.line(100, 192, 100, 260); // Vertical split
-
-        // Left Side Signatures
-        doc.text("REQUESTED BY:", sx + 2, 198);
-        doc.line(20, 218, 90, 218);
-        doc.text(names, 55, 217, {align: 'center'});
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        doc.text("(Name & Position)", 55, 222, {align:"center"});
-
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("RECOMMENDING APPROVAL BY:", sx + 2, 230);
-        if (dc_list.length > 0) {
-            if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', 45, 231, 20, 20); } catch(e){}
-            doc.text(dc_list[0].full_name.toUpperCase(), 55, 250, {align: 'center'});
-        }
-        doc.line(20, 251, 90, 251);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        doc.text("(Name & Position)", 55, 255, {align:"center"});
-
-        // Certification Box Left
-        doc.line(sx, 260, 100, 260);
-        doc.setFont("helvetica", "italic"); doc.setFontSize(7);
-        const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
-        doc.text(doc.splitTextToSize(cert, 85), sx + 2, 264);
-
-        // Right Side Signatures
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("RECOMMENDED BY:", 102, 198);
-        if (uh_list.length > 0) {
-            if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', 140, 199, 20, 20); } catch(e){}
-            doc.text(uh_list[0].full_name.toUpperCase(), 150, 217, {align: 'center'});
-        }
-        doc.line(110, 218, 190, 218);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        doc.text("(Name & Position of Immediate Supervisor)", 150, 222, {align:"center"});
-
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("APPROVED BY:", 102, 230);
-        if (img_p2) try { doc.addImage(img_p2, 'PNG', 140, 231, 20, 20); } catch(e){}
-        doc.text("RICARDO C. GARCIA", 150, 250, {align: 'center'});
-        doc.line(110, 251, 190, 251);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        doc.text("(Name & Position of Approving Officer)", 150, 255, {align:"center"});
-
-        // FOOTER
-        doc.line(sx, 275, sx + ew, 275);
+        drawChk("ALI/PALA", sx + 35, 172, isAli); doc.line(sx + 52, 173, sx + 65, 173);
+        drawChk("ARBDSP", sx + 75, 172, isArbdsp); doc.line(sx + 92, 173, sx + 115, 173);
+        drawChk("OTHERS:", sx + 125, 172, isOthers); doc.line(sx + 142, 173, sx + 165, 173);
+        
+        doc.text(doc.splitTextToSize(othersText, 22), sx + 143, 172);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(5);
+        doc.text("(Please specify)", sx + 153, 176, {align:"center"});
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-        doc.text("IMPORTANT: To be accomplished in Triplicate", sx + 2, 279);
+
+        // ROW 11: Live In/Out
+        doc.line(sx, 178, sx + ew, 178);
+        doc.setFont("helvetica", "normal");
+        doc.text("In case of trainings/seminar/workshop/consultation/briefing/conference, check if:", sx + 2, 183);
+        doc.setFont("helvetica", "bold");
+        drawChk("LIVE-IN", sx + 115, 183, false);
+        drawChk("LIVE-OUT", sx + 140, 183, false);
+
+        // ROW 12: Signatures Grid
+        doc.line(sx, 186, sx + ew, 186);
+        doc.line(sx + 85, 186, sx + 85, 240); // Center split vertical
+        doc.line(sx, 224, sx + 85, 224); // Left cert split horizontal
+        doc.line(sx + 85, 213, sx + ew, 213); // Right sigs split horizontal
+
+        // Left Top (Requested By)
+        doc.text("REQUESTED BY:", sx + 2, 191);
+        doc.line(sx + 5, 202, sx + 80, 202);
+        doc.text(names, sx + 42.5, 201, {align: 'center'});
         doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-        doc.text("Original - Attachment to Voucher", sx + 2, 283);
-        doc.text("Duplicate - Human Resource Copy", sx + 2, 287);
-        doc.text("Triplicate - Employee's Copy", sx + 2, 291);
+        doc.text("(Name & Position)", sx + 42.5, 205, {align:"center"});
+
+        // Left Middle (Recommending)
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("RECOMMENDING APPROVAL BY:", sx + 2, 210);
+        if (dc_list.length > 0) {
+            if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, 206, 18, 18); } catch(e){}
+            doc.text(dc_list[0].full_name.toUpperCase(), sx + 42.5, 219, {align: 'center'});
+        }
+        doc.line(sx + 5, 220, sx + 80, 220);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+        doc.text("(Name & Position)", sx + 42.5, 223, {align:"center"});
+
+        // Left Bottom (Cert text - Bold Italic mapping)
+        doc.setFont("helvetica", "bolditalic"); doc.setFontSize(7);
+        const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
+        doc.text(doc.splitTextToSize(cert, 82), sx + 2, 228);
+
+        // Right Top (Recommended By)
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("RECOMMENDED BY:", sx + 87, 191);
+        if (uh_list.length > 0) {
+            if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 125, 192, 20, 20); } catch(e){}
+            doc.text(uh_list[0].full_name.toUpperCase(), sx + 137.5, 208, {align: 'center'});
+        }
+        doc.line(sx + 90, 209, sx + ew - 5, 209);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+        doc.text("(Name & Position of Immediate Supervisor)", sx + 137.5, 212, {align:"center"});
+
+        // Right Bottom (Approved By)
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("APPROVED BY:", sx + 87, 218);
+        if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, 219, 20, 20); } catch(e){}
+        doc.text("RICARDO C. GARCIA", sx + 137.5, 235, {align: 'center'});
+        doc.line(sx + 90, 236, sx + ew - 5, 236);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+        doc.text("(Name & Position of Approving Officer)", sx + 137.5, 239, {align:"center"});
+
+        // ROW 13: Important Footer
+        doc.line(sx, 240, sx + ew, 240);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("IMPORTANT: To be accomplished in Triplicate", sx + 2, 244);
+        doc.line(sx, 246, sx + ew, 246);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+        doc.text("Original - Attachment to Voucher", sx + 2, 249);
+        doc.text("Duplicate - Human Resource Copy", sx + 2, 252);
+        doc.text("Triplicate - Employee's Copy", sx + 2, 255);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
+        
 
         
 window.cancelLeaveApp = async function(leaveId) {
