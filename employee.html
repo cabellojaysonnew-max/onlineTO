@@ -79,7 +79,12 @@
             document.getElementById('app-container').style.display = 'none';
             document.getElementById('landing-menu').style.display = 'flex';
         }
-async function hardReloadSystem() {
+    async function hardReloadSystem() {
+    // Add confirmation prompt
+    if (!confirm("This will log you out, clear all saved data, and force the app to download the latest version. Are you sure you want to proceed?")) {
+        return; // Stops the function if they click Cancel
+    }
+
     // Remove service workers
     if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -88,6 +93,7 @@ async function hardReloadSystem() {
         }
     }
 
+    
     // Delete all Cache Storage entries
     if ('caches' in window) {
         const cacheNames = await caches.keys();
