@@ -2961,7 +2961,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
             // Left Middle
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("RECOMMENDING APPROVAL BY:", sx + 2, 210);
+            doc.text("RECOMMENDED BY (MARPO/UNIT HEAD):", sx + 2, 210);
             if (dc_list.length > 0) {
                 if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, 206, 18, 18); } catch(e){}
                 doc.text(dc_list[0].full_name.toUpperCase(), sx + 42.5, 219, {align: 'center'});
@@ -2972,7 +2972,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
             // Right Top
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("RECOMMENDED BY:", sx + 87, 191);
+            doc.text("RECOMMENDED BY (DIVISION CHIEF):", sx + 87, 191);
             if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, 192, 18, 18); } catch(e){}
             doc.text("RICARDO C. GARCIA", sx + 137.5, 208, {align: 'center'});
             doc.line(sx + 90, 209, sx + ew - 5, 209);
