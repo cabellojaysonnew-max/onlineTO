@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.1"; 
+        const APP_VERSION = "v1.2"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -466,11 +466,11 @@ async function hardReloadSystem() {
     </div>
 
     <script>
-    // SUPABASE CONFIGURATION
+        // SUPABASE CONFIGURATION
         const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-        const supabaseKey = 'sb_publishable_poSZUQ9HI4wcY9poEo5b1w_Z-pAJbKo'; 
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-
+        
         // GLOBAL STATE VARIABLES
         let currentUser = null; 
         let itineraryDraft = []; 
@@ -4291,17 +4291,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
 
 
-
-    
-
-
-
-
-
-    
-
-    
-<xmp id="admin_console" style="display: none;">
 <xmp id="admin_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
@@ -6102,7 +6091,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </script>
 </body>
 </html>
-</xmp>
 </xmp>
 </body>
 </html>
