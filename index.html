@@ -2804,14 +2804,14 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Background image remains firmly locked at exactly A4 Size (210x297), explicitly uncompressed ('NONE')
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'NONE'); } catch(e){} }
+        // Background image remains firmly locked at exactly A4 Size (210x297), explicitly named and uncompressed ('NONE')
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, 'BG_FORM_NEW', 'NONE'); } catch(e){} }
         
-        // Shifted QR Code higher to clear the horizontal line, explicitly uncompressed ('NONE')
-        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 12, 15, 15, undefined, 'NONE'); } catch(e){} }
+        // Shifted QR Code higher (Y: 9) to clear the horizontal line, explicitly named and uncompressed ('NONE')
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16, 'QR_CODE_IMG', 'NONE'); } catch(e){} }
 
         // --- APPLIED 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
-        let topY = 25.75; 
+        let topY = 31.75 - 6; // Sit just above the main box
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -3123,7 +3123,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, sigTopY + 18, imgSize, imgSize); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, sigTopY + 18, imgSize, imgSize, 'SIG_'+j, 'NONE'); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
@@ -3151,7 +3151,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("RECOMMENDED BY (MARPO/UNIT HEAD):", sx + 2, sigTopY + 24);
             if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
+                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18, 'SIG_DC', 'NONE'); } catch(e){}
                 doc.text(dc_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
             }
             doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
@@ -3160,7 +3160,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("RECOMMENDED BY (DIVISION CHIEF):", sx + 87, sigTopY + 5);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 6, 18, 18); } catch(e){}
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 6, 18, 18, 'SIG_P2', 'NONE'); } catch(e){}
             doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 22, {align: 'center'});
             doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
             doc.setFont("helvetica", "normal"); doc.setFontSize(6);
@@ -3176,7 +3176,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("MARPO/UNIT HEAD:", sx + 2, sigTopY + 24);
             if (uh_list.length > 0) {
-                if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
+                if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18, 'SIG_UH', 'NONE'); } catch(e){}
                 doc.text(uh_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
             }
             doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
@@ -3186,7 +3186,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("DIVISION CHIEF:", sx + 87, sigTopY + 5);
             if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 125, sigTopY + 6, 20, 20); } catch(e){}
+                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 125, sigTopY + 6, 20, 20, 'SIG_DC', 'NONE'); } catch(e){}
                 doc.text(dc_list[0].full_name.toUpperCase(), sx + 137.5, sigTopY + 22, {align: 'center'});
             }
             doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
@@ -3195,7 +3195,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20); } catch(e){}
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20, 'SIG_P2', 'NONE'); } catch(e){}
             doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 49, {align: 'center'});
             doc.line(sx + 90, sigTopY + 50, sx + ew - 5, sigTopY + 50);
             doc.setFont("helvetica", "normal"); doc.setFontSize(6);
@@ -3228,8 +3228,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-            
-            
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
