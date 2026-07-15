@@ -2728,8 +2728,6 @@ window.generateOfficialPDF = async function(toNo) {
 };
         
 
-
-
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2806,14 +2804,14 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Background image remains firmly locked at exactly A4 Size (210x297)
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        // Background image remains firmly locked at exactly A4 Size (210x297), explicitly uncompressed ('NONE')
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'NONE'); } catch(e){} }
         
-        // Shifted QR Code down to align with the new 1.1-inch margin
-        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 19.94, 15, 15); } catch(e){} }
+        // Shifted QR Code higher to clear the horizontal line, explicitly uncompressed ('NONE')
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 12, 15, 15, undefined, 'NONE'); } catch(e){} }
 
-        // --- APPLIED 1.1 INCH TOP MARGIN HERE (1.1 inch = 27.94 mm) ---
-        let topY = 27.94; 
+        // --- APPLIED 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
+        let topY = 25.75; 
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2832,7 +2830,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 36.94; // Shifted relative to 1.1 inch top margin
+        let curY = 31.75; // Shifted relative to exactly 1.25 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3224,8 +3222,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 36.94mm)
-        doc.rect(sx, 36.94, ew, curY - 36.94 + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 31.75mm)
+        doc.rect(sx, 31.75, ew, curY - 31.75 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
