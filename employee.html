@@ -80,24 +80,38 @@
             document.getElementById('landing-menu').style.display = 'flex';
         }
 async function hardReloadSystem() {
-    // Remove service workers
-    if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const registration of registrations) {
-            await registration.unregister();
+    if (!confirm("⚠️ FORCE UPDATE\n\nAre you sure you want to completely clear the cache, remove saved offline data, and reload the system?\n\nThis resolves issues where the Admin or Employee portal appears blank or outdated.")) {
+        return;
+    }
+
+    try {
+        // Remove service workers
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const registration of registrations) {
+                await registration.unregister();
+            }
         }
-    }
 
-    // Delete all Cache Storage entries
-    if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-    }
+        // Delete all Cache Storage entries
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
 
-    // Reload with cache-busting parameter
-    window.location.href = window.location.pathname + '?v=' + Date.now();
+        // Clear local and session storage to flush old memory states
+        localStorage.clear();
+        sessionStorage.clear();
+
+        alert("✅ Cache and old data successfully cleared!\n\nThe system will now load the latest version.");
+        
+        // Reload with cache-busting parameter
+        window.location.href = window.location.pathname + '?v=' + Date.now();
+    } catch (error) {
+        alert("Warning: Could not clear all cache automatically. " + error.message);
+        window.location.reload(true);
+    }
 }
-
 
         
     </script>
@@ -1826,20 +1840,22 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
         };
 
 
-window.submitTO = async function() {
+        window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
             
-          const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set(); const fundSources = new Set();
+        const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set(); const fundSources = new Set();
             for (let it of itineraryDraft) {
                 const dest = document.getElementById(it.destId).value.trim();
                 const purp = document.getElementById(it.purpId).value.trim();
                 const rep = document.getElementById(it.repId).value.trim();
                 const fund = document.getElementById(it.fundId).value.trim();
-                if (!dest || !purp || !rep || !fund) return alert(`Fill all fields for ${it.date}.`);
+                
+                if (!dest || !purp || !rep) return alert(`Fill all fields (except Fund Source) for ${it.date}.`);
+                
                 batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
                 reportTos.add(rep);
-                fundSources.add(fund);
+                if (fund) fundSources.add(fund); // Only add to array if not blank
                 
                 // Safely capture selected units
                 if (it.unitId) {
@@ -1944,15 +1960,11 @@ window.submitTO = async function() {
                 }
 
                 const finalToNo = editingToNo ? editingToNo : await window.generateToNo(toNoDiv); 
-                const transport = document.getElementById('to-transport').value;
-                const isGovVeh = transport === "GOV'T VEHICLE";
-
                 let fundSourceArray = Array.from(fundSources).map(f => {
                     const up = f.toUpperCase();
                     return ["GAS", "LTSP", "AARC", "ALI/PALA", "ARBDSP"].includes(up) ? up : `OTHERS: ${f}`;
-                });
+                }).filter(f => f); // Safe filter
                 let fundSource = fundSourceArray.join(', ');
-
                 let baseRemarks = [];
                 if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
                 if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
