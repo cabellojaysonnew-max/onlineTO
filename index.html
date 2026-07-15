@@ -2727,8 +2727,6 @@ window.generateOfficialPDF = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
         
-
-
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2806,10 +2804,11 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const dc_imgs = sigs.slice(uh_list.length);
 
         if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
-        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 15, 15, 15); } catch(e){} }
+        // Shifted QR Code down to align with 1-inch top margin
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 17.4, 15, 15); } catch(e){} }
 
-        // --- ADDED: TOP RED TEXT LOGIC ---
-        let topY = 23; // Sit just above the main box
+        // --- APPLIED 1 INCH TOP MARGIN HERE (1 inch = 25.4 mm) ---
+        let topY = 25.4; 
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2828,7 +2827,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 32; 
+        let curY = 34.4; // Shifted relative to 1 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -2848,7 +2847,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         curY += 8;
 
         // ROW 3: TO No / Date of Approval
-        let splitX = 120; // <--- Optimized to give maximum width to the left Name column
+        let splitX = 120;
         doc.line(sx, curY, sx + ew, curY);
         let row3Y = curY;
         doc.setFont("helvetica", "bold");
@@ -2870,7 +2869,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         // ROW 4: Name/Position & Station
         doc.line(sx, curY, sx + ew, curY);
         
-        // Ensure values cleanly clear the bold labels to avoid overlap
         let nameStartX = sx + 34;
         let statStartX = sx + splitX + 32;
 
@@ -2942,7 +2940,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         drawChk("LAND", sx + 87, curY + 6, od.transport === "LAND");
         drawChk("GOVERNMENT VEHICLE", sx + 107, curY + 6, od.transport === "GOV'T VEHICLE");
         
-        // --- ADDED: GOVERNMENT VEHICLE RED SCHEDULE TEXT ---
         if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(255, 0, 0);
             doc.text(`Sched: ${vLog.schedule}`, sx + 107, curY + 11);
@@ -3092,7 +3089,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("REQUESTED BY:", sx + 2, sigTopY + 5);
         
-        // Multi-line Dynamic Requester Names logic that builds up from the line
         doc.setFont("helvetica", "bold");
         let reqFontSize = 8;
         doc.setFontSize(reqFontSize);
@@ -3112,6 +3108,41 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.line(sx + 5, sigTopY + 16, sx + 80, sigTopY + 16);
         doc.setFont("helvetica", "normal"); doc.setFontSize(6);
         doc.text("(Name & Position)", sx + 42.5, sigTopY + 19, {align:"center"});
+
+        const renderSigs = (list, imgs, startX, width, roleLabel) => {
+            if (list.length === 0) return;
+            const count = list.length;
+            const step = width / count;
+            const imgSize = count > 2 ? 18 : 25;
+            
+            for (let j = 0; j < count; j++) {
+                let cx = startX + (step * j) + (step / 2); 
+                let imgX = cx - (imgSize / 2);
+                
+                if (imgs[j]) { 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, sigTopY + 18, imgSize, imgSize); } catch(e){} 
+                }
+                
+                let name = list[j].full_name.toUpperCase();
+                let fontSize = 8;
+                doc.setFontSize(fontSize);
+                while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                    fontSize -= 0.5;
+                    doc.setFontSize(fontSize);
+                }
+                
+                doc.setFont("helvetica", "bold");
+                doc.text(name, cx, sigTopY + 33, { align: 'center' });
+
+                let lineStart = cx - (step / 2) + 2;
+                let lineEnd = cx + (step / 2) - 2;
+                
+                doc.line(lineStart, sigTopY + 34, lineEnd, sigTopY + 34);
+                doc.setFont("helvetica", "normal"); 
+                doc.setFontSize(7);
+                doc.text(roleLabel, cx, sigTopY + 37, { align: 'center' });
+            }
+        };
 
         if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
@@ -3188,8 +3219,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start)
-        doc.rect(sx, 32, ew, curY - 32 + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 34.4mm)
+        doc.rect(sx, 34.4, ew, curY - 34.4 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
