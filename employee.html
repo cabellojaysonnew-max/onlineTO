@@ -1960,11 +1960,18 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 }
 
                 const finalToNo = editingToNo ? editingToNo : await window.generateToNo(toNoDiv); 
+                const transport = document.getElementById('to-transport').value;
+                const isGovVeh = transport === "GOV'T VEHICLE"; // <-- Ito yung nawala kaya nag-error!
+
+                // Formats standard choices, types custom entries as OTHERS, or returns a clean blank value if empty
                 let fundSourceArray = Array.from(fundSources).map(f => {
-                    const up = f.toUpperCase();
-                    return ["GAS", "LTSP", "AARC", "ALI/PALA", "ARBDSP"].includes(up) ? up : `OTHERS: ${f}`;
-                }).filter(f => f); // Safe filter
-                let fundSource = fundSourceArray.join(', ');
+                    if (!f || f.trim() === "") return "";
+                    const up = f.trim().toUpperCase();
+                    return ["GAS", "LTSP", "AARC", "ALI/PALA", "ARBDSP"].includes(up) ? up : `OTHERS: ${f.trim()}`;
+                }).filter(f => f !== "");
+                
+                let fundSource = fundSourceArray.length > 0 ? fundSourceArray.join(', ') : "";
+
                 let baseRemarks = [];
                 if (itineraryDraft.some(it => it.hasPSO)) baseRemarks.push("EXISTING PSO");
                 if (document.getElementById('to-outside-bicol').checked) baseRemarks.push("OUTSIDE BICOL");
