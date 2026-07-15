@@ -2806,7 +2806,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 32; // <--- ADJUSTED TOP MARGIN (approx 1.25 inch)
+        let curY = 32; 
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -2819,21 +2819,21 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.line(sx, curY, sx + ew, curY);
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("DATE:", sx + 2, curY + 5);
-        doc.line(sx + 20, curY + 6, sx + 80, curY + 6);
+        doc.line(sx + 15, curY + 6, sx + 80, curY + 6);
         const fDate = new Date(od.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         doc.setFont("helvetica", "normal");
-        doc.text(fDate, sx + 22, curY + 5);
+        doc.text(fDate, sx + 17, curY + 5);
         curY += 8;
 
         // ROW 3: TO No / Date of Approval
-        let splitX = 115; // <--- GIVEN LEFT COLUMN MORE SPACE
+        let splitX = 120; // <--- Optimized to give maximum width to the left Name column
         doc.line(sx, curY, sx + ew, curY);
         let row3Y = curY;
         doc.setFont("helvetica", "bold");
         doc.text("TRAVEL ORDER NO.:", sx + 2, curY + 5);
-        doc.line(sx + 32, curY + 6, sx + splitX - 5, curY + 6);
+        doc.line(sx + 34, curY + 6, sx + splitX - 3, curY + 6);
         doc.setFont("helvetica", "normal");
-        doc.text(toNo, sx + 34, curY + 5);
+        doc.text(toNo, sx + 36, curY + 5);
         
         doc.setFont("helvetica", "bold");
         doc.text("DATE OF APPROVAL:", sx + splitX + 2, curY + 5);
@@ -2845,11 +2845,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         }
         curY += 8;
 
-        // ROW 4: Name/Position & Station (Flexible Height, Font & Wrapping)
+        // ROW 4: Name/Position & Station
         doc.line(sx, curY, sx + ew, curY);
         
-        let nameMaxWidth = splitX - 32;
-        let statMaxWidth = ew - splitX - 34;
+        // Ensure values cleanly clear the bold labels to avoid overlap
+        let nameStartX = sx + 34;
+        let statStartX = sx + splitX + 32;
+
+        let nameMaxWidth = (sx + splitX - 3) - nameStartX;
+        let statMaxWidth = (sx + ew - 2) - statStartX;
         
         doc.setFont("helvetica", "normal");
         let nameFontSize = 9;
@@ -2875,26 +2879,26 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         
         doc.line(sx + splitX, row3Y, sx + splitX, curY + row4Height); 
         
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
         doc.text("NAME/POSITION/", sx + 2, curY + 5);
         doc.text("DESIGNATION:", sx + 2, curY + 9);
         
         doc.setFont("helvetica", "normal"); doc.setFontSize(nameFontSize);
         let textY = curY + 5;
         nameLines.forEach(line => { 
-            doc.text(line, sx + 30, textY); 
-            doc.line(sx + 28, textY + 1, sx + splitX - 2, textY + 1); 
+            doc.text(line, nameStartX, textY); 
+            doc.line(nameStartX - 2, textY + 1, sx + splitX - 2, textY + 1); 
             textY += 4.5; 
         });
 
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
         doc.text("OFFICIAL STATION:", sx + splitX + 2, curY + 5);
         
         doc.setFont("helvetica", "normal"); doc.setFontSize(statFontSize);
         textY = curY + 5;
         statLines.forEach(line => { 
-            doc.text(line, sx + splitX + 32, textY); 
-            doc.line(sx + splitX + 30, textY + 1, sx + ew - 2, textY + 1); 
+            doc.text(line, statStartX, textY); 
+            doc.line(statStartX - 2, textY + 1, sx + ew - 2, textY + 1); 
             textY += 4.5; 
         });
         
@@ -2902,7 +2906,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // ROW 5: Means of Transportation
         doc.line(sx, curY, sx + ew, curY);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); // Slightly smaller to prevent crash
         doc.text("MEANS OF TRANSPORTATION:", sx + 2, curY + 6);
         
         const drawChk = (label, x, y, isChecked) => {
@@ -2911,14 +2915,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.text(label, x + 4, y);
         };
         doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        drawChk("AIR", sx + 50, curY + 6, od.transport === "AIR");
-        drawChk("WATER", sx + 65, curY + 6, od.transport === "WATER");
-        drawChk("LAND", sx + 85, curY + 6, od.transport === "LAND");
-        drawChk("GOVERNMENT VEHICLE", sx + 105, curY + 6, od.transport === "GOV'T VEHICLE");
-        drawChk("OTHERS:", sx + 142, curY + 6, od.transport === "OTHERS");
-        doc.line(sx + 158, curY + 7, sx + ew - 2, curY + 7);
+        // Adjusted all checkboxes farther to the right to stop overlap
+        drawChk("AIR", sx + 52, curY + 6, od.transport === "AIR");
+        drawChk("WATER", sx + 67, curY + 6, od.transport === "WATER");
+        drawChk("LAND", sx + 87, curY + 6, od.transport === "LAND");
+        drawChk("GOVERNMENT VEHICLE", sx + 107, curY + 6, od.transport === "GOV'T VEHICLE");
+        drawChk("OTHERS:", sx + 145, curY + 6, od.transport === "OTHERS");
+        doc.line(sx + 160, curY + 7, sx + ew - 2, curY + 7);
         doc.setFont("helvetica", "italic"); doc.setFontSize(5);
-        doc.text("(Please specify)", sx + 170, curY + 9, {align:"center"});
+        doc.text("(Please specify)", sx + 172, curY + 9, {align:"center"});
         curY += 10;
 
         // ROW 6: Destination
@@ -3057,25 +3062,25 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("REQUESTED BY:", sx + 2, sigTopY + 5);
-        doc.line(sx + 5, sigTopY + 16, sx + 80, sigTopY + 16);
         
-        // Multi-line Dynamic Requester Names logic
+        // Multi-line Dynamic Requester Names logic that builds up from the line
         doc.setFont("helvetica", "bold");
         let reqFontSize = 8;
         doc.setFontSize(reqFontSize);
-        let reqLines = doc.splitTextToSize(names, 73);
+        let reqLines = doc.splitTextToSize(names, 75);
         while (reqLines.length > 2 && reqFontSize > 4.5) {
             reqFontSize -= 0.5;
             doc.setFontSize(reqFontSize);
-            reqLines = doc.splitTextToSize(names, 73);
+            reqLines = doc.splitTextToSize(names, 75);
         }
         
-        let ry = sigTopY + 15; // Start drawing from the line upwards
-        for (let i = reqLines.length - 1; i >= 0; i--) {
-            doc.text(reqLines[i], sx + 42.5, ry, {align: 'center'});
-            ry -= 3.5;
-        }
+        let ry = sigTopY + 14 - ((reqLines.length - 1) * 3.5); 
+        reqLines.forEach(line => {
+            doc.text(line, sx + 42.5, ry, {align: 'center'});
+            ry += 3.5;
+        });
 
+        doc.line(sx + 5, sigTopY + 16, sx + 80, sigTopY + 16);
         doc.setFont("helvetica", "normal"); doc.setFontSize(6);
         doc.text("(Name & Position)", sx + 42.5, sigTopY + 19, {align:"center"});
 
@@ -3161,6 +3166,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
 
+            
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
