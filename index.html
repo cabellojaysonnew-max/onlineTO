@@ -2727,6 +2727,8 @@ window.generateOfficialPDF = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
         
+
+
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2803,39 +2805,34 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Background image firmly locked at exactly A4 Size (210x297).
-        // Removed explicit format, alias, and compression parameters so jsPDF natively detects
-        // the MIME type from the Data URI. This prevents fallback canvas downsampling causing poor resolution.
-        if (img_bg) { try { doc.addImage(img_bg, 0, 0, 210, 297); } catch(e){} }
+        // Background image remains firmly locked at exactly A4 Size (210x297).
+        // Removed alias and compression string params. jsPDF will natively embed the raw JPEG without applying canvas re-compression, solving the poor resolution issue.
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        
+        // Shifted QR Code higher (Y: 9) to clear the horizontal line, explicitly named and uncompressed ('NONE')
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16, 'QR_CODE_IMG', 'NONE'); } catch(e){} }
 
-        // --- APPLIED EXACT 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
-        let curY = 31.75; // Absolute top margin start
-
-        // Render QR Code starting exactly at 31.75mm
-        if (img_qr) { try { doc.addImage(img_qr, 182, curY, 16, 16); } catch(e){} }
-
+        // --- APPLIED 1 INCH TOP MARGIN HERE (1 inch = 25.4 mm) ---
+        let topY = 25.4 - 6; // Sit just above the main box
+        
         if (od.to_header) {
-            doc.setTextColor(255, 0, 0);
+            doc.setTextColor(255, 0, 0); 
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-            doc.text(od.to_header.toUpperCase(), 105, curY + 3, { align: 'center' });
+            doc.text(od.to_header.toUpperCase(), 105, topY, { align: 'center' });
             doc.setTextColor(0, 0, 0); 
-            curY += 4;
+            topY += 4;
         }
 
         if (od.transport === "GOV'T VEHICLE") {
             doc.setTextColor(255, 0, 0); 
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-            doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, curY + 3, { align: 'center' });
+            doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, topY, { align: 'center' });
             doc.setTextColor(0, 0, 0); 
-            curY += 4;
         }
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        
-        // Push the main grid down enough so it does not overlap the QR code or headers
-        let startGridY = Math.max(curY + 2, 31.75 + 18);
-        curY = startGridY;
+        let curY = 25.4; // Shifted relative to exactly 1 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3227,12 +3224,13 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation
-        doc.rect(sx, startGridY, ew, curY - startGridY + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for exactly 1 inch (25.4mm) top margin)
+        doc.rect(sx, 25.4, ew, curY - 25.4 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
+
 
             
             
