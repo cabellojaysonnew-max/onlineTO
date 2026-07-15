@@ -2943,7 +2943,10 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         drawChk("ARBDSP", sx + 75, 172, isArbdsp); doc.line(sx + 92, 173, sx + 115, 173);
         drawChk("OTHERS:", sx + 125, 172, isOthers); doc.line(sx + 142, 173, sx + 165, 173);
         
-        doc.text(doc.splitTextToSize(othersText, 22), sx + 143, 172);
+        // Only prints text value if others strings are physically populated
+        if (isOthers && othersText) {
+            doc.text(doc.splitTextToSize(othersText, 22), sx + 143, 172);
+        }
         doc.setFont("helvetica", "italic"); doc.setFontSize(5);
         doc.text("(Please specify)", sx + 153, 176, {align:"center"});
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
