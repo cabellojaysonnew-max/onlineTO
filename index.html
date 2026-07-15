@@ -2728,6 +2728,7 @@ window.generateOfficialPDF = async function(toNo) {
 };
         
 
+
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2767,6 +2768,9 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
         const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
         
+        // FETCH VEHICLE LOG SCHEDULE for red ink rendering
+        const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
+        
         const od = group_orders[0];
         const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
         const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
@@ -2803,6 +2807,24 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
         if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 15, 15, 15); } catch(e){} }
+
+        // --- ADDED: TOP RED TEXT LOGIC ---
+        let topY = 23; // Sit just above the main box
+        
+        if (od.to_header) {
+            doc.setTextColor(255, 0, 0); 
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text(od.to_header.toUpperCase(), 105, topY, { align: 'center' });
+            doc.setTextColor(0, 0, 0); 
+            topY += 4;
+        }
+
+        if (od.transport === "GOV'T VEHICLE") {
+            doc.setTextColor(255, 0, 0); 
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, topY, { align: 'center' });
+            doc.setTextColor(0, 0, 0); 
+        }
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
@@ -2906,7 +2928,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // ROW 5: Means of Transportation
         doc.line(sx, curY, sx + ew, curY);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); // Slightly smaller to prevent crash
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); 
         doc.text("MEANS OF TRANSPORTATION:", sx + 2, curY + 6);
         
         const drawChk = (label, x, y, isChecked) => {
@@ -2915,16 +2937,23 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.text(label, x + 4, y);
         };
         doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        // Adjusted all checkboxes farther to the right to stop overlap
         drawChk("AIR", sx + 52, curY + 6, od.transport === "AIR");
         drawChk("WATER", sx + 67, curY + 6, od.transport === "WATER");
         drawChk("LAND", sx + 87, curY + 6, od.transport === "LAND");
         drawChk("GOVERNMENT VEHICLE", sx + 107, curY + 6, od.transport === "GOV'T VEHICLE");
+        
+        // --- ADDED: GOVERNMENT VEHICLE RED SCHEDULE TEXT ---
+        if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+            doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(255, 0, 0);
+            doc.text(`Sched: ${vLog.schedule}`, sx + 107, curY + 11);
+            doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+        }
+
         drawChk("OTHERS:", sx + 145, curY + 6, od.transport === "OTHERS");
         doc.line(sx + 160, curY + 7, sx + ew - 2, curY + 7);
         doc.setFont("helvetica", "italic"); doc.setFontSize(5);
         doc.text("(Please specify)", sx + 172, curY + 9, {align:"center"});
-        curY += 10;
+        curY += 12;
 
         // ROW 6: Destination
         doc.line(sx, curY, sx + ew, curY);
@@ -3166,6 +3195,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
 
+            
             
             
 window.cancelLeaveApp = async function(leaveId) {
