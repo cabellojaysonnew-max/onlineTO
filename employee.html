@@ -94,13 +94,11 @@ async function hardReloadSystem() {
         await Promise.all(cacheNames.map(name => caches.delete(name)));
     }
 
-    // CLEAR ALL BROWSER STORAGE (The Nuclear Option)
-    localStorage.clear();
-    sessionStorage.clear();
-
     // Reload with cache-busting parameter
     window.location.href = window.location.pathname + '?v=' + Date.now();
 }
+
+
         
     </script>
 
@@ -4536,24 +4534,18 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             } catch(e) { console.log("Biometric auth failed", e); }
         }
 
-function checkSession() {
+        function checkSession() {
             const stored = localStorage.getItem('dar_admin_session');
             if (stored) {
-                try {
-                    const session = JSON.parse(stored);
-                    if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
-                        currentUser = session.user;
-                    } else {
-                        localStorage.removeItem('dar_admin_session');
-                    }
-                } catch (e) {
-                    console.error("Corrupted session data, clearing...", e);
+                const session = JSON.parse(stored);
+                if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) {
+                    currentUser = session.user;
+                } else {
                     localStorage.removeItem('dar_admin_session');
                 }
             }
         }
 
-        
         function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
         function renderLogin() {
