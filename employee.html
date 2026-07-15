@@ -2552,14 +2552,7 @@ window.generateOfficialPDF = async function(toNo) {
         
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("REPORT TO:", 20, curY);
-        doc.setFont("helvetica", "normal"); 
-        
-        let repLines = doc.splitTextToSize(od.report_to || "", 125);
-        repLines.forEach((line, idx) => {
-            doc.text(line, 50, curY); 
-            doc.line(50, curY+1, 175, curY+1);
-            if (idx < repLines.length - 1) curY += 4.5;
-        });
+        doc.setFont("helvetica", "normal"); doc.text(od.report_to || "", 50, curY); doc.line(50, curY+1, 175, curY+1);
         
         curY += 6;
         doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
@@ -2638,17 +2631,14 @@ window.generateOfficialPDF = async function(toNo) {
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-        doc.line(lineStart, 173, lineEnd, 173);
+                doc.line(lineStart, 173, lineEnd, 173);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(7);
                 doc.text(roleLabel, cx, 177, { align: 'center' });
             }
         };
 
-        const sx = 15;
-        const ew = 180;
-
-        if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
+if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
             // Left Middle (Division Chief Recommending)
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("RECOMMENDING APPROVAL BY - DIVISION CHIEF:", sx + 2, 210);
@@ -2781,7 +2771,8 @@ window.cancelLeaveApp = async function(leaveId) {
                         </div>
                         <div class="action-group" style="margin-top: 0; flex-wrap: wrap;">
                             ${isPending ? `<button class="btn btn-warning btn-small" onclick="window.modifyPendingTO('${to.to_no}')">Modify</button><button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.withdrawPendingTO('${to.to_no}')">Withdraw</button><button class="btn btn-danger btn-small" onclick="window.deletePendingTO('${to.to_no}')">Delete All</button>` : ''}
-${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-warning btn-small" onclick="window.dropApprovedTODay('${to.to_no}')" style="background:#f59e0b; color:white;">Drop Day</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print (Old)</button><button class="btn btn-success btn-small" style="background:#059669;" onclick="window.generateOfficialPDF('${to.to_no}')">Print (New)</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel TO</button>` : ''}                       
+                            ${isApproved ? `<button class="btn btn-primary btn-small" onclick="window.openTevModal('${to.to_no}')">TEV Claim</button><button class="btn btn-warning btn-small" onclick="window.dropApprovedTODay('${to.to_no}')" style="background:#f59e0b; color:white;">Drop Day</button><button class="btn btn-success btn-small" onclick="window.generateOfficialPDF('${to.to_no}')">Print (Old)</button><button class="btn btn-success btn-small" style="background:#059669;" onclick="window.generateOfficialPDFNewFormat('${to.to_no}')">Print (New)</button><button class="btn btn-danger btn-small" onclick="window.cancelApprovedTO('${to.to_no}')">Cancel TO</button>` : ''}
+                       
                        </div>
                     </div>`;
                 }
