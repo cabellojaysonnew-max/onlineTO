@@ -2324,6 +2324,7 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
+
 window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2373,7 +2374,7 @@ window.generateOfficialPDF = async function(toNo) {
         }
         return result.join('; ');
     };
-    
+
     try {
         const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
@@ -2419,11 +2420,8 @@ window.generateOfficialPDF = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        if (img_bg) { 
-            try { 
-                doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, 'bg_old', 'NONE'); 
-            } catch(e){} 
-        }
+        // Alias 'FAST' added here to prevent image compression blurring
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
         
         let topY = 8;
         
@@ -2502,6 +2500,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "normal");
         
         let nameLinesCount = renderFlexibleText(names, 40, 48, 135, 175, 10, 4);
+
         let nextY = 48 + ((nameLinesCount - 1) * 4.5) + 6;
 
         doc.setFont("helvetica", "bold"); doc.text("POSITION:", 20, nextY);
@@ -2541,6 +2540,7 @@ window.generateOfficialPDF = async function(toNo) {
         let destY = destLabelY;
         
         const destMaxWidth = 125;
+
         const destMap = new Map();
         itin_list.forEach(it => {
             if (!destMap.has(it.destination)) destMap.set(it.destination, []);
@@ -2585,7 +2585,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
         doc.text("DEPARTURE DATE:", 20, curY);
         doc.setFont("helvetica", "normal"); 
-        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10); 
+        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10);
         doc.text(departureDateStr, 55, curY); 
         doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("RETURN DATE:", 95, curY);
@@ -2611,6 +2611,7 @@ window.generateOfficialPDF = async function(toNo) {
         });
 
         let finalPurposeStr = "";
+        
         if (purpMap.size === 1) {
             finalPurposeStr = Array.from(purpMap.keys())[0];
         } else {
@@ -2621,7 +2622,6 @@ window.generateOfficialPDF = async function(toNo) {
             });
             finalPurposeStr = groupedPurposes.join('; ');
         }        
-        
         let purpFontSize = 9;
         doc.setFont("helvetica", "normal"); doc.setFontSize(purpFontSize);
         
@@ -2645,18 +2645,19 @@ window.generateOfficialPDF = async function(toNo) {
         drawCheck("LIVE IN", 110, curY, false);
         drawCheck("LIVE OUT", 135, curY, false);
 
-        const renderSigs = (list, imgs, startX, width, roleLabel) => {
+        // Dynamic Signature Render Helper
+        const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
             if (list.length === 0) return;
             const count = list.length;
             const step = width / count;
-            const imgSize = count > 2 ? 18 : 25;
+            const imgSize = count > 2 ? 18 : 22;
             
             for (let j = 0; j < count; j++) {
                 let cx = startX + (step * j) + (step / 2); 
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, 155, imgSize, imgSize); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, customY, imgSize, imgSize); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
@@ -2668,51 +2669,59 @@ window.generateOfficialPDF = async function(toNo) {
                 }
                 
                 doc.setFont("helvetica", "bold");
-                doc.text(name, cx, 171, { align: 'center' });
+                doc.text(name, cx, customY + 16, { align: 'center' });
 
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-                doc.line(lineStart, 173, lineEnd, 173);
+                doc.line(lineStart, customY + 18, lineEnd, customY + 18);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(7);
-                doc.text(roleLabel, cx, 177, { align: 'center' });
+                doc.text(roleLabel, cx, customY + 22, { align: 'center' });
             }
         };
 
-        const travelDuration = earliestDate && latestDate ? Math.ceil(Math.abs(new Date(latestDate) - new Date(earliestDate)) / (1000 * 60 * 60 * 24)) + 1 : 1;
-        const isOutsideBicol = od.remarks && od.remarks.includes("OUTSIDE BICOL");
-        const requiresRD = isOutsideBicol && travelDuration >= 7;
+        // NEW SIGNATURE BLOCK (Old Format PDF logic)
+        let sigTopY = curY + 6;
+        
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("REQUESTED BY:", 20, sigTopY);
+        let requesterList = uh_list.length > 0 ? uh_list : [{ full_name: names.split(',')[0] }];
+        let requesterImgs = uh_list.length > 0 ? uh_imgs : [];
+        renderSigs(requesterList, requesterImgs, 15, 80, "MARPO / UNIT HEAD", sigTopY + 2);
 
-        if (requiresRD) {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-            doc.text("Recommending Approval:", 20, 156);
-            
-            renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
-            
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 153, 20, 20); } catch(e){} }
-            doc.setFont("helvetica", "bold"); doc.setFontSize(8); 
-            doc.text("RICARDO C. GARCIA", 127, 171, {align: 'center'});
-            doc.line(100, 173, 155, 173); 
-            doc.setFont("helvetica", "normal"); doc.setFontSize(7); 
-            doc.text("PARPO II", 127, 177, {align: 'center'});
-            
-            doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
-            doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-            doc.text("Regional Director", 128, 206);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("RECOMMENDING APPROVAL:", 105, sigTopY);
+        renderSigs(dc_list, dc_imgs, 105, 80, "DIVISION CHIEF", sigTopY + 2);
+
+        sigTopY += 28;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("APPROVED BY:", 20, sigTopY);
+
+        const travelStart = new Date(sortedItin[0].travel_date);
+        const travelEnd = new Date(sortedItin[sortedItin.length - 1].travel_date);
+        const durationDays = Math.ceil((travelEnd - travelStart) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL") && durationDays >= 7) {
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', 45, sigTopY + 2, 20, 20); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("RICARDO C. GARCIA", 55, sigTopY + 18, {align: 'center'});
+            doc.line(20, sigTopY + 19, 90, sigTopY + 19);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("PARPO II", 55, sigTopY + 22, {align:"center"});
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("RODRIGO O. REALUBIT, CESO VI", 150, sigTopY + 18, {align: 'center'});
+            doc.line(110, sigTopY + 19, 190, sigTopY + 19);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("Regional Director", 150, sigTopY + 22, {align:"center"});
         } else {
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', 95, sigTopY + 2, 24, 24); } catch(e){}
             doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-            doc.text("Recommended by:", 20, 156);
-            
-            if (!isMARPO) renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD");
-            renderSigs(dc_list, dc_imgs, 100, 80, "DIVISION CHIEF");
-
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 185, 24, 24); } catch(e){} }
-            doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-            doc.text("RICARDO C. GARCIA", 114, 202);
+            doc.text("RICARDO C. GARCIA", 107, sigTopY + 22, {align: 'center'});
+            doc.line(60, sigTopY + 23, 154, sigTopY + 23);
             doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-            doc.text("PARPO II", 128, 206);
+            doc.text("PARPO II", 107, sigTopY + 27, {align:"center"});
         }
         
         await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
@@ -2794,18 +2803,13 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // --- FIXED IMAGE RENDER: BYPASS JSPDF COMPRESSION ---
-        if (img_bg) { 
-            try { 
-                // Specifying 'JPEG' format and 'NONE' compression prevents jsPDF from ruining the quality
-                doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, 'bg_new', 'NONE'); 
-            } catch(e) {} 
-        }
+        // FAST alias applied for native high-res render without fuzzy compression
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
         
         if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
 
         // --- APPLIED 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
-        let topY = 31.75; 
+        let topY = 31.75 - 6; 
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2820,13 +2824,11 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
             doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, topY, { align: 'center' });
             doc.setTextColor(0, 0, 0); 
-            topY += 4;
         }
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = topY; 
-        let gridStartY = curY; // Start grid exactly based on the adjusted margin
+        let curY = 31.75; // Shifted relative to exactly 1.25 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3081,133 +3083,97 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         drawChk("LIVE-OUT", sx + 140, curY + 5, false);
         curY += 8;
 
-        const renderSigs = (list, imgs, startX, baseY, width, roleLabel) => {
+        // Dynamic Signature Render Helper
+        const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
             if (list.length === 0) return;
             const count = list.length;
             const step = width / count;
-            const imgSize = count > 2 ? 14 : 18;
+            const imgSize = count > 2 ? 16 : 20;
             
             for (let j = 0; j < count; j++) {
                 let cx = startX + (step * j) + (step / 2); 
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, baseY + 6, imgSize, imgSize); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, customY, imgSize, imgSize); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
-                let fontSize = 8;
+                let fontSize = 7.5;
                 doc.setFontSize(fontSize);
                 while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
-                    fontSize -= 0.5;
-                    doc.setFontSize(fontSize);
+                    fontSize -= 0.5; doc.setFontSize(fontSize);
                 }
                 
                 doc.setFont("helvetica", "bold");
-                doc.text(name, cx, baseY + 21, { align: 'center' });
+                doc.text(name, cx, customY + 16, { align: 'center' });
 
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-                doc.line(lineStart, baseY + 22, lineEnd, baseY + 22);
+                doc.line(lineStart, customY + 17, lineEnd, customY + 17);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(6);
-                doc.text(roleLabel, cx, baseY + 25, { align: 'center' });
+                doc.text(roleLabel, cx, customY + 20, { align: 'center' });
             }
         };
 
-        const earliestDate = sortedItin[0]?.travel_date || "";
-        const latestDate = sortedItin[sortedItin.length - 1]?.travel_date || "";
-        const travelDuration = earliestDate && latestDate ? Math.ceil(Math.abs(new Date(latestDate) - new Date(earliestDate)) / (1000 * 60 * 60 * 24)) + 1 : 1;
-        
-        const isOutsideBicol = od.remarks && od.remarks.includes("OUTSIDE BICOL");
-        const requiresRD = isOutsideBicol && travelDuration >= 7;
-
-        // ROW 12: Signatures Grid
+        // ROW 12: Signatures Grid (New layout for format constraints)
         let sigTopY = curY;
-        doc.line(sx, curY, sx + ew, curY); // Top divider
-        doc.line(sx + 85, sigTopY, sx + 85, sigTopY + 54); // Center vertical divider
-        
-        // TOP-LEFT: REQUESTED BY (UNIT HEAD/MARPO)
+        doc.line(sx, curY, sx + ew, curY);
+
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-        doc.text("REQUESTED BY:", sx + 2, sigTopY + 5);
-        if (uh_list.length > 0) {
-            renderSigs(uh_list, uh_imgs, sx, sigTopY, 85, "MARPO / UNIT HEAD");
-        } else if (isMARPO) {
+        doc.text("REQUESTED BY:", sx + 2, sigTopY + 4);
+        let requesterList = uh_list.length > 0 ? uh_list : [{ full_name: names.split(',')[0] }];
+        let requesterImgs = uh_list.length > 0 ? uh_imgs : [];
+        renderSigs(requesterList, requesterImgs, sx + 2, 80, "MARPO / UNIT HEAD", sigTopY + 6);
+
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("RECOMMENDING APPROVAL:", sx + 87, sigTopY + 4);
+        renderSigs(dc_list, dc_imgs, sx + 87, 100, "DIVISION CHIEF", sigTopY + 6);
+
+        // Center line
+        doc.line(sx + 85, sigTopY, sx + 85, sigTopY + 28);
+        doc.line(sx, sigTopY + 28, sx + ew, sigTopY + 28);
+
+        // Approvals
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("APPROVED BY:", sx + 2, sigTopY + 32);
+
+        const travelStart = new Date(sortedItin[0].travel_date);
+        const travelEnd = new Date(sortedItin[sortedItin.length - 1].travel_date);
+        const durationDays = Math.ceil((travelEnd - travelStart) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL") && durationDays >= 7) {
+            doc.line(sx + 95, sigTopY + 28, sx + 95, sigTopY + 58);
+
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 35, sigTopY + 34, 20, 20); } catch(e){}
             doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-            doc.text(names, sx + 42.5, sigTopY + 21, { align: 'center' });
-            doc.line(sx + 5, sigTopY + 22, sx + 80, sigTopY + 22);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("MARPO", sx + 42.5, sigTopY + 25, {align:"center"});
+            doc.text("RICARDO C. GARCIA", sx + 47.5, sigTopY + 50, {align: 'center'});
+            doc.line(sx + 10, sigTopY + 51, sx + 85, sigTopY + 51);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("PARPO II", sx + 47.5, sigTopY + 54, {align:"center"});
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+            doc.text("RODRIGO O. REALUBIT, CESO VI", sx + 142.5, sigTopY + 50, {align: 'center'});
+            doc.line(sx + 105, sigTopY + 51, sx + 180, sigTopY + 51);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("Regional Director", sx + 142.5, sigTopY + 54, {align:"center"});
         } else {
-            doc.line(sx + 5, sigTopY + 22, sx + 80, sigTopY + 22);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("MARPO / UNIT HEAD", sx + 42.5, sigTopY + 25, {align:"center"});
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 85, sigTopY + 34, 20, 20); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+            doc.text("RICARDO C. GARCIA", sx + 95, sigTopY + 50, {align: 'center'});
+            doc.line(sx + 50, sigTopY + 51, sx + 140, sigTopY + 51);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("PARPO II", sx + 95, sigTopY + 54, {align:"center"});
         }
 
-        // TOP-RIGHT: RECOMMENDING APPROVAL (DIVISION CHIEF)
-        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-        doc.text("RECOMMENDING APPROVAL:", sx + 87, sigTopY + 5);
-        if (dc_list.length > 0) {
-            renderSigs(dc_list, dc_imgs, sx + 85, sigTopY, ew - 85, "DIVISION CHIEF");
-        } else {
-            doc.line(sx + 90, sigTopY + 22, sx + ew - 5, sigTopY + 22);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("DIVISION CHIEF", sx + 85 + ((ew-85)/2), sigTopY + 25, {align:"center"});
-        }
+        doc.line(sx, sigTopY + 58, sx + ew, sigTopY + 58);
+        doc.setFont("helvetica", "bolditalic"); doc.setFontSize(7);
+        const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
+        doc.text(doc.splitTextToSize(cert, 185), sx + 2, sigTopY + 62);
 
-        if (requiresRD) {
-            // REQUIRES REGIONAL DIRECTOR (Outside Bicol >= 7 Days)
-            doc.line(sx, sigTopY + 27, sx + ew, sigTopY + 27); // Horizontal divider
-            
-            // BOTTOM-LEFT: RECOMMENDING APPROVAL (PARPO II)
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("RECOMMENDING APPROVAL:", sx + 2, sigTopY + 32);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 32.5, sigTopY + 31, 20, 20); } catch(e){}
-            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-            doc.text("RICARDO C. GARCIA", sx + 42.5, sigTopY + 48, {align: 'center'});
-            doc.line(sx + 5, sigTopY + 49, sx + 80, sigTopY + 49);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("PARPO II", sx + 42.5, sigTopY + 52, {align:"center"});
-            
-            // BOTTOM-RIGHT: APPROVED BY (Regional Director)
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-            doc.text("RODRIGO O. REALUBIT, CESO VI", sx + 85 + ((ew-85)/2), sigTopY + 48, {align: 'center'});
-            doc.line(sx + 90, sigTopY + 49, sx + ew - 5, sigTopY + 49);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("Regional Director", sx + 85 + ((ew-85)/2), sigTopY + 52, {align:"center"});
-            
-            curY = sigTopY + 54;
-            
-            // Certification placed below signatures for RD format
-            doc.line(sx, curY, sx + ew, curY);
-            doc.setFont("helvetica", "bolditalic"); doc.setFontSize(7);
-            const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
-            doc.text(cert, sx + 2, curY + 4);
-            curY += 7;
-        } else {
-            // STANDARD / LOCAL / OUTSIDE BICOL (< 7 DAYS)
-            doc.line(sx, sigTopY + 27, sx + ew, sigTopY + 27); // Horizontal divider
-            
-            // BOTTOM-LEFT: Leave Certification
-            doc.setFont("helvetica", "bolditalic"); doc.setFontSize(7);
-            const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
-            doc.text(doc.splitTextToSize(cert, 80), sx + 2, sigTopY + 34);
-            
-            // BOTTOM-RIGHT: APPROVED BY (PARPO II)
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 31, 20, 20); } catch(e){}
-            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-            doc.text("RICARDO C. GARCIA", sx + 85 + ((ew-85)/2), sigTopY + 48, {align: 'center'});
-            doc.line(sx + 90, sigTopY + 49, sx + ew - 5, sigTopY + 49);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("PARPO II", sx + 85 + ((ew-85)/2), sigTopY + 52, {align:"center"});
-            
-            curY = sigTopY + 54;
-        }
+        curY = sigTopY + 66;
 
         // ROW 13: Important Footer
         doc.line(sx, curY, sx + ew, curY);
@@ -3219,12 +3185,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation based strictly on calculated grid start
-        doc.rect(sx, gridStartY, ew, curY - gridStartY + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 31.75mm)
+        doc.rect(sx, 31.75, ew, curY - 31.75 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
-};       
+};
+
+
+
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
