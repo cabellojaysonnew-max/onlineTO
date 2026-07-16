@@ -2805,15 +2805,14 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Background image remains firmly locked at exactly A4 Size (210x297).
-        // Removed alias and compression string params. jsPDF will natively embed the raw JPEG without applying canvas re-compression, solving the poor resolution issue.
+        // Fixed Resolution Issue: Removed alias and compression parameters to match working old logic format
         if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
         
-        // Shifted QR Code higher (Y: 9) to clear the horizontal line, explicitly named and uncompressed ('NONE')
-        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16, 'QR_CODE_IMG', 'NONE'); } catch(e){} }
+        // Placement of the QR code is explicitly kept without alias processing issues
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
 
-        // --- APPLIED 1 INCH TOP MARGIN HERE (1 inch = 25.4 mm) ---
-        let topY = 25.4 - 6; // Sit just above the main box
+        // --- APPLIED 1.1 INCH TOP MARGIN HERE (1.1 inch = 27.94 mm) ---
+        let topY = 27.94 - 6; // Sit just above the main box
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2832,7 +2831,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 25.4; // Shifted relative to exactly 1 inch top margin
+        let curY = 27.94; // Shifted relative to exactly 1.1 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3125,7 +3124,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, sigTopY + 18, imgSize, imgSize, 'SIG_'+j, 'NONE'); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, sigTopY + 18, imgSize, imgSize); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
@@ -3153,7 +3152,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("RECOMMENDED BY (MARPO/UNIT HEAD):", sx + 2, sigTopY + 24);
             if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18, 'SIG_DC', 'NONE'); } catch(e){}
+                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
                 doc.text(dc_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
             }
             doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
@@ -3162,7 +3161,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("RECOMMENDED BY (DIVISION CHIEF):", sx + 87, sigTopY + 5);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 6, 18, 18, 'SIG_P2', 'NONE'); } catch(e){}
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 6, 18, 18); } catch(e){}
             doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 22, {align: 'center'});
             doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
             doc.setFont("helvetica", "normal"); doc.setFontSize(6);
@@ -3178,7 +3177,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("MARPO/UNIT HEAD:", sx + 2, sigTopY + 24);
             if (uh_list.length > 0) {
-                if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18, 'SIG_UH', 'NONE'); } catch(e){}
+                if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
                 doc.text(uh_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
             }
             doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
@@ -3188,7 +3187,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("DIVISION CHIEF:", sx + 87, sigTopY + 5);
             if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 125, sigTopY + 6, 20, 20, 'SIG_DC', 'NONE'); } catch(e){}
+                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 125, sigTopY + 6, 20, 20); } catch(e){}
                 doc.text(dc_list[0].full_name.toUpperCase(), sx + 137.5, sigTopY + 22, {align: 'center'});
             }
             doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
@@ -3197,7 +3196,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             
             doc.setFont("helvetica", "bold"); doc.setFontSize(7);
             doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20, 'SIG_P2', 'NONE'); } catch(e){}
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20); } catch(e){}
             doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 49, {align: 'center'});
             doc.line(sx + 90, sigTopY + 50, sx + ew - 5, sigTopY + 50);
             doc.setFont("helvetica", "normal"); doc.setFontSize(6);
@@ -3224,13 +3223,13 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for exactly 1 inch (25.4mm) top margin)
-        doc.rect(sx, 25.4, ew, curY - 25.4 + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 27.94mm)
+        doc.rect(sx, 27.94, ew, curY - 27.94 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-
+            
 
             
             
