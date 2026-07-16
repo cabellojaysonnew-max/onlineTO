@@ -2419,7 +2419,11 @@ window.generateOfficialPDF = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        if (img_bg) { 
+            try { 
+                doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, 'bg_old', 'NONE'); 
+            } catch(e){} 
+        }
         
         let topY = 8;
         
@@ -2676,7 +2680,6 @@ window.generateOfficialPDF = async function(toNo) {
             }
         };
 
-        // --- DURATION CALCULATION LOGIC FOR OUTSIDE BICOL ---
         const travelDuration = earliestDate && latestDate ? Math.ceil(Math.abs(new Date(latestDate) - new Date(earliestDate)) / (1000 * 60 * 60 * 24)) + 1 : 1;
         const isOutsideBicol = od.remarks && od.remarks.includes("OUTSIDE BICOL");
         const requiresRD = isOutsideBicol && travelDuration >= 7;
@@ -2791,11 +2794,18 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        // --- FIXED IMAGE RENDER: BYPASS JSPDF COMPRESSION ---
+        if (img_bg) { 
+            try { 
+                // Specifying 'JPEG' format and 'NONE' compression prevents jsPDF from ruining the quality
+                doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, 'bg_new', 'NONE'); 
+            } catch(e) {} 
+        }
+        
         if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
 
         // --- APPLIED 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
-        let topY = 31.75 - 6; 
+        let topY = 31.75; 
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2810,11 +2820,13 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
             doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, topY, { align: 'center' });
             doc.setTextColor(0, 0, 0); 
+            topY += 4;
         }
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 31.75; 
+        let curY = topY; 
+        let gridStartY = curY; // Start grid exactly based on the adjusted margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3069,7 +3081,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         drawChk("LIVE-OUT", sx + 140, curY + 5, false);
         curY += 8;
 
-        // --- NEW MODIFIED RENDER SIGS ---
         const renderSigs = (list, imgs, startX, baseY, width, roleLabel) => {
             if (list.length === 0) return;
             const count = list.length;
@@ -3105,7 +3116,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             }
         };
 
-        // --- DURATION CALCULATION LOGIC FOR OUTSIDE BICOL ---
         const earliestDate = sortedItin[0]?.travel_date || "";
         const latestDate = sortedItin[sortedItin.length - 1]?.travel_date || "";
         const travelDuration = earliestDate && latestDate ? Math.ceil(Math.abs(new Date(latestDate) - new Date(earliestDate)) / (1000 * 60 * 60 * 24)) + 1 : 1;
@@ -3113,7 +3123,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const isOutsideBicol = od.remarks && od.remarks.includes("OUTSIDE BICOL");
         const requiresRD = isOutsideBicol && travelDuration >= 7;
 
-        // ROW 12: Signatures Grid (Modified Structure)
+        // ROW 12: Signatures Grid
         let sigTopY = curY;
         doc.line(sx, curY, sx + ew, curY); // Top divider
         doc.line(sx + 85, sigTopY, sx + 85, sigTopY + 54); // Center vertical divider
@@ -3209,14 +3219,12 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start of 31.75mm)
-        doc.rect(sx, 31.75, ew, curY - 31.75 + 18);
+        // Final Dynamic Height Outer Border Calculation based strictly on calculated grid start
+        doc.rect(sx, gridStartY, ew, curY - gridStartY + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
-};
-
-            
+};       
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
