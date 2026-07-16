@@ -2325,6 +2325,7 @@ window.modifyPendingTO = async function(toNo) {
         };
         
 
+
 window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
@@ -2420,7 +2421,7 @@ window.generateOfficialPDF = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Alias 'FAST' added here to prevent image compression blurring
+        // 'FAST' alias applied to prevent jsPDF from blurring/compressing the background image
         if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
         
         let topY = 8;
@@ -2645,7 +2646,6 @@ window.generateOfficialPDF = async function(toNo) {
         drawCheck("LIVE IN", 110, curY, false);
         drawCheck("LIVE OUT", 135, curY, false);
 
-        // Dynamic Signature Render Helper
         const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
             if (list.length === 0) return;
             const count = list.length;
@@ -2681,14 +2681,12 @@ window.generateOfficialPDF = async function(toNo) {
             }
         };
 
-        // NEW SIGNATURE BLOCK (Old Format PDF logic)
+        // SIGNATURE BLOCK (Old Format PDF)
         let sigTopY = curY + 6;
         
         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
         doc.text("REQUESTED BY:", 20, sigTopY);
-        let requesterList = uh_list.length > 0 ? uh_list : [{ full_name: names.split(',')[0] }];
-        let requesterImgs = uh_list.length > 0 ? uh_imgs : [];
-        renderSigs(requesterList, requesterImgs, 15, 80, "MARPO / UNIT HEAD", sigTopY + 2);
+        renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD", sigTopY + 2);
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(8);
         doc.text("RECOMMENDING APPROVAL:", 105, sigTopY);
@@ -2803,7 +2801,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // FAST alias applied for native high-res render without fuzzy compression
+        // 'FAST' alias applied for native high-res render without fuzzy compression
         if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
         
         if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
@@ -3124,9 +3122,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("REQUESTED BY:", sx + 2, sigTopY + 4);
-        let requesterList = uh_list.length > 0 ? uh_list : [{ full_name: names.split(',')[0] }];
-        let requesterImgs = uh_list.length > 0 ? uh_imgs : [];
-        renderSigs(requesterList, requesterImgs, sx + 2, 80, "MARPO / UNIT HEAD", sigTopY + 6);
+        renderSigs(uh_list, uh_imgs, sx + 2, 80, "MARPO / UNIT HEAD", sigTopY + 6);
 
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("RECOMMENDING APPROVAL:", sx + 87, sigTopY + 4);
@@ -3191,8 +3187,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-
-
 
             
 window.cancelLeaveApp = async function(leaveId) {
