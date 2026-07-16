@@ -2813,8 +2813,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         
         if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
 
-        // --- APPLIED 1.25 INCH TOP MARGIN HERE (1.25 inch = 31.75 mm) ---
-        let topY = 31.75 - 6; 
+        // --- APPLIED 1.5 INCH TOP MARGIN HERE (1.5 inch = 38.1 mm) ---
+        let topY = 38.1 - 6; 
         
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
@@ -2833,7 +2833,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 31.75; // Shifted relative to exactly 1.25 inch top margin
+        let curY = 38.1; // Shifted relative to exactly 1.5 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -3198,13 +3198,12 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for exact 31.75mm top margin)
-        doc.rect(sx, 31.75, ew, curY - 31.75 + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for exact 38.1mm top margin)
+        doc.rect(sx, 38.1, ew, curY - 38.1 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-            
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
