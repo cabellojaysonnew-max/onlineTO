@@ -6338,7 +6338,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             if (emp && checkScope(emp.division, emp.unit)) {
                 let show = false;
                 const s = getLeaveStatus(l.remarks || "");
-// Logic for showing leaves based on subtab
+            // Logic for showing leaves based on subtab
                 if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                     let canSeePending = false;
                     const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
@@ -6352,7 +6352,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                     }
                     if(canSeePending) { show = true; totalQueue++; }
-                }
                 } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
                     show = true; totalActive++;
                 } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
