@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <script>
-        // AUTOMATIC REFRESH SCRIPT
-        // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
-        // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.5"; 
+        // CACHE KILLER SCRIPT
+        // Update this version string whenever you deploy new code.
+        const APP_VERSION = "v1.4"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
-            window.location.reload(true);
+            // Forces the network to fetch a fresh file by appending a unique timestamp
+            window.location.replace(window.location.pathname + '?v=' + new Date().getTime());
         }
     </script>
     <meta charset="UTF-8">
