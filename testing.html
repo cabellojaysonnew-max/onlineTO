@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        // Bumped to 1.4 to force the refresh once the server accepts the clean file
+        const APP_VERSION = "v1.4"; 
+        if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
+            localStorage.setItem("dar_app_version", APP_VERSION);
+            window.location.reload(true);
+        }
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>DAR Integrated System</title>
+    <style>
+        /* ALL YOUR MASTER CSS GOES HERE */
+        body, html { margin: 0; padding: 0; height: 100%; background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; }
+        #landing-menu { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; background: #003811; color: white; }
+        .system-title { color: #D4AF37; margin-bottom: 5px; font-size: 28px; font-weight: bold; letter-spacing: 2px; }
+        .system-sub { color: #ccc; margin-bottom: 40px; font-size: 12px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
+        .btn-launch { background: white; color: #003811; padding: 18px 30px; margin: 10px; border: 3px solid #D4AF37; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; width: 85%; max-width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-launch:active { transform: scale(0.96); }
+        #app-container { display: none; width: 100%; height: 100%; position: relative; }
+        #app-iframe { width: 100%; height: 100%; border: none; background: #fff; }
+        #btn-switch { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 9999; background: rgba(0, 56, 17, 0.8); color: white; border: 2px solid #D4AF37; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: bold; cursor: pointer; backdrop-filter: blur(4px); transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #btn-switch:active { transform: translateX(-50%) scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <div id="landing-menu">
+        <div class="system-title">DAR PORTALS</div>
+        <div class="system-sub">Camarines Sur I</div>
+        
+        <button class="btn-launch" onclick="bootSystem('employee_portal')">
+            📱 EMPLOYEE PORTAL
+        </button>
+        <button class="btn-launch" onclick="bootSystem('admin_console')">
+            💻 ADMIN CONSOLE
+        </button>
+        <button class="btn-launch" onclick="bootSystem('leave_console')">
+            🍃 LEAVE PROCESSING
+        </button>
+        <button class="btn-launch" style="margin-top: 30px; font-size: 12px; border-color: #dc2626; color: #dc2626;" onclick="hardReloadSystem()">
+            🔄 FORCE APP UPDATE
+        </button>
+    </div>
+
+    <div id="app-container">
+        <button id="btn-switch" onclick="returnToMenu()">Switch Portal ↺</button>
+        <iframe id="app-iframe"></iframe>
+    </div>
+
+    <script>
+        function bootSystem(id) {
+            const portalElement = document.getElementById(id);
+            if (!portalElement) {
+                alert(`Error: The module '${id}' could not be loaded. Please click 'FORCE APP UPDATE'.`);
+                return;
+            }
+            const code = portalElement.textContent;
+            const iframe = document.getElementById('app-iframe');
+            iframe.srcdoc = code;
+            document.getElementById('landing-menu').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+        }
+     
+        function returnToMenu() {
+            document.getElementById('app-iframe').srcdoc = '';
+            document.getElementById('app-container').style.display = 'none';
+            document.getElementById('landing-menu').style.display = 'flex';
+        }
+
+        async function hardReloadSystem() {
+            if (!confirm("⚠️ FORCE UPDATE\n\nAre you sure you want to completely clear the cache, remove saved offline data, and reload the system?\n\nThis resolves issues where the Admin or Employee portal appears blank or outdated.")) {
+                return;
+            }
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                }
+                localStorage.clear();
+                sessionStorage.clear();
+                alert("✅ Cache and old data successfully cleared!\n\nThe system will now load the latest version.");
+                window.location.href = window.location.pathname + '?v=' + Date.now();
+            } catch (error) {
+                alert("Warning: Could not clear all cache automatically. " + error.message);
+                window.location.reload(true);
+            }
+        }
+    </script>
+
+<!-- ============================================== -->
+<!-- 1. EMPLOYEE PORTAL                             -->
+<!-- ============================================== -->
+<xmp id="employee_portal" style="display: none;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- PASTE THE ENTIRE EMPLOYEE PORTAL CODE HERE -->
+</head>
+<body>
+<!-- PASTE THE ENTIRE EMPLOYEE PORTAL BODY HERE -->
+</body>
+</html>
+</xmp>
+
+<!-- ============================================== -->
+<!-- 2. ADMIN CONSOLE                               -->
+<!-- ============================================== -->
+<xmp id="admin_console" style="display: none;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- PASTE THE ENTIRE ADMIN CONSOLE CODE HERE -->
+</head>
+<body>
+<!-- PASTE THE ENTIRE ADMIN CONSOLE BODY HERE -->
+</body>
+</html>
+</xmp>
+
+<!-- ============================================== -->
+<!-- 3. LEAVE PROCESSING CONSOLE                    -->
+<!-- ============================================== -->
+<xmp id="leave_console" style="display: none;">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- PASTE THE ENTIRE LEAVE CONSOLE CODE HERE -->
+</head>
+<body>
+<!-- PASTE THE ENTIRE LEAVE CONSOLE BODY HERE -->
+</body>
+</html>
+</xmp>
+
+<!-- THIS IS THE ONLY PLACE THESE TAGS SHOULD EXIST -->
+</body>
+</html>
