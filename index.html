@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.2"; 
+        const APP_VERSION = "v1.3"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -45,8 +45,11 @@
         <button class="btn-launch" onclick="bootSystem('employee_portal')">
             📱 EMPLOYEE PORTAL
         </button>
-        <button class="btn-launch" onclick="bootSystem('admin_console')">
-            💻 ADMIN CONSOLE
+     <button class="btn-launch" onclick="bootSystem('admin_console')">
+            💻 TO PROCESSING
+        </button>
+        <button class="btn-launch" onclick="bootSystem('leave_console')">
+            🍃 LEAVE PROCESSING
         </button>
         <button class="btn-launch" style="margin-top: 30px; font-size: 12px; border-color: #dc2626; color: #dc2626;" onclick="hardReloadSystem()">
             🔄 FORCE APP UPDATE
@@ -273,23 +276,6 @@ async function hardReloadSystem() {
                 
                 <button class="btn btn-primary" onclick="window.generateTEVPDF()">📄 GENERATE COMBINED TEV FORM</button>
             </div>
-        </div><div id="dropDayModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2000; justify-content:center; align-items:center;">
-            <div class="card" style="width: 85%; max-width: 400px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                <button onclick="document.getElementById('dropDayModal').style.display='none'" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
-                <h3 style="margin-top:0; color:var(--dar-green);">Select Day to Drop</h3>
-                <p style="font-size:12px; color:var(--text-muted);">Dropping a day from a group TO will securely split you into a new TO number.</p>
-                <div id="drop-day-list" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
-            </div>
-        </div>
-
-        <div id="cancelToModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2000; justify-content:center; align-items:center;">
-            <div class="card" style="width: 85%; max-width: 400px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                <button onclick="document.getElementById('cancelToModal').style.display='none'" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
-                <h3 style="margin-top:0; color:var(--danger);">Cancel Travel Order</h3>
-                <p style="font-size:12px; color:var(--text-muted); margin-bottom: 15px;">This is a group Travel Order. Do you want to cancel your participation only, or cancel the entire Travel Order for everyone?</p>
-                <button class="btn btn-warning" id="btn-cancel-me" style="margin-bottom: 10px;">Cancel Just Me</button>
-                <button class="btn btn-danger" id="btn-cancel-all">Cancel ENTIRE T.O. For All</button>
-            </div>
         </div>
 
         <div id="remarksModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2000; justify-content:center; align-items:center;">
@@ -302,9 +288,15 @@ async function hardReloadSystem() {
             </div>
         </div>
 
+        <div id="dropDayModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2000; justify-content:center; align-items:center;">
+            <div class="card" style="width: 85%; max-width: 400px; background:white; padding:20px; border-radius: 12px; position:relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                <button onclick="document.getElementById('dropDayModal').style.display='none'" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--dar-green);">Select Day to Drop</h3>
+                <p style="font-size:12px; color:var(--text-muted);">Dropping a day from a group TO will securely split you into a new TO number.</p>
+                <div id="drop-day-list" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+        </div>
 
-
-        
         <div id="attendance-view" class="view">
             <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 20px;">
                 <h4 style="margin:0; border:none; padding:0; color: #6b7280; font-size: 12px; letter-spacing: 1px;">TODAY'S STATUS</h4>
@@ -2142,42 +2134,14 @@ return {
             window.loadStatus();
         };
 
-    window.cancelApprovedTO = async function(toNo) {
-            const { data: toGroup } = await supabase.from('travel_orders').select('emp_id').eq('to_no', toNo);
-
-            if (toGroup && toGroup.length > 1) {
-                const modal = document.getElementById('cancelToModal');
-                modal.style.display = 'flex';
-
-                document.getElementById('btn-cancel-me').onclick = async () => {
-                    modal.style.display = 'none';
-                    if(!confirm(`Cancel your participation in Approved TO ${toNo}? (Other participants will remain unaffected)`)) return;
-                    await executeCancellation(toNo, false);
-                };
-                document.getElementById('btn-cancel-all').onclick = async () => {
-                    modal.style.display = 'none';
-                    if(!confirm(`WARNING: Are you sure you want to cancel the ENTIRE Travel Order (${toNo}) for ALL participants?`)) return;
-                    await executeCancellation(toNo, true);
-                };
-            } else {
-                if(!confirm(`Cancel your Approved TO ${toNo}?`)) return;
-                await executeCancellation(toNo, false);
-            }
+        window.cancelApprovedTO = async function(toNo) {
+            if(!confirm(`Cancel your participation in Approved TO ${toNo}? (Other participants will remain unaffected)`)) return;
+            await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
+            await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled for ${currentUser.full_name}` });
+            await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by ' + currentUser.full_name);
+            window.loadStatus();
         };
 
-        async function executeCancellation(toNo, isAll) {
-            if (isAll) {
-                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo);
-                await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled for ALL PARTICIPANTS by ${currentUser.full_name}` });
-                await window.logActivity(toNo, 'CANCELLED', 'Entire Approved TO Cancelled by ' + currentUser.full_name);
-            } else {
-                await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', toNo).eq('emp_id', currentUser.emp_id);
-                await supabase.from('notifications').insert({ recipient_role: 'PARPO', message: `Approved TO ${toNo} was cancelled for ${currentUser.full_name}` });
-                await window.logActivity(toNo, 'CANCELLED', 'Approved Travel Order Cancelled by ' + currentUser.full_name);
-            }
-            window.loadStatus();
-        }
-            
         window.dropApprovedTODay = async function(toNo) {
             const { data: itin } = await supabase.from('itinerary').select('travel_date').eq('to_no', toNo).order('travel_date');
             if (!itin || itin.length === 0) return alert("No dates found.");
@@ -2324,13 +2288,12 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
-
-
 window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
 
+// HELPER: Groups dates into formats like "March 1-3 & 5, 2026" or "June 1, 2 & 5, 2026"
     const groupConsecutiveDates = (dates) => {
         if (!dates || !dates.length) return "";
         const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
@@ -2375,12 +2338,12 @@ window.generateOfficialPDF = async function(toNo) {
         }
         return result.join('; ');
     };
-
     try {
         const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
         const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
         
+        // FETCH VEHICLE LOG SCHEDULE for red ink rendering
         const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
         
         const od = group_orders[0];
@@ -2393,6 +2356,7 @@ window.generateOfficialPDF = async function(toNo) {
 
         const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
+        // Get Unique Units and Divisions from the Personnel in this TO
         const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
         const uniqueUnits = [...new Set(rawUnits)];
         const uniqueDivs = [...new Set(group_orders.flatMap(o => o.division ? o.division.split(',').map(d=>d.trim()) : []).filter(d => d))];
@@ -2421,11 +2385,11 @@ window.generateOfficialPDF = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        // Alias 'FAST' prevents jsPDF from blurring/compressing the background image
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
         
         let topY = 8;
         
+        // TOP MOST OVERRIDE FOR TO HEADER
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
@@ -2447,6 +2411,7 @@ window.generateOfficialPDF = async function(toNo) {
                 doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
                 if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
 
+                // AUDIT TRAIL TIMESTAMPS
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(4);
                 let auditText = [
@@ -2477,6 +2442,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "normal"); doc.setFontSize(10);
         doc.text(`Date: ${fDate}`, 105, 43, { align: 'center' });
 
+        
         const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
             let currentSize = defaultSize;
             doc.setFontSize(currentSize);
@@ -2542,6 +2508,7 @@ window.generateOfficialPDF = async function(toNo) {
         
         const destMaxWidth = 125;
 
+        // Grouping Same Destinations Over Same/Consecutive Dates
         const destMap = new Map();
         itin_list.forEach(it => {
             if (!destMap.has(it.destination)) destMap.set(it.destination, []);
@@ -2560,6 +2527,7 @@ window.generateOfficialPDF = async function(toNo) {
         
         let curY = Math.max(destY, destLabelY + 5);
 
+      // Sort explicitly to guarantee earliest and latest are accurate
         const sortedItin = [...itin_list].sort((a, b) => new Date(a.travel_date) - new Date(b.travel_date));
         let earliestDate = sortedItin[0]?.travel_date || "";
         let latestDate = sortedItin[sortedItin.length - 1]?.travel_date || "";
@@ -2586,7 +2554,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
         doc.text("DEPARTURE DATE:", 20, curY);
         doc.setFont("helvetica", "normal"); 
-        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10);
+        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10); // Shrinks font if string is long so it fits the line
         doc.text(departureDateStr, 55, curY); 
         doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("RETURN DATE:", 95, curY);
@@ -2604,6 +2572,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
         curY += 4;
         
+        // Grouping Same Purposes Over Same/Consecutive Dates
         const purpMap = new Map();
         itin_list.forEach(it => {
             if (!it.purpose) return;
@@ -2611,11 +2580,13 @@ window.generateOfficialPDF = async function(toNo) {
             purpMap.get(it.purpose).push(it.travel_date);
         });
 
-        let finalPurposeStr = "";
+  let finalPurposeStr = "";
         
         if (purpMap.size === 1) {
+            // If there's only 1 unique purpose, summarize it without dating
             finalPurposeStr = Array.from(purpMap.keys())[0];
         } else {
+            // Mixed purposes: group by consecutive dates
             let groupedPurposes = [];
             purpMap.forEach((dates, purp) => {
                 const formattedDates = groupConsecutiveDates(dates);
@@ -2646,18 +2617,18 @@ window.generateOfficialPDF = async function(toNo) {
         drawCheck("LIVE IN", 110, curY, false);
         drawCheck("LIVE OUT", 135, curY, false);
 
-        const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
+        const renderSigs = (list, imgs, startX, width, roleLabel) => {
             if (list.length === 0) return;
             const count = list.length;
             const step = width / count;
-            const imgSize = count > 2 ? 18 : 22;
+            const imgSize = count > 2 ? 18 : 25;
             
             for (let j = 0; j < count; j++) {
                 let cx = startX + (step * j) + (step / 2); 
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, customY, imgSize, imgSize); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, 155, imgSize, imgSize); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
@@ -2669,69 +2640,58 @@ window.generateOfficialPDF = async function(toNo) {
                 }
                 
                 doc.setFont("helvetica", "bold");
-                doc.text(name, cx, customY + 16, { align: 'center' });
+                doc.text(name, cx, 171, { align: 'center' });
 
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-                doc.line(lineStart, customY + 18, lineEnd, customY + 18);
+                doc.line(lineStart, 173, lineEnd, 173);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(7);
-                doc.text(roleLabel, cx, customY + 22, { align: 'center' });
+                doc.text(roleLabel, cx, 177, { align: 'center' });
             }
         };
 
-        // SIGNATURE BLOCK (Old Format PDF)
-        let sigTopY = curY + 6;
-        
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("REQUESTED BY:", 20, sigTopY);
-        if (uh_list.length > 0) {
-            renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD", sigTopY + 2);
-        } else {
-            // Draw an empty signature line if no unit/uh_list
-            doc.line(25, sigTopY + 20, 85, sigTopY + 20);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-            doc.text("MARPO / UNIT HEAD", 55, sigTopY + 24, { align: 'center' });
-        }
-
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("RECOMMENDING APPROVAL:", 105, sigTopY);
-        renderSigs(dc_list, dc_imgs, 105, 80, "DIVISION CHIEF", sigTopY + 2);
-
-        sigTopY += 28;
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
-        doc.text("APPROVED BY:", 20, sigTopY);
-
-        const travelStart = new Date(sortedItin[0].travel_date);
-        const travelEnd = new Date(sortedItin[sortedItin.length - 1].travel_date);
-        const durationDays = Math.ceil((travelEnd - travelStart) / (1000 * 60 * 60 * 24)) + 1;
-
-        if (od.remarks && od.remarks.includes("OUTSIDE BICOL") && durationDays >= 7) {
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', 45, sigTopY + 2, 20, 20); } catch(e){}
-            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-            doc.text("RICARDO C. GARCIA", 55, sigTopY + 18, {align: 'center'});
-            doc.line(20, sigTopY + 19, 90, sigTopY + 19);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-            doc.text("PARPO II", 55, sigTopY + 22, {align:"center"});
-
-            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
-            doc.text("RODRIGO O. REALUBIT, CESO VI", 150, sigTopY + 18, {align: 'center'});
-            doc.line(110, sigTopY + 19, 190, sigTopY + 19);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
-            doc.text("Regional Director", 150, sigTopY + 22, {align:"center"});
-        } else {
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', 95, sigTopY + 2, 24, 24); } catch(e){}
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
             doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-            doc.text("RICARDO C. GARCIA", 107, sigTopY + 22, {align: 'center'});
-            doc.line(60, sigTopY + 23, 154, sigTopY + 23);
+            doc.text("Recommending Approval:", 20, 156);
+            
+            // Division Chief Signatures (Dynamically handles multiple)
+            renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
+            
+            // Force aligned Signature positions mapping exactly to renderSigs Y-axes (Y=171, 173, 177)
+            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 153, 20, 20); } catch(e){} }
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8); 
+            doc.text("RICARDO C. GARCIA", 127, 171, {align: 'center'});
+            doc.line(100, 173, 155, 173); 
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7); 
+            doc.text("PARPO II", 127, 177, {align: 'center'});
+            
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
+            doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
             doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-            doc.text("PARPO II", 107, sigTopY + 27, {align:"center"});
+            doc.text("Regional Director", 128, 206);
+        } else {
+            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+            doc.text("Recommended by:", 20, 156);
+            
+            // Dynamically splits space for Unit Heads and Chiefs
+            if (!isMARPO) renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD");
+            renderSigs(dc_list, dc_imgs, 100, 80, "DIVISION CHIEF");
+
+            // Scaled PARPO II Signature to 24x24 instead of 30x30
+            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 185, 24, 24); } catch(e){} }
+            doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+            doc.text("RICARDO C. GARCIA", 114, 202);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+            doc.text("PARPO II", 128, 206);
         }
         
         await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
+        
+
 
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
@@ -3205,6 +3165,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
     } catch (e) { alert("PDF Error: " + e.message); }
 };
             
+                    
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
@@ -3279,8 +3240,9 @@ for(let app of leaves || []) {
                         <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
-                            ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                        ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
                             ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
+                            ${isApp ? `<button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.retractLeaveApp('${app.id}')">Retract</button>` : ''}
                         </div>
                     </div>`;
                 }
@@ -3290,6 +3252,29 @@ for(let app of leaves || []) {
             
             
             };
+
+        window.retractLeaveApp = async function(leaveId) {
+            const { data: app } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).single();
+            if(!app) return;
+            const daysToRetract = prompt(`Approved Leave is ${app.debit} days.\nHow many days do you want to retract?`);
+            if(!daysToRetract || isNaN(daysToRetract) || parseFloat(daysToRetract) <= 0 || parseFloat(daysToRetract) > app.debit) return alert("Invalid number of days.");
+            
+            if(confirm(`Retract ${daysToRetract} days from this leave? This will refund your credits automatically.`)) {
+                await supabase.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
+                    start_date: todayStr, end_date: todayStr, type: app.type, credit: parseFloat(daysToRetract),
+                    transaction_type: "CREDIT", remarks: `Retracted ${daysToRetract} days from leave`
+                });
+                
+                if (parseFloat(daysToRetract) == app.debit) {
+                     await supabase.from('leave_ledger').update({ transaction_type: 'CANCELLED', remarks: (app.remarks || '') + ' | FULLY RETRACTED' }).eq('id', leaveId);
+                } else {
+                     await supabase.from('leave_ledger').update({ debit: app.debit - parseFloat(daysToRetract), remarks: (app.remarks || '') + ` | RETRACTED ${daysToRetract} days` }).eq('id', leaveId);
+                }
+                alert("Leave successfully retracted and credits refunded.");
+                window.loadStatus();
+            }
+        };
 
    window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
@@ -3458,39 +3443,47 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
 
-           if (!start || !end || days <= 0) return alert("Select valid working dates.");
+        if (!start || !end || days <= 0) return alert("Select valid working dates.");
 
-            // LEAVE FILING DEADLINE RESTRICTIONS
-            const fileDiffTime = new Date(start) - new Date(todayStr);
-            const fileDiffDays = Math.ceil(fileDiffTime / (1000 * 60 * 60 * 24));
-
-            if (["Vacation Leave", "Special Privilege Leave", "Mandatory/Forced Leave"].includes(type)) {
-                if (fileDiffDays < 5) {
-                    return alert("⚠️ Filing Constraint: Vacation, Mandatory, and SPL must be filed at least 5 days in advance.");
+            if (type === "Vacation Leave") {
+                const filingDate = new Date(todayStr);
+                const leaveStart = new Date(start);
+                const diffTime = leaveStart - filingDate;
+                const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
+            } else if (type === "Sick Leave" || type === "Wellness Leave") {
+                // Determine the next working day after the leave's end date
+                let nextWorkingDay = new Date(end);
+                nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
+                
+                while (true) {
+                    let day = nextWorkingDay.getDay();
+                    let dStr = nextWorkingDay.toISOString().split('T')[0];
+                    
+                    let isHol = cachedHolidays.some(h => {
+                        if (h.date !== dStr) return false;
+                        const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
+                        const station = String(currentUser.station || "").toUpperCase().trim();
+                        if (coverage.includes("NATIONWIDE")) return true;
+                        const hasNaga = coverage.includes("NAGA CITY");
+                        const hasCamSur = coverage.includes("CAMARINES SUR");
+                        if (hasNaga && hasCamSur) return true;
+                        if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
+                        if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
+                        return false;
+                    });
+                    
+                    if (day !== 0 && day !== 6 && !isHol) break; // Reached a valid working day
+                    nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
+                }
+                
+                let filingDate = new Date(todayStr);
+                if (filingDate > nextWorkingDay) {
+                    return alert(`${type} must be filed in advance or strictly on the next working day after the leave.`);
                 }
             }
 
-            if (["Sick Leave", "Wellness Leave"].includes(type)) {
-                if (todayStr < start) {
-                    return alert("⚠️ Filing Constraint: Sick Leave and Wellness Leave cannot be filed in advance.");
-                }
-                let nextWDay = new Date(end);
-                let wDayCount = 0;
-                while (wDayCount < 1) {
-                    nextWDay.setDate(nextWDay.getDate() + 1);
-                    const checkStr = nextWDay.toISOString().split('T')[0];
-                    const isHol = cachedHolidays.some(h => h.date === checkStr);
-                    if (nextWDay.getDay() !== 0 && nextWDay.getDay() !== 6 && !isHol) {
-                        wDayCount++;
-                    }
-                }
-                const deadlineStr = nextWDay.toISOString().split('T')[0];
-                if (todayStr > deadlineStr) {
-                    return alert("⚠️ Filing Deadline Expired: Sick Leave and Wellness Leave must be filed on the day or by the next working day after leave.");
-                }
-            }
-
-            // --- LEAVE BALANCE CHECK LOGIC ---
+            // --- LEAVE BALANCE CHECK LOGIC ---          
             const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
             let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
@@ -3566,19 +3559,24 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
+         // LEAVE APPROVAL ROUTING (Initial Assignment)
+            // 1. Unit (if needed) -> 2. Div Chief -> 3. PARPO -> 4. HRMO
             let routeStatus = "PENDING_CHIEF";
             const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+            const hasUnit = currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit.toUpperCase() !== "NA";
             
-            if (isPARPOUnit) {
-                routeStatus = "PENDING_HRMO"; 
-            } else if (isMARPO) {
-                routeStatus = "PENDING_CHIEF";
-            } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
+            if (hasUnit && !isPARPOUnit && !isMARPO) {
+                // Step 1: Route to Unit Head first if employee belongs to a standard unit
                 routeStatus = "PENDING_UNIT_HEAD";
-            } 
-                
+            } else {
+                // Step 2: Route directly to Division Chief (PARPO unit employees will also start at Div Chief level here)
+                routeStatus = "PENDING_CHIEF";
+            }
+            
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
+                
+                
 
             const dates_to_check = [];
             let curr = new Date(start);
@@ -4810,13 +4808,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
-                    <button onclick="switchTab('leaves')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'leaves' ? 'text-emerald-600 font-bold' : 'text-gray-400'}"><span class="text-lg">🍃</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Leaves</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
-                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
                 </nav>
+                
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
                     <div class="space-x-2 flex">
@@ -4855,7 +4853,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 hideBatchActionBar();
                 if (currentTab === 'approved') loadStatusTab('APPROVED');
                 else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
-                else if (currentTab === 'leaves') loadLeavesTab();
                 else if (currentTab === 'reports') loadReportsTab();
                 else loadAnalyticsTab();
             }
@@ -4891,47 +4888,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             alert("Updated!"); hideChangePassword();
         }
 
-        // --- LEAVE ROUTING HELPER FUNCTIONS ---
-        function getLeaveStatus(remarks) {
-            const m = remarks.match(/ROUTING_STATUS:\s*([^\s|]+)/);
-            return m ? m[1].toUpperCase() : 'PENDING_CHIEF';
-        }
 
-        function setLeaveStatus(remarks, newStatus) {
-            if (remarks.includes('ROUTING_STATUS:')) {
-                return remarks.replace(/ROUTING_STATUS:\s*([^\s|]+)/, `ROUTING_STATUS: ${newStatus}`);
-            }
-            return remarks + ` | ROUTING_STATUS: ${newStatus}`;
-        }
-
-function getLeaveAppPayload(u, leaveRec) {
-            const roles = u.roles || [];
-            const currentStatus = getLeaveStatus(leaveRec.remarks || "");
-            let nextStatus = currentStatus;
-            let transType = "APPLICATION";
-
-            if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
-                nextStatus = "PENDING_CHIEF";
-            } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
-                nextStatus = "PENDING_HRMO";
-            } else if (currentStatus === "PENDING_HRMO" && roles.includes("HRMO")) {
-                nextStatus = "PENDING_PARPO";
-            } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
-                nextStatus = "APPROVED";
-                transType = "APPROVED";
-            }
-
-            if (nextStatus === currentStatus && roles.includes("ADMIN")) {
-                nextStatus = "APPROVED";
-                transType = "APPROVED";
-            }
-
-            return {
-                transaction_type: transType,
-                remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus)
-            };
-        }
-            
+        
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
         function showCancelModal(to_no, datesEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
@@ -5092,38 +5050,13 @@ function getLeaveAppPayload(u, leaveRec) {
                         await Promise.all(updatePromises);
                     }
                 }
-
-                // Batch Leaves
-                if (leaveIds.length > 0) {
-                    const { data: lResData, error } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
-                    if (!error) {
-                        const leavePromises = leaveIds.map(async (id) => {
-                            const leaveData = (lResData || []).find(l => l.id === id);
-                            if (!leaveData) return;
-
-                            if (action === 'DISAPPROVED') {
-                                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied: ${denyReason}`;
-                                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
-                                await window.logActivity(id, 'LEAVE_DENIED', `Batch denied by ${currentUser.fullName}. Reason: ${denyReason}`);
-                            } else {
-                                const p = getLeaveAppPayload(currentUser, leaveData);
-                                if (!p || Object.keys(p).length === 0) return;
-                                await supabaseClient.from('leave_ledger').update(p).eq('id', id);
-                                await window.logActivity(id, 'LEAVE_APPROVED', `Leave status advanced to ${getLeaveStatus(p.remarks)} by ${currentUser.fullName}`);
-                            }
-                        });
-                        await Promise.all(leavePromises);
-                    }
-                }
-
-                selectedPendingOrders.clear();
-                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
+         selectedPendingOrders.clear();
+                loadPendingTab();
             } catch (err) {
                 alert("Batch processing error: " + err.message);
-                if (currentTab === 'leaves') loadLeavesTab(); else loadPendingTab();
+                loadPendingTab();
             }
         }
-
         // --- PENDING MODAL & DIRECT ACTIONS ---
         window.hidePendingDateModal = function() {
             document.getElementById('pendingDateModal').style.display = 'none';
@@ -5284,38 +5217,6 @@ function getLeaveAppPayload(u, leaveRec) {
             }
         };
 
-        window.processDirectLeave = async function(id, action) {
-            try {
-                const { data: leaveData, error } = await supabaseClient.from('leave_ledger').select('*').eq('id', id).single();
-                if (error || !leaveData) throw new Error("Leave record not found.");
-
-                const content = document.getElementById('mainContent');
-                content.innerHTML = `<p class="flex items-center justify-center h-full text-emerald-600 font-bold animate-pulse">Processing Leave...</p>`;
-
-                if (action === 'DISAPPROVED') {
-                    const reason = prompt("Reason for denying:");
-                    if (!reason) { loadLeavesTab(); return; }
-                    
-                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied: ${reason}`;
-                    await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
-                    await window.logActivity(id, 'LEAVE_DENIED', `Leave denied by ${currentUser.fullName}. Reason: ${reason}`);
-                } else {
-                    const p = getLeaveAppPayload(currentUser, leaveData);
-                    if (!p || Object.keys(p).length === 0) {
-                        alert("Approval failed: Your role is not configured to approve this status.");
-                        loadLeavesTab();
-                        return;
-                    }
-                    
-                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
-                    await window.logActivity(id, 'LEAVE_APPROVED', `Leave status advanced to ${getLeaveStatus(p.remarks)} by ${currentUser.fullName}`);
-                }
-                loadLeavesTab();
-            } catch(e) {
-                alert("Error: " + e.message);
-                loadLeavesTab();
-            }
-        };
 
         function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
@@ -5601,121 +5502,7 @@ function getLeaveAppPayload(u, leaveRec) {
             }
         }
 
-        // --- LEAVES HUB ---
-        async function loadLeavesTab() {
-            selectedPendingOrders.clear();
-            const content = document.getElementById('mainContent');
-            content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-emerald-600">Syncing Leaves...</p>`;
-
-            const [lRes, empRes] = await Promise.all([
-                supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED']).order('created_at', { ascending: false }).limit(3000),
-                supabaseClient.from('employees').select('emp_id, full_name, division, unit')
-            ]);
-
-            let pendingItems = [];
-            const roles = currentUser.roles || [];
-
-            for (let l of (lRes.data || [])) {
-                const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
-                if (emp && checkScope(emp.division, emp.unit)) {
-                    let show = false;
-                    let displayStatus = l.transaction_type;
-                    let textColor = 'text-gray-400';
-                    let borderColor = 'border-emerald-500';
-
-                    const s = getLeaveStatus(l.remarks || "");
-
-                        if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
-                        let canSeePending = false;
-
-                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
-                        if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
-                        if (roles.includes("HRMO") && s === "PENDING_HRMO") canSeePending = true;
-                        if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
-                        if (roles.includes("ADMIN")) canSeePending = true;
-
-                        if(canSeePending) show = true;
-
-                    } else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
-                        show = true;
-                        textColor = 'text-emerald-600';
-                    } 
-                    else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'CANCELLED' || l.transaction_type.includes('DISAPPROVED'))) {
-                        show = true;
-                        textColor = 'text-red-500';
-                        borderColor = 'border-red-500';
-                    }
-
-                    if (show) {
-                        let btns = '';
-                        if (currentLeaveSubTab === 'pending') {
-                            btns = `
-                                <div class="mt-3 pt-3 flex gap-2">
-                                    <button onclick="processDirectLeave('${l.id}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2 active:scale-95 transition-transform">DENY</button>
-                                    <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
-                                </div>
-                            `;
-                        } else if (currentLeaveSubTab === 'approved' && roles.includes("PARPO") && String(l.type).toUpperCase() !== "SICK LEAVE") {
-                            btns = `
-                                <div class="mt-3 pt-3">
-                                    <button onclick="window.retractLeaveApproval('${l.id}')" class="px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-transform w-full">↩️ RETRACT LEAVE APPROVAL</button>
-                                </div>
-                            `;
-                        }
-                        pendingItems.push({
-                            type: 'LEAVE',
-                            id: l.id,
-                            created_at: l.created_at,
-                            html: `<div class="bg-emerald-50/30 p-4 rounded-xl border border-emerald-200 border-l-4 ${borderColor} shadow-sm mb-4">
-                                    ${currentLeaveSubTab === 'pending' ? `<div class="pt-1 mb-2"><input type="checkbox" value="LEAVE:${l.id}" class="batch-checkbox to-checkbox" onchange="toggleBatchSelection('LEAVE:${l.id}', this.checked)"></div>` : ''}
-                                    <div class="flex justify-between items-center mb-2 border-b border-emerald-100 pb-2">
-                                        <span class="text-[10px] font-bold text-white px-2 py-0.5 rounded shadow-sm tracking-wide uppercase bg-emerald-600">🍃 LEAVE APP</span>
-                                        <span class="text-[9px] font-black uppercase ${textColor}">${displayStatus === 'APPLICATION' ? s : displayStatus}</span>
-                                    </div>
-                                    <p class="font-bold text-gray-800 text-base">${emp.full_name}</p>
-                                    <div class="mt-1.5 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                                        <span class="text-[10px] text-emerald-700 font-bold">🍃 ${l.type}</span><br>
-                                        <span class="text-[9px] text-gray-500 mt-0.5 leading-tight break-words whitespace-normal">${l.remarks || 'No remarks provided'}</span>
-                                    </div>
-                                    <p class="text-[11px] text-dar-green font-bold mt-1">📅 ${l.start_date} to ${l.end_date} (${l.debit} days)</p>
-                                    ${btns}
-                                  </div>`
-                        });
-                    }
-                }
-            }
-
-            pendingItems.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-
-            let h = `
-                <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
-                    <h2 class="font-extrabold text-lg text-emerald-700 mb-3 text-center tracking-tighter uppercase">Leave Hub</h2>
-                    <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
-                        <button onclick="switchLeaveSubTab('pending')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'pending' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Pending</button>
-                        <button onclick="switchLeaveSubTab('approved')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'approved' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Approved</button>
-                        <button onclick="switchLeaveSubTab('denied')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'denied' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Denied</button>
-                    </div>
-                    ${currentLeaveSubTab === 'pending' && pendingItems.length > 0 ? `
-                        <div class="flex justify-between items-center mt-2">
-                            <label class="flex items-center space-x-2 cursor-pointer text-sm font-bold text-gray-700">
-                                <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
-                                <span>Select All</span>
-                            </label>
-                            <span class="text-xs text-gray-500 font-bold">${pendingItems.length} Leaves</span>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="p-4 space-y-3 pb-32">
-            `;
-
-            if (pendingItems.length === 0) {
-                h += `<div class="flex flex-col items-center justify-center py-10 opacity-50"><span class="text-4xl">🍃</span><p class="font-bold mt-2 text-xs uppercase text-center">No Records Found</p></div>`;
-            } else {
-                pendingItems.forEach(r => { h += r.html; });
-            }
-
-            content.innerHTML = h + `</div>`;
-        }
+      
 
         // --- REPORTS (WHEREABOUTS) ---
         async function loadReportsTab() {
@@ -6134,6 +5921,10 @@ function getLeaveAppPayload(u, leaveRec) {
 
             document.getElementById('mainContent').innerHTML = `
                 <div class="p-4 pb-32 space-y-4">
+                    <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
+                        ${aiText}
+                    </p>
+
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
                             <span class="kpi-label mb-1">Most Visited</span>
@@ -6259,28 +6050,7 @@ function getLeaveAppPayload(u, leaveRec) {
             });
         }
 
-// Leave Approval Retraction Function
-        window.retractLeaveApproval = async function(id) {
-            if(!confirm("Are you sure you want to retract this leave approval and return it to your pending approval queue?")) return;
-            try {
-                const { data: leaveRec, error } = await supabaseClient.from('leave_ledger').select('remarks').eq('id', id).single();
-                if (error || !leaveRec) throw new Error("Record fetch error.");
-                
-                const updatedRemarks = setLeaveStatus(leaveRec.remarks || "", "PENDING_PARPO");
-                await supabaseClient.from('leave_ledger').update({
-                    transaction_type: "APPLICATION",
-                    remarks: updatedRemarks
-                }).eq('id', id);
-                
-                await window.logActivity(id, 'LEAVE_RETRACTED', `Leave approval retracted and sent back to PENDING_PARPO queue`);
-                alert("Leave approval retracted successfully!");
-                loadLeavesTab();
-            } catch(e) {
-                alert("Retraction failed: " + e.message);
-            }
-        };
-
-        // Expose functions to window for HTML onclick handlers
+    // Expose functions to window for HTML onclick handlers
         window.handleLogin = handleLogin;
         window.handleBiometricLogin = handleBiometricLogin;
         window.logout = logout;
@@ -6298,5 +6068,638 @@ function getLeaveAppPayload(u, leaveRec) {
 </body>
 </html>
 </xmp>
+
+
+<xmp id="leave_console" style="display: none;"><!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Leave Processing Administration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        .dar-green { background-color: #003811; }
+        .text-dar-green { color: #003811; }
+        .dar-gold { background-color: #D4AF37; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* Modern UI Elements */
+        .batch-checkbox { appearance: none; width: 1.25rem; height: 1.25rem; border: 2px solid #cbd5e1; border-radius: 0.375rem; outline: none; cursor: pointer; position: relative; background-color: white; transition: all 0.2s ease; }
+        .batch-checkbox:hover { border-color: #94a3b8; }
+        .batch-checkbox:checked { background-color: #003811; border-color: #003811; }
+        .batch-checkbox:checked::after { content: '✓'; position: absolute; color: white; font-size: 0.875rem; font-weight: bold; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        
+        /* Animations */
+        .modal-fade { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style></head><body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left"><div id="app" class="w-full h-full flex flex-col relative"></div><script type="module">
+    const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    let currentUser = null;
+    let currentLeaveSubTab = 'pending';
+    let selectedLeaves = new Set();
+    let currentActionContext = null; // For modals
+
+    async function hashPassword(msg) {
+        if (!msg) return "";
+        return sha256(msg);
+    }
+
+    // Seamless Session Verification (Shares with Travel Order Console)
+    function checkSession() {
+        const stored = localStorage.getItem('dar_admin_session');
+        if (stored) {
+            const session = JSON.parse(stored);
+            if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) currentUser = session.user;
+            else localStorage.removeItem('dar_admin_session');
+        }
+    }
+
+    function render() { if (!currentUser) renderLogin(); else renderMain(); }
+
+    function renderLogin() {
+        document.getElementById('app').innerHTML = `
+            <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
+                <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div class="dar-gold h-2 w-full"></div>
+                    <div class="p-8">
+                        <h1 class="text-dar-green font-bold text-3xl font-serif mb-1 text-center">DAR</h1>
+                        <p class="text-[10px] text-slate-400 font-bold tracking-widest mb-6 uppercase text-center">Leave Console</p>
+                        <div class="space-y-4">
+                            <div><label class="block text-xs font-bold text-slate-700 mb-1">USERNAME</label><input type="text" id="username" class="w-full px-4 py-3 bg-slate-50 border rounded-xl focus:outline-none focus:border-emerald-600 transition-colors"></div>
+                            <div><label class="block text-xs font-bold text-slate-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-slate-50 border rounded-xl focus:outline-none focus:border-emerald-600 transition-colors"></div>
+                            <p id="loginError" class="text-rose-600 text-[10px] font-bold text-center hidden"></p>
+                            <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg hover:bg-emerald-900 transition-colors">SECURE LOG IN</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    window.handleLogin = async function() {
+        const uBox = document.getElementById('username').value.trim();
+        const pBox = document.getElementById('password').value.trim();
+        const err = document.getElementById('loginError');
+        try {
+            const hashedPBox = await hashPassword(pBox);
+            const { data: users } = await supabaseClient.from('users').select('*');
+            const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+            if (u) {
+                currentUser = { 
+                    username: u.username, fullName: u.full_name, 
+                    roles: u.role ? u.role.split(',').map(r => r.trim().toUpperCase()) : [], 
+                    divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
+                    units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [],
+                    emp_id: u.id
+                };
+                localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                render();
+            } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
+        } catch (e) { err.innerText = "Error authenticating."; err.classList.remove("hidden"); }
+    };
+
+    window.logout = function() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); };
+
+    function renderMain() {
+        document.getElementById('app').innerHTML = `
+            <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-30">
+                <div class="overflow-hidden text-left">
+                    <h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1>
+                    <p class="text-[10px] text-dar-gold tracking-widest font-bold uppercase">Leave Processing & Validation</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="logout()" class="text-xs bg-white/10 hover:bg-white/20 transition-colors px-4 py-1.5 rounded-full font-bold shadow-sm">Logout</button>
+                </div>
+            </header>
+            
+            <div class="flex-none bg-white border-b border-slate-200 shadow-sm z-20 relative">
+                <div class="flex px-2 pt-2 overflow-x-auto hide-scroll justify-start">
+                    <button onclick="switchLeaveSubTab('pending')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'pending' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Action Required</button>
+                    <button onclick="switchLeaveSubTab('current')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'current' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Current Day</button>
+                    <button onclick="switchLeaveSubTab('incoming')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'incoming' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Incoming</button>
+                    <button onclick="switchLeaveSubTab('previous')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'previous' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Previous</button>
+                </div>
+            </div>
+
+            <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-slate-100 relative z-10 scroll-smooth pb-32"></main>
+            
+            <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t border-slate-200 shadow-[0_-10px_30px_rgba(0,0,0,0.1)] z-40 px-5 py-4 flex justify-between items-center transition-transform duration-300 transform translate-y-full pb-safe" style="bottom: 0;">
+                <span id="batchCountText" class="font-black text-sm text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200 shadow-sm">0 selected</span>
+                <div class="space-x-3 flex">
+                    <button onclick="openDenyModal('BATCH')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold shadow-sm transition-colors uppercase tracking-wider">Deny</button>
+                    <button onclick="processBatchLeave('APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-xs font-bold shadow-md transition-colors uppercase tracking-wider">Approve</button>
+                </div>
+            </div>
+
+            <!-- Enhanced Modals -->
+            
+            <!-- Deny Modal -->
+            <div id="denyModal" class="hidden fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center px-4 backdrop-blur-sm modal-fade">
+                <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                    <div class="bg-rose-600 text-white p-4 font-bold text-center flex justify-between items-center shadow-sm">
+                        <span class="uppercase tracking-widest text-xs">Disapprove Leave</span>
+                        <button onclick="closeModals()" class="text-white hover:text-rose-200 font-normal text-lg">✕</button>
+                    </div>
+                    <div class="p-6 flex-grow">
+                        <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Mandatory Reason for Denial</label>
+                        <textarea id="denyReasonInput" rows="3" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-rose-500 bg-slate-50 transition-colors" placeholder="State reason for disapproval..."></textarea>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-slate-50">
+                        <button onclick="confirmDeny()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors uppercase tracking-wider text-xs">Confirm Disapproval</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Retract Modal -->
+            <div id="retractModal" class="hidden fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center px-4 backdrop-blur-sm modal-fade">
+                <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                    <div class="bg-indigo-600 text-white p-4 font-bold text-center flex justify-between items-center shadow-sm">
+                        <span class="uppercase tracking-widest text-xs">Retract Approved Leave</span>
+                        <button onclick="closeModals()" class="text-white hover:text-indigo-200 font-normal text-lg">✕</button>
+                    </div>
+                    <div class="p-5 overflow-y-auto flex-grow bg-slate-50/50">
+                        <div class="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl text-indigo-800 text-xs">
+                            <span class="font-bold block mb-1">Instruction:</span>
+                            Select the <b>exact specific dates</b> that should be retracted and credited back to the employee's balance.
+                        </div>
+                        <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest border-b border-slate-200 pb-1">Select Dates to Retract</p>
+                        <div id="retractDatesContainer" class="space-y-2 mb-5 max-h-48 overflow-y-auto pr-1 hide-scroll"></div>
+                        
+                        <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest border-b border-slate-200 pb-1">Mandatory Reason</label>
+                        <textarea id="retractReasonInput" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-indigo-500 bg-white shadow-inner transition-colors" placeholder="Why are these dates being retracted?"></textarea>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-white">
+                        <button onclick="confirmRetract()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors uppercase tracking-wider text-xs">Process Retraction</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        loadLeavesTab();
+    }
+
+    window.switchLeaveSubTab = function(subTab) {
+        currentLeaveSubTab = subTab;
+        selectedLeaves.clear();
+        updateBatchActionBar();
+        const tabs = document.querySelectorAll('header + div button');
+        tabs.forEach(t => {
+            t.classList.remove('border-emerald-700', 'text-emerald-800');
+            t.classList.add('border-transparent', 'text-slate-500');
+        });
+        const tabMap = { 'pending': 0, 'current': 1, 'incoming': 2, 'previous': 3 };
+        const activeIdx = tabMap[subTab];
+        if(tabs[activeIdx]) {
+            tabs[activeIdx].classList.remove('border-transparent', 'text-slate-500');
+            tabs[activeIdx].classList.add('border-emerald-700', 'text-emerald-800');
+        }
+        loadLeavesTab();
+    };
+
+    const checkScope = (div, unit) => {
+        const roles = currentUser.roles || [];
+        if (roles.some(r => ["PARPO", "ADMIN", "HRMO"].includes(r))) return true;
+        const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
+        const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+        if (roles.includes("CHIEF")) return dMatch;
+        const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
+        const uMatch = oUnits.some(u => currentUser.units.includes(u));
+        return dMatch && uMatch;
+    };
+
+    function getLeaveStatus(remarks) {
+        const m = remarks.match(/ROUTING_STATUS:\s*([^\s|]+)/);
+        return m ? m[1].toUpperCase() : 'PENDING_CHIEF';
+    }
+
+    function setLeaveStatus(remarks, newStatus) {
+        if (remarks.includes('ROUTING_STATUS:')) return remarks.replace(/ROUTING_STATUS:\s*([^\s|]+)/, `ROUTING_STATUS: ${newStatus}`);
+        return remarks + ` | ROUTING_STATUS: ${newStatus}`;
+    }
+
+    function getLeaveAppPayload(u, leaveRec) {
+        const roles = u.roles || [];
+        const currentStatus = getLeaveStatus(leaveRec.remarks || "");
+        let nextStatus = currentStatus;
+        let transType = "APPLICATION";
+        const empUnit = leaveRec.unit ? leaveRec.unit.trim().toUpperCase() : "";
+
+        if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
+            nextStatus = empUnit === "PARPO" ? "PENDING_HRMO" : "PENDING_CHIEF";
+        } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
+            nextStatus = "PENDING_PARPO";
+        } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
+            nextStatus = "PENDING_HRMO";
+        } else if (currentStatus === "PENDING_HRMO" && roles.some(r => ["HRMO", "ADMIN"].includes(r))) {
+            nextStatus = "APPROVED"; transType = "APPROVED";
+        }
+
+        if (nextStatus === currentStatus && roles.includes("ADMIN")) { nextStatus = "APPROVED"; transType = "APPROVED"; }
+
+        return { transaction_type: transType, remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus) };
+    }
+
+    function getStatusBadge(type, subStatus) {
+        if (type === 'APPLICATION') return `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>${subStatus || 'PENDING'}</span>`;
+        if (type === 'APPROVED') return `<span class="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">APPROVED</span>`;
+        if (type === 'DISAPPROVED' || type.includes('DISAPPROVED')) return `<span class="bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">DISAPPROVED</span>`;
+        if (type === 'CANCELLED') return `<span class="bg-slate-200 text-slate-600 border border-slate-300 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">CANCELLED</span>`;
+        if (type === 'RETRACTED') return `<span class="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">RETRACTED</span>`;
+        return `<span class="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">${type}</span>`;
+    }
+
+    async function loadLeavesTab() {
+        selectedLeaves.clear(); updateBatchActionBar();
+        const content = document.getElementById('mainContent');
+        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Synchronizing Ledger...</p></div>`;
+
+        const [lRes, empRes] = await Promise.all([
+            supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED', 'RETRACTED']).order('created_at', { ascending: false }).limit(3000),
+            supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+        ]);
+
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+        let itemsToRender = [];
+        const roles = currentUser.roles || [];
+
+        let totalQueue = 0;
+        let totalActive = 0;
+
+        for (let l of (lRes.data || [])) {
+            const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
+            if (emp && checkScope(emp.division, emp.unit)) {
+                let show = false;
+                const s = getLeaveStatus(l.remarks || "");
+// Logic for showing leaves based on subtab
+                if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
+                    let canSeePending = false;
+                    const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
+                    
+                    // STRICT ROUTING: HRMO only sees PENDING_HRMO. PARPO sees PENDING_PARPO.
+                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
+                    if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
+                    
+                    if (!isParpoUnit) {
+                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
+                        if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
+                    }
+                    if(canSeePending) { show = true; totalQueue++; }
+                }
+                } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
+                    show = true; totalActive++;
+                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
+                    show = true; 
+                } else if (currentLeaveSubTab === 'previous') {
+                    if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) show = true; 
+                    if (['DISAPPROVED', 'CANCELLED', 'RETRACTED'].includes(l.transaction_type) || l.transaction_type.includes('DISAPPROVED')) show = true; 
+                }
+
+                if (show) {
+                    let btns = '';
+                    if (currentLeaveSubTab === 'pending') {
+                        btns = `
+                            <button onclick="openDenyModal('${l.id}')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">Deny</button>
+                            <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto mt-2 sm:mt-0">Approve</button>
+                        `;
+                    } else if (l.transaction_type === 'APPROVED' || l.transaction_type === 'APPLICATION') {
+                        // Pass stringified JSON object securely
+                        const safeObj = encodeURIComponent(JSON.stringify(l));
+                        btns = `<button onclick="openRetractModal('${safeObj}')" class="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">⚙️ Retract Dates</button>`;
+                    }
+
+                    const badge = getStatusBadge(l.transaction_type, s);
+                    const isPending = currentLeaveSubTab === 'pending';
+
+                    itemsToRender.push({
+                        emp: emp,
+                        leaveData: l,
+                        html: `
+                        <div class="p-5 flex flex-col sm:flex-row items-start gap-4 hover:bg-slate-50 transition-colors relative">
+                            ${isPending ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
+                            <div class="flex-grow w-full">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="font-black text-slate-800 text-sm tracking-tight">${emp.full_name}</span>
+                                    ${badge}
+                                </div>
+                                <div class="text-xs text-slate-600 mb-1.5 leading-tight flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                    <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">${l.type}</span> 
+                                    <span class="font-black text-slate-700 bg-slate-200 px-2 py-0.5 rounded">${l.debit} Days</span> 
+                                    <span class="text-slate-500 font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded shadow-sm">📅 ${l.start_date} to ${l.end_date}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 bg-white px-3 py-2 rounded-xl mt-3 border border-slate-200 leading-relaxed break-words whitespace-normal shadow-inner">
+                                    <span class="font-bold text-slate-400 uppercase tracking-widest text-[9px] block mb-0.5">Remarks / Logistics</span>
+                                    ${l.remarks || 'No additional remarks provided'}
+                                </div>
+                            </div>
+                            <div class="shrink-0 flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                                ${btns}
+                            </div>
+                        </div>`
+                    });
+                }
+            }
+        }
+
+        // Sort items logically based on view
+        if (currentLeaveSubTab === 'incoming') {
+            itemsToRender.sort((a, b) => new Date(a.leaveData.start_date) - new Date(b.leaveData.start_date));
+        }
+
+        let h = `<div class="p-4 md:p-6 space-y-6">`;
+
+        // KPI Dashboard Summary 
+        if (currentLeaveSubTab === 'pending') {
+            h += `
+                <div class="grid grid-cols-2 gap-4 mb-2">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Queue Actionable</span>
+                        <span class="text-2xl font-black text-emerald-700 leading-none">${totalQueue}</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Application</span>
+                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span> <!-- Informative proxy -->
+                    </div>
+                </div>
+            `;
+        } else if (currentLeaveSubTab === 'current') {
+            h += `
+                <div class="grid grid-cols-1 gap-4 mb-2">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">On Leave Today</span>
+                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (currentLeaveSubTab === 'pending' && itemsToRender.length > 0) {
+            h += `
+                <div class="flex justify-between items-center bg-white px-5 py-3.5 rounded-2xl border border-slate-200 shadow-sm">
+                    <label class="flex items-center space-x-3 cursor-pointer text-sm font-bold text-slate-700 group">
+                        <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
+                        <span class="group-hover:text-emerald-700 transition-colors uppercase tracking-widest text-xs">Select All Pending</span>
+                    </label>
+                    <span class="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-full uppercase tracking-widest shadow-inner">${itemsToRender.length} Leaves</span>
+                </div>
+            `;
+        }
+
+        if (itemsToRender.length === 0) {
+            h += `<div class="flex flex-col items-center justify-center py-24 opacity-40"><span class="text-6xl mb-4">🍃</span><p class="font-black text-sm tracking-widest uppercase text-slate-500">No Records Found</p><p class="text-xs text-slate-400 mt-2 text-center max-w-xs">You are completely caught up in this section.</p></div>`;
+        } else {
+            const grouped = {};
+            itemsToRender.forEach(item => {
+                const div = item.emp.division || "UNASSIGNED DIVISION";
+                const unit = item.emp.unit || "UNASSIGNED UNIT";
+                if (!grouped[div]) grouped[div] = {};
+                if (!grouped[div][unit]) grouped[div][unit] = [];
+                grouped[div][unit].push(item);
+            });
+
+            for (const [div, units] of Object.entries(grouped)) {
+                h += `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6 last:mb-0">
+                    <div class="bg-slate-800 text-white px-5 py-3 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                        <span>🏢</span> ${div}
+                    </div>
+                    <div class="p-2 bg-slate-50">`;
+                
+                for (const [unit, items] of Object.entries(units)) {
+                    h += `
+                        <div class="mb-2 last:mb-0 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                            <h4 class="text-[10px] font-black text-emerald-800 uppercase bg-emerald-50/50 px-5 py-2.5 border-b border-emerald-100/50 flex items-center gap-2">
+                                <span class="text-emerald-500">↳</span> ${unit}
+                            </h4>
+                            <div class="divide-y divide-slate-100">`;
+                    items.forEach(i => h += i.html);
+                    h += `  </div>
+                        </div>`;
+                }
+                h += `</div></div>`;
+            }
+        }
+        content.innerHTML = h + `</div>`;
+    }
+
+    // MODAL LOGIC FOR DISAPPROVAL AND RETRACTION
+    window.closeModals = function() {
+        document.getElementById('denyModal').style.display = 'none';
+        document.getElementById('retractModal').style.display = 'none';
+        currentActionContext = null;
+    }
+
+    window.openDenyModal = function(id) {
+        currentActionContext = id; // 'BATCH' or specific ID
+        document.getElementById('denyReasonInput').value = '';
+        document.getElementById('denyModal').style.display = 'flex';
+    }
+
+    window.confirmDeny = async function() {
+        const reason = document.getElementById('denyReasonInput').value.trim();
+        if (!reason) return alert("A mandatory reason for disapproval is required.");
+
+        closeModals();
+
+        if (currentActionContext === 'BATCH') {
+            const leaveIds = Array.from(selectedLeaves);
+            document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Processing Batch Denial...</p></div>`;
+            const { data: lResData } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
+            const leavePromises = leaveIds.map(async (id) => {
+                const leaveData = (lResData || []).find(l => l.id === id);
+                if (leaveData) {
+                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
+                    await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
+                }
+            });
+            await Promise.all(leavePromises);
+            selectedLeaves.clear();
+            updateBatchActionBar();
+        } else {
+            document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Denying Record...</p></div>`;
+            const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', currentActionContext).single();
+            if (leaveData) {
+                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
+                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', currentActionContext);
+            }
+        }
+        loadLeavesTab();
+    }
+
+    window.openRetractModal = function(safeObjEncoded) {
+        const leaveObj = JSON.parse(decodeURIComponent(safeObjEncoded));
+        currentActionContext = leaveObj;
+
+        const start = new Date(leaveObj.start_date + "T00:00:00");
+        const end = new Date(leaveObj.end_date + "T00:00:00");
+        
+        let datesHtml = '';
+        let curr = new Date(start);
+        
+        while (curr <= end) {
+            let day = curr.getDay();
+            let isWeekend = (day === 0 || day === 6);
+            let dateStr = curr.toISOString().split('T')[0];
+            let displayStr = curr.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+            // Highlight weekends so admin is aware
+            datesHtml += `
+                <label class="flex items-center space-x-3 p-3 border border-slate-200 rounded-xl ${isWeekend ? 'bg-slate-100 opacity-60' : 'bg-white hover:bg-indigo-50/50'} cursor-pointer transition-colors shadow-sm">
+                    <input type="checkbox" value="${dateStr}" class="retract-date-cb w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" ${isWeekend ? '' : 'checked'}>
+                    <span class="text-sm font-bold text-slate-700">${displayStr} ${isWeekend ? '<span class="text-[9px] uppercase tracking-widest text-slate-400 ml-2 font-black">(Weekend)</span>' : ''}</span>
+                </label>
+            `;
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        document.getElementById('retractDatesContainer').innerHTML = datesHtml;
+        document.getElementById('retractReasonInput').value = '';
+        document.getElementById('retractModal').style.display = 'flex';
+    }
+
+    window.confirmRetract = async function() {
+        const leaveData = currentActionContext;
+        const checkboxes = document.querySelectorAll('.retract-date-cb:checked');
+        const reason = document.getElementById('retractReasonInput').value.trim();
+
+        if (checkboxes.length === 0) return alert("Please select at least one specific date to retract.");
+        if (!reason) return alert("A mandatory reason for retraction is required to ensure audit compliance.");
+
+        const retractedDates = Array.from(checkboxes).map(cb => cb.value);
+        let daysToRetract = checkboxes.length;
+
+        // Failsafe: Never retract more than the logged debit
+        if (daysToRetract > leaveData.debit) {
+            daysToRetract = leaveData.debit; 
+        }
+
+        closeModals();
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⚙️</span><p class="font-bold text-xs uppercase tracking-widest text-indigo-600">Processing Retraction Ledger Protocol...</p></div>`;
+
+        try {
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+            // 1. Insert CREDIT to refund the specifically retracted days back to the employee's balance ledger
+            await supabaseClient.from('leave_ledger').insert({
+                transaction_id: crypto.randomUUID(), 
+                emp_id: leaveData.emp_id,
+                start_date: todayStr, 
+                end_date: todayStr, 
+                type: leaveData.type, 
+                credit: daysToRetract,
+                transaction_type: "CREDIT", 
+                remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
+            });
+
+            // 2. Update the existing transaction record specifically mapped to RETRACTED or reduced partial days
+            if (daysToRetract >= leaveData.debit) {
+                // Fully Retracted implies the whole chunk goes back
+                await supabaseClient.from('leave_ledger').update({ 
+                    transaction_type: 'RETRACTED', 
+                    remarks: (leaveData.remarks || '') + ` | FULLY RETRACTED BY ${currentUser.fullName}: ${reason}` 
+                }).eq('id', leaveData.id);
+            } else {
+                // Partially Retracted (Deduct the days from original leave but leave status as APPROVED)
+                await supabaseClient.from('leave_ledger').update({ 
+                    debit: leaveData.debit - daysToRetract, 
+                    remarks: (leaveData.remarks || '') + ` | PARTIALLY RETRACTED DATES: [${retractedDates.join(', ')}] BY ${currentUser.fullName}: ${reason}` 
+                }).eq('id', leaveData.id);
+            }
+
+            alert(`Successfully retracted ${daysToRetract} day(s) and refunded the employee's credits.`);
+        } catch(e) {
+            alert("Database Error: " + e.message);
+        }
+        loadLeavesTab();
+    }
+
+    // BATCH & TOGGLE SELECTIONS
+    window.toggleBatchSelection = function(id, isChecked) {
+        if (isChecked) selectedLeaves.add(id); else selectedLeaves.delete(id);
+        updateBatchActionBar();
+    }
+
+    window.selectAllPending = function(checkbox) {
+        const checkboxes = document.querySelectorAll('.batch-checkbox');
+        checkboxes.forEach(cb => {
+            if(cb.value && cb.value !== "on") {
+                cb.checked = checkbox.checked;
+                if (checkbox.checked) selectedLeaves.add(cb.value); else selectedLeaves.delete(cb.value);
+            }
+        });
+        updateBatchActionBar();
+    }
+
+    function updateBatchActionBar() {
+        const bar = document.getElementById('batchActionBar');
+        if (selectedLeaves.size > 0) {
+            document.getElementById('batchCountText').innerText = `${selectedLeaves.size} selected`;
+            bar.classList.remove('translate-y-full');
+        } else bar.classList.add('translate-y-full');
+    }
+
+    window.processBatchLeave = async function(action) {
+        if (selectedLeaves.size === 0) return;
+        
+        if (action === 'DISAPPROVED') {
+            openDenyModal('BATCH');
+            return;
+        }
+
+        updateBatchActionBar();
+        document.getElementById('batchActionBar').classList.add('translate-y-full');
+
+        const leaveIds = Array.from(selectedLeaves);
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Approving Batch Leaves...</p></div>`;
+
+        const { data: lResData } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
+        const leavePromises = leaveIds.map(async (id) => {
+            const leaveData = (lResData || []).find(l => l.id === id);
+            if (leaveData) {
+                const p = getLeaveAppPayload(currentUser, leaveData);
+                if (p && Object.keys(p).length > 0) {
+                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                }
+            }
+        });
+        await Promise.all(leavePromises);
+
+        selectedLeaves.clear(); loadLeavesTab();
+    };
+
+    window.processDirectLeave = async function(id, action) {
+        if (action === 'DISAPPROVED') {
+            openDenyModal(id);
+            return;
+        }
+
+        const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', id).single();
+        if (!leaveData) return;
+        
+        const p = getLeaveAppPayload(currentUser, leaveData);
+        if (!p || Object.keys(p).length === 0) return alert("Approval failed: Your role is not configured to approve this record.");
+        
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Advancing Leave Approval...</p></div>`;
+        await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+        
+        loadLeavesTab();
+    };
+
+    checkSession();
+    render();
+    </script>
+    </body>
+</html>
+</xmp>
+
+
+    
 </body>
 </html>
