@@ -413,7 +413,13 @@ async function hardReloadSystem() {
                         <input type="checkbox" id="leave-half-day-end" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day End
                     </label>
                 </div>
-                <label style="margin-top: 10px;">Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
+                <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #e5e7eb;">
+                    <label style="margin-bottom: 5px;">Chargeable Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 16px; font-weight: bold;">0</span></label>
+                    <div id="leave-breakdown" style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                        Select dates to see working days calculation.
+                    </div>
+                </div>
+                
                 <h4 style="margin-top: 15px;">4. Commutation</h4>
                 <select id="leave-commutation">
                     <option value="Not Requested">Not Requested</option>
@@ -3319,73 +3325,86 @@ for(let app of leaves || []) {
             };
 
         
-        window.calculateLeaveDays = async function() {
+
+window.calculateLeaveDays = async function() {
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
+            const countEl = document.getElementById('leave-days-count');
+            const breakdownEl = document.getElementById('leave-breakdown');
+            
             if (!start || !end) return;
 
             const sDate = new Date(start);
             const eDate = new Date(end);
             if (sDate > eDate) {
                 document.getElementById('leave-to').value = start;
-                document.getElementById('leave-days-count').innerText = "1";
+                countEl.innerText = "1";
+                if(breakdownEl) breakdownEl.innerHTML = "";
                 return;
             }
 
-const { data: schedOverrides } = await supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').in('emp_id', [currentUser.emp_id, 'ALL']).gte('end_date', start).lte('start_date', end);
+            // Pull the latest setup by ordering via created_at descending
+            const { data: schedOverrides } = await supabase.from('schedule_override')
+                .select('start_date, end_date, start_time, end_time, schedule_type, created_at')
+                .in('emp_id', [currentUser.emp_id, 'ALL'])
+                .order('created_at', { ascending: false });
+
             let count = 0;
+            let excludedWeekends = 0;
+            let excludedHolidays = 0;
+            let excludedFridays = 0;
             let cur = new Date(sDate);
+
             while (cur <= eDate) {
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
-const isHoliday = cachedHolidays.some(h => {
-    if (h.date !== dateStr) return false;
-    
-    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-    const station = String(currentUser.station || "").toUpperCase().trim();
-    
-    if (coverage.includes("NATIONWIDE")) return true;
-    
-    const hasNaga = coverage.includes("NAGA CITY");
-    const hasCamSur = coverage.includes("CAMARINES SUR");
-    
-    if (hasNaga && hasCamSur) return true;
-    
-    if (hasNaga && !hasCamSur) {
-        return station.includes("DARPO") || station === "DARPO-CS1";
-    }
-    if (hasCamSur && !hasNaga) {
-        return station.includes("DARMO") || station !== "DARPO-CS1";
-    }
-    
-    return false;
-});
-
                 
-                let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
+                const isWeekend = (day === 0 || day === 6);
 
-                if (schedOverrides) {
-                    const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
-                    if (override) {
-                        if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && day === 5) {
-                            isWorkingDay = false;
-                        } else if (!isHoliday) {
-                            isWorkingDay = true;
-                        }
+                const isHoliday = cachedHolidays.some(h => {
+                    if (h.date !== dateStr) return false;
+                    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
+                    const station = String(currentUser.station || "").toUpperCase().trim();
+                    
+                    if (coverage.includes("NATIONWIDE")) return true;
+                    const hasNaga = coverage.includes("NAGA CITY");
+                    const hasCamSur = coverage.includes("CAMARINES SUR");
+                    
+                    if (hasNaga && hasCamSur) return true;
+                    if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
+                    if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
+                    return false;
+                });
+
+                let isCWWFriday = false;
+                if (schedOverrides && schedOverrides.length > 0) {
+                    // Takes the latest date-specific override, or falls back to the absolute latest active setup
+                    const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
+                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00" && day === 5) {
+                        isCWWFriday = true;
                     }
                 }
 
-            if (isWorkingDay) count++;
+                if (isHoliday && !isWeekend) {
+                    excludedHolidays++;
+                } else if (isWeekend) {
+                    excludedWeekends++;
+                } else if (isCWWFriday) {
+                    excludedFridays++;
+                } else {
+                    count++; 
+                }
+
                 cur.setDate(cur.getDate() + 1);
             }
 
-const halfStartCheck = document.getElementById('leave-half-day-start');
+            const halfStartCheck = document.getElementById('leave-half-day-start');
             const halfEndCheck = document.getElementById('leave-half-day-end');
-            const selectedLeaveType = document.querySelector('input[name="ltype"]:checked').value;
             
             let deduction = 0;
             if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
             if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
+            
             if (deduction > 0) {
                 if ((count - deduction) < 1.5) {
                     alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
@@ -3399,7 +3418,23 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     count -= deduction;
                 }
             }
-            document.getElementById('leave-days-count').innerText = count;
+            
+            countEl.innerText = count;
+
+            // Render details so admin knows exactly why a day wasn't counted
+            if(breakdownEl) {
+                let infoArr = [];
+                if(excludedWeekends > 0) infoArr.push(`<b>${excludedWeekends}</b> Weekend(s)`);
+                if(excludedHolidays > 0) infoArr.push(`<b>${excludedHolidays}</b> Holiday(s)`);
+                if(excludedFridays > 0) infoArr.push(`<b>${excludedFridays}</b> CWW Friday(s)`);
+                if(deduction > 0 && count > 0) infoArr.push(`<b>${deduction}</b> Half-day deduction(s)`);
+                
+                if (infoArr.length > 0) {
+                    breakdownEl.innerHTML = `Automatically excluded: ${infoArr.join(', ')}`;
+                } else {
+                    breakdownEl.innerHTML = `All selected dates are standard working days.`;
+                }
+            }
 
             const ctoCheck = document.getElementById('vl-cto-credit');         
             const isCtoCredited = ctoCheck && ctoCheck.checked;
@@ -3434,6 +3469,8 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 if(submitBtn) submitBtn.disabled = false;
             }
         };
+
+            
 
             window.submitLeave = async function() {
             if (isSubmitting) return;
