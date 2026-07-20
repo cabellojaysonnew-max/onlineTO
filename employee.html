@@ -46,7 +46,7 @@
             📱 EMPLOYEE PORTAL
         </button>
      <button class="btn-launch" onclick="bootSystem('admin_console')">
-            💻 TRAVEL ORDER PROCESSING
+            💻 TO PROCESSING
         </button>
         <button class="btn-launch" onclick="bootSystem('leave_console')">
             🍃 LEAVE PROCESSING
@@ -5934,10 +5934,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </html>
 </xmp>
 
-
-
-    
-
+```html
 <xmp id="leave_console" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
@@ -6061,8 +6058,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             <div class="flex-none bg-white border-b border-slate-200 shadow-sm z-20 relative">
                 <div class="flex px-2 pt-2 overflow-x-auto hide-scroll justify-start">
                     <button onclick="switchLeaveSubTab('pending')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'pending' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Action Required</button>
-                    <button onclick="switchLeaveSubTab('active')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'active' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Active / Queued</button>
-                    <button onclick="switchLeaveSubTab('history')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'history' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Archived Records</button>
+                    <button onclick="switchLeaveSubTab('current')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'current' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Current Day</button>
+                    <button onclick="switchLeaveSubTab('incoming')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'incoming' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Incoming</button>
+                    <button onclick="switchLeaveSubTab('previous')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'previous' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Previous</button>
                 </div>
             </div>
 
@@ -6131,9 +6129,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             t.classList.remove('border-emerald-700', 'text-emerald-800');
             t.classList.add('border-transparent', 'text-slate-500');
         });
-        const activeIdx = subTab === 'pending' ? 0 : (subTab === 'active' ? 1 : 2);
-        tabs[activeIdx].classList.remove('border-transparent', 'text-slate-500');
-        tabs[activeIdx].classList.add('border-emerald-700', 'text-emerald-800');
+        const tabMap = { 'pending': 0, 'current': 1, 'incoming': 2, 'previous': 3 };
+        const activeIdx = tabMap[subTab];
+        if(tabs[activeIdx]) {
+            tabs[activeIdx].classList.remove('border-transparent', 'text-slate-500');
+            tabs[activeIdx].classList.add('border-emerald-700', 'text-emerald-800');
+        }
         loadLeavesTab();
     };
 
@@ -6223,9 +6224,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                     }
                     if(canSeePending) { show = true; totalQueue++; }
-                } else if (currentLeaveSubTab === 'active' && l.transaction_type === 'APPROVED' && l.end_date >= todayStr) {
+                } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
                     show = true; totalActive++;
-                } else if (currentLeaveSubTab === 'history') {
+                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr) {
+                    show = true; 
+                } else if (currentLeaveSubTab === 'previous') {
                     if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) show = true; 
                     if (['DISAPPROVED', 'CANCELLED', 'RETRACTED'].includes(l.transaction_type) || l.transaction_type.includes('DISAPPROVED')) show = true; 
                 }
@@ -6248,6 +6251,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                     itemsToRender.push({
                         emp: emp,
+                        leaveData: l,
                         html: `
                         <div class="p-5 flex flex-col sm:flex-row items-start gap-4 hover:bg-slate-50 transition-colors relative">
                             ${isPending ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
@@ -6275,6 +6279,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             }
         }
 
+        // Sort items logically based on view
+        if (currentLeaveSubTab === 'incoming') {
+            itemsToRender.sort((a, b) => new Date(a.leaveData.start_date) - new Date(b.leaveData.start_date));
+        }
+
         let h = `<div class="p-4 md:p-6 space-y-6">`;
 
         // KPI Dashboard Summary 
@@ -6286,8 +6295,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         <span class="text-2xl font-black text-emerald-700 leading-none">${totalQueue}</span>
                     </div>
                     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Active / Deployed</span>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Application</span>
                         <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span> <!-- Informative proxy -->
+                    </div>
+                </div>
+            `;
+        } else if (currentLeaveSubTab === 'current') {
+            h += `
+                <div class="grid grid-cols-1 gap-4 mb-2">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">On Leave Today</span>
+                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span>
                     </div>
                 </div>
             `;
@@ -6551,6 +6569,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </body>
 </html>
 </xmp>
+
+```
+
     
 </body>
 </html>
