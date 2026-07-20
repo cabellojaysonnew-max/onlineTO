@@ -3569,14 +3569,53 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
-            let routeStatus = "PENDING_CHIEF";
+    let routeStatus = "PENDING_CHIEF";
             const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+            const hasUnit = currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit.trim() !== "NA" && !isPARPOUnit;
             
+            // Initial routing matching TO flow (Wait for final HRMO approval before 'APPROVED')
             if (isPARPOUnit) {
-                routeStatus = "PENDING_HRMO"; 
-            } else if (isMARPO) {
+                routeStatus = "PENDING_PARPO"; 
+            } else if (isMARPO || !hasUnit) {
                 routeStatus = "PENDING_CHIEF";
+            } else {
+                routeStatus = "PENDING_UNIT_HEAD";
+            }
+
+            try {
+                const payload = {
+                    emp_id: currentUser.emp_id,
+                    start_date: start,
+                    end_date: end,
+                    type: type,
+                    debit: days,
+                    transaction_type: routeStatus,
+                    remarks: detailStr,
+                    created_at: new Date().toISOString()
+                };
+
+                const { error } = await supabase.from('leave_ledger').insert([payload]);
+                if (error) throw error;
+                
+                alert(`Leave Application submitted successfully! Routed to: ${routeStatus}`);
+                
+                // Clear form
+                document.getElementById('leave-from').value = '';
+                document.getElementById('leave-to').value = '';
+                document.getElementById('leave-days-count').innerText = '0';
+                if(document.getElementById('leave-specify')) document.getElementById('leave-specify').value = '';
+                
+                // Switch to status view
+                window.loadStatus();
+                window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
+            } catch (err) {
+                alert("Error submitting leave: " + err.message);
+            } finally {
+                isSubmitting = false;
+                if(submitBtn) submitBtn.disabled = false;
+            }
+        };
             } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
                 routeStatus = "PENDING_UNIT_HEAD";
             } 
