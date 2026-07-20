@@ -173,11 +173,20 @@ async function hardReloadSystem() {
         
         .action-group { display: flex; gap: 8px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
-
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
         .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; white-space: nowrap; }
+
+        /* Responsive Mobile Layout for DTR Calendar */
+        @media (max-width: 768px) {
+            .cal-table thead { display: none; }
+            .cal-table, .cal-table tbody, .cal-table tr, .cal-table td { display: block; width: 100%; }
+            .cal-table tr { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; padding: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+            .cal-table td { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; border: none !important; white-space: normal; text-align: right; }
+            .cal-table td::before { content: attr(data-label); font-weight: bold; color: var(--dar-green); margin-right: 15px; text-align: left; flex-shrink: 0; }
+            .cal-table td .cal-entry { margin-left: auto; display: block; width: fit-content; }
+        }
         .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
         .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; display: inline-block;}
         .entry-to { background: var(--dar-green); }
@@ -3376,37 +3385,70 @@ window.calculateLeaveDays = async function() {
                     return false;
                 });
 
-                let isCWWFriday = false;
-                if (schedOverrides && schedOverrides.length > 0) {
-                    // Takes the latest date-specific override, or falls back to the absolute latest active setup
-                    const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
-                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00" && day === 5) {
-                        isCWWFriday = true;
+                    let isCWWFriday = false;
+                    let isCWW = false;
+                    if (schedOverrides && schedOverrides.length > 0) {
+                        // Takes the latest date-specific override, or falls back to the absolute latest active setup
+                        const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
+                        if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                            isCWW = true;
+                            if (day === 5) {
+                                isCWWFriday = true;
+                            }
+                        }
                     }
-                }
 
-                if (isHoliday && !isWeekend) {
-                    excludedHolidays++;
-                } else if (isWeekend) {
-                    excludedWeekends++;
-                } else if (isCWWFriday) {
-                    excludedFridays++;
-                } else {
-                    count++; 
-                }
+                    if (isHoliday && !isWeekend) {
+                        excludedHolidays++;
+                    } else if (isWeekend) {
+                        excludedWeekends++;
+                    } else if (isCWWFriday) {
+                        excludedFridays++;
+                    } else {
+                        let dayDeduction = 1.0;
+                        if (isCWW) {
+                            const lTypeElement = document.querySelector('input[name="ltype"]:checked');
+                            const lType = lTypeElement ? lTypeElement.value : '';
+                            // 1.25 deduction exclusively for VL and SL during CWW
+                            if (lType === "Vacation Leave" || lType === "Sick Leave") {
+                                dayDeduction = 1.25;
+                            }
+                        }
+                        count += dayDeduction; 
+                    }
 
+                
                 cur.setDate(cur.getDate() + 1);
             }
 
-            const halfStartCheck = document.getElementById('leave-half-day-start');
+const halfStartCheck = document.getElementById('leave-half-day-start');
             const halfEndCheck = document.getElementById('leave-half-day-end');
             
+            // Determine active schedule to adjust half-day values properly
+            let isCWWActive = false;
+            if (schedOverrides && schedOverrides.length > 0) {
+                const activeOverride = schedOverrides.find(s => start >= s.start_date && start <= s.end_date) || schedOverrides[0];
+                if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                    isCWWActive = true;
+                }
+            }
+            
+            const lTypeElement = document.querySelector('input[name="ltype"]:checked');
+            const lType = lTypeElement ? lTypeElement.value : '';
+            
+            let halfDayValue = 0.5;
+            let minAllowed = 1.5;
+            if (isCWWActive && (lType === "Vacation Leave" || lType === "Sick Leave")) {
+                halfDayValue = 0.625; // Half of 1.25 day deduction
+                minAllowed = 1.875; // Equivalent minimum to 1.5 days under CWW
+            }
+
             let deduction = 0;
-            if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
-            if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
+            if (halfStartCheck && halfStartCheck.checked) deduction += halfDayValue;
+            if (halfEndCheck && halfEndCheck.checked) deduction += halfDayValue;
             
             if (deduction > 0) {
-                if ((count - deduction) < 1.5) {
+                if ((count - deduction) < minAllowed) {
                     alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
@@ -3418,7 +3460,7 @@ window.calculateLeaveDays = async function() {
                     count -= deduction;
                 }
             }
-            
+    
             countEl.innerText = count;
 
             // Render details so admin knows exactly why a day wasn't counted
