@@ -5934,11 +5934,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </html>
 </xmp>
 
-```html
-<xmp id="leave_console" style="display: none;">
-<!DOCTYPE html>
-<html lang="en">
-<head>
+
+<xmp id="leave_console" style="display: none;"><!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Leave Processing Administration</title>
@@ -5967,13 +5964,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         /* Animations */
         .modal-fade { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    </style>
-</head>
-<body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left">
-
-<div id="app" class="w-full h-full flex flex-col relative"></div>
-
-<script type="module">
+    </style></head><body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left"><div id="app" class="w-full h-full flex flex-col relative"></div><script type="module">
     const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -6226,7 +6217,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     if(canSeePending) { show = true; totalQueue++; }
                 } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
                     show = true; totalActive++;
-                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr) {
+                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
                     show = true; 
                 } else if (currentLeaveSubTab === 'previous') {
                     if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) show = true; 
@@ -6565,12 +6556,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
     checkSession();
     render();
-</script>
-</body>
+    </script>
+    </body>
 </html>
 </xmp>
 
-```
 
     
 </body>
