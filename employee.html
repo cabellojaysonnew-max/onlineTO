@@ -120,25 +120,298 @@ async function hardReloadSystem() {
     </script>
 
 
+
 <xmp id="leave_processing" style="display: none;">
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leave Processing</title>
+    <title>Leave Processing Portal</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { margin: 0; background-color: #f4f7f6; font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; }
-        h2 { color: #003811; }
+        :root {
+            --dar-green: #003811;
+            --dar-gold: #D4AF37;
+            --bg-main: #f4f7f6;
+            --danger: #dc2626;
+            --success: #16a34a;
+        }
+        body { margin: 0; background-color: var(--bg-main); font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; }
+        h2 { color: var(--dar-green); border-bottom: 2px solid var(--dar-gold); padding-bottom: 10px; }
+        
+        .tab-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { padding: 10px 20px; cursor: pointer; background: white; border: 1px solid #ccc; border-radius: 8px; font-weight: bold; color: var(--dar-green); transition: 0.2s; }
+        .tab-btn.active { background: var(--dar-green); color: white; border-color: var(--dar-green); }
+        
+        .view { display: none; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .view.active { display: block; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: var(--dar-green); color: white; position: sticky; top: 0; }
+        tr:hover { background: #f9fafb; }
+        
+        /* Context Menu Styles */
+        #ctx-menu {
+            display: none;
+            position: fixed;
+            background: white;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            z-index: 9999;
+            overflow: hidden;
+            width: 220px;
+        }
+        .ctx-item {
+            padding: 12px 15px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }
+        .ctx-item:hover { background: #f3f4f6; }
+        .ctx-approve { color: var(--success); }
+        .ctx-disapprove { color: var(--danger); }
+        .ctx-exigency { color: #b45309; }
+
+        .btn { padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; background: var(--dar-green); display: inline-flex; align-items: center; gap: 8px; }
+        .btn:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
-    <h2>🍃 LEAVE PROCESSING</h2>
-    <p>Module loaded successfully. Build your interface here.</p>
+
+    <h2>🍃 LEAVE PROCESSING PORTAL</h2>
+    
+    <div class="tab-container">
+        <div class="tab-btn active" onclick="switchTab('pending-view', this)">📋 Pending Applications</div>
+        <div class="tab-btn" onclick="switchTab('force-leave-view', this)">🛡️ Batch Force Leave</div>
+    </div>
+
+    <!-- PENDING LEAVES VIEW -->
+    <div id="pending-view" class="view active">
+        <p style="font-size: 12px; color: gray; margin-top: 0;">Right-click on any application row to process it.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Type</th>
+                    <th>Dates</th>
+                    <th>Days (Debit)</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody id="pending-body">
+                <tr><td colspan="5">Loading pending applications...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- FORCE LEAVE BATCH VIEW -->
+    <div id="force-leave-view" class="view">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <p style="font-size: 12px; color: gray; margin: 0; max-width: 60%;">
+                Displays employees lacking the 5-day Mandatory Force Leave.<br>
+                <strong>Note:</strong> Disapproved leaves due to "Exigency of the Service" are automatically credited towards compliance.
+            </p>
+            <button class="btn" onclick="processBatchForceLeave()">⚡ BATCH CREDIT FORCE LEAVE</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Emp ID</th>
+                    <th>Name</th>
+                    <th>Complied Days</th>
+                    <th>Deficit (To Credit)</th>
+                </tr>
+            </thead>
+            <tbody id="force-leave-body">
+                <tr><td colspan="4">Loading force leave statuses...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- CUSTOM RIGHT-CLICK CONTEXT MENU -->
+    <div id="ctx-menu">
+        <div class="ctx-item ctx-approve" onclick="actionLeave('APPROVED')">✅ Approve Leave</div>
+        <div class="ctx-item ctx-disapprove" onclick="actionLeave('DISAPPROVED')">❌ Disapprove</div>
+        <div class="ctx-item ctx-exigency" onclick="actionLeave('DISAPPROVED_EXIGENCY')">⚠️ Disapprove (Exigency of Service)</div>
+    </div>
+
+    <script>
+        // Supabase Init
+        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let selectedLeaveId = null;
+        let forceLeaveBatchData = [];
+
+        function switchTab(viewId, el) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            el.classList.add('active');
+            
+            if(viewId === 'pending-view') loadPending();
+            if(viewId === 'force-leave-view') loadForceLeave();
+        }
+
+        // --- PENDING PROCESSING LOGIC ---
+        async function loadPending() {
+            const tbody = document.getElementById('pending-body');
+            tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+            
+            const { data: emps } = await supabase.from('employees').select('emp_id, full_name');
+            const { data: pending } = await supabase.from('leave_ledger')
+                .select('*')
+                .eq('transaction_type', 'APPLICATION')
+                .order('created_at', { ascending: false });
+
+            if (!pending || pending.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:gray;">No pending applications found.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            pending.forEach(app => {
+                const empName = emps?.find(e => e.emp_id === app.emp_id)?.full_name || app.emp_id;
+                html += `
+                    <tr oncontextmenu="showContextMenu(event, '${app.id}')">
+                        <td style="font-weight:bold;">${empName}</td>
+                        <td>${app.type}</td>
+                        <td>${app.start_date} to ${app.end_date}</td>
+                        <td style="color:var(--danger); font-weight:bold;">${app.debit}</td>
+                        <td style="color:gray; font-size:11px;">${app.remarks || 'None'}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        // --- CONTEXT MENU LOGIC ---
+        function showContextMenu(e, id) {
+            e.preventDefault();
+            selectedLeaveId = id;
+            const menu = document.getElementById('ctx-menu');
+            menu.style.display = 'block';
+            menu.style.left = e.pageX + 'px';
+            menu.style.top = e.pageY + 'px';
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('ctx-menu').style.display = 'none';
+        });
+
+        async function actionLeave(actionType) {
+            if(!selectedLeaveId) return;
+            
+            let remarkAddition = actionType === 'DISAPPROVED_EXIGENCY' ? 'Disapproved due to Exigency of the service' : '';
+            
+            try {
+                const { data: existing } = await supabase.from('leave_ledger').select('remarks').eq('id', selectedLeaveId).single();
+                let finalRemarks = existing.remarks ? `${existing.remarks} | ${remarkAddition}` : remarkAddition;
+                
+                const { error } = await supabase.from('leave_ledger').update({
+                    transaction_type: actionType,
+                    remarks: finalRemarks.trim()
+                }).eq('id', selectedLeaveId);
+
+                if (error) throw error;
+                
+                alert(`Leave application updated to: ${actionType.replace(/_/g, ' ')}`);
+                loadPending();
+            } catch (err) {
+                alert('Error updating leave: ' + err.message);
+            }
+        }
+
+        // --- FORCE LEAVE BATCH LOGIC ---
+        async function loadForceLeave() {
+            const tbody = document.getElementById('force-leave-body');
+            tbody.innerHTML = '<tr><td colspan="4">Calculating force leave compliance...</td></tr>';
+            
+            const currentYear = new Date().getFullYear();
+            const { data: emps } = await supabase.from('employees').select('emp_id, full_name').eq('role', 'EMPLOYEE');
+            const { data: ledgers } = await supabase.from('leave_ledger')
+                .select('emp_id, type, transaction_type, debit, start_date')
+                .gte('start_date', `${currentYear}-01-01`)
+                .lte('start_date', `${currentYear}-12-31`);
+
+            let html = '';
+            forceLeaveBatchData = [];
+
+            emps.forEach(emp => {
+                const empLedgers = ledgers.filter(l => l.emp_id === emp.emp_id);
+                let compliedDays = 0;
+                
+                empLedgers.forEach(l => {
+                    const isMandatoryApproved = l.type && (l.type.includes('Mandatory') || l.type.includes('Forced')) && l.transaction_type === 'APPROVED';
+                    const isExigency = l.transaction_type === 'DISAPPROVED_EXIGENCY';
+                    
+                    if (isMandatoryApproved || isExigency) {
+                        compliedDays += parseFloat(l.debit) || 0;
+                    }
+                });
+
+                let deficit = 5 - compliedDays;
+                if (deficit > 0) {
+                    html += `
+                        <tr>
+                            <td>${emp.emp_id}</td>
+                            <td style="font-weight:bold;">${emp.full_name}</td>
+                            <td style="color:var(--success);">${compliedDays}</td>
+                            <td style="color:var(--danger); font-weight:bold;">${deficit}</td>
+                        </tr>
+                    `;
+                    forceLeaveBatchData.push({ emp_id: emp.emp_id, debit: deficit });
+                }
+            });
+            
+            if (html === '') {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--success); font-weight:bold;">All employees are compliant with the 5-Day Force Leave!</td></tr>';
+            } else {
+                tbody.innerHTML = html;
+            }
+        }
+
+        async function processBatchForceLeave() {
+            if (forceLeaveBatchData.length === 0) return alert("No employees found lacking force leave compliance.");
+            if (!confirm("Are you sure you want to batch deduct the remaining force leave deficit from the Vacation Leave of all listed employees?")) return;
+
+            const currentYear = new Date().getFullYear();
+            const batchPayload = forceLeaveBatchData.map(data => ({
+                emp_id: data.emp_id,
+                start_date: `${currentYear}-12-31`,
+                end_date: `${currentYear}-12-31`,
+                type: 'Mandatory/Forced Leave',
+                debit: data.debit,
+                credit: 0,
+                transaction_type: 'DEDUCTION',
+                remarks: 'Automatic Batch Force Leave Compliance Deduction'
+            }));
+
+            try {
+                const { error } = await supabase.from('leave_ledger').insert(batchPayload);
+                if (error) throw error;
+                
+                alert("Batch processing complete! Remaining force leaves have been deducted.");
+                loadForceLeave();
+            } catch (err) {
+                alert("Batch Error: " + err.message);
+            }
+        }
+
+        // Initialize first tab on module boot
+        window.addEventListener('load', () => {
+            setTimeout(loadPending, 500);
+        });
+    </script>
 </body>
 </html>
-</xmp>
-    
+</xmp>    
 
     
 <xmp id="employee_portal" style="display: none;">
