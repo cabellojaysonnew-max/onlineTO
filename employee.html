@@ -2324,12 +2324,13 @@ window.modifyPendingTO = async function(toNo) {
             window.switchTab('apply-view', document.querySelector('.nav-item'));
         };
         
+
+
 window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
 
-// HELPER: Groups dates into formats like "March 1-3 & 5, 2026" or "June 1, 2 & 5, 2026"
     const groupConsecutiveDates = (dates) => {
         if (!dates || !dates.length) return "";
         const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
@@ -2374,12 +2375,12 @@ window.generateOfficialPDF = async function(toNo) {
         }
         return result.join('; ');
     };
+
     try {
         const { data: group_orders } = await supabase.from('travel_orders').select('*').eq('to_no', toNo);
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
         const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
         
-        // FETCH VEHICLE LOG SCHEDULE for red ink rendering
         const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
         
         const od = group_orders[0];
@@ -2392,7 +2393,6 @@ window.generateOfficialPDF = async function(toNo) {
 
         const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
 
-        // Get Unique Units and Divisions from the Personnel in this TO
         const rawUnits = group_orders.flatMap(o => o.unit ? o.unit.split(',').map(u=>u.trim()) : []).filter(u => u && u !== "PARPO" && u !== "NA");
         const uniqueUnits = [...new Set(rawUnits)];
         const uniqueDivs = [...new Set(group_orders.flatMap(o => o.division ? o.division.split(',').map(d=>d.trim()) : []).filter(d => d))];
@@ -2421,11 +2421,11 @@ window.generateOfficialPDF = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
+        // Alias 'FAST' prevents jsPDF from blurring/compressing the background image
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
         
         let topY = 8;
         
-        // TOP MOST OVERRIDE FOR TO HEADER
         if (od.to_header) {
             doc.setTextColor(255, 0, 0); 
             doc.setFont("helvetica", "bold"); doc.setFontSize(9);
@@ -2447,7 +2447,6 @@ window.generateOfficialPDF = async function(toNo) {
                 doc.addImage(img_qr, 'PNG', 180, 10, 20, 20); 
                 if(typeLabel){ doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(typeLabel, 190, 33, {align: 'center'}); } 
 
-                // AUDIT TRAIL TIMESTAMPS
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(4);
                 let auditText = [
@@ -2478,7 +2477,6 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "normal"); doc.setFontSize(10);
         doc.text(`Date: ${fDate}`, 105, 43, { align: 'center' });
 
-        
         const renderFlexibleText = (text, x, y, maxWidth, lineEndX, defaultSize, maxLines = 2) => {
             let currentSize = defaultSize;
             doc.setFontSize(currentSize);
@@ -2544,7 +2542,6 @@ window.generateOfficialPDF = async function(toNo) {
         
         const destMaxWidth = 125;
 
-        // Grouping Same Destinations Over Same/Consecutive Dates
         const destMap = new Map();
         itin_list.forEach(it => {
             if (!destMap.has(it.destination)) destMap.set(it.destination, []);
@@ -2563,7 +2560,6 @@ window.generateOfficialPDF = async function(toNo) {
         
         let curY = Math.max(destY, destLabelY + 5);
 
-      // Sort explicitly to guarantee earliest and latest are accurate
         const sortedItin = [...itin_list].sort((a, b) => new Date(a.travel_date) - new Date(b.travel_date));
         let earliestDate = sortedItin[0]?.travel_date || "";
         let latestDate = sortedItin[sortedItin.length - 1]?.travel_date || "";
@@ -2590,7 +2586,7 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
         doc.text("DEPARTURE DATE:", 20, curY);
         doc.setFont("helvetica", "normal"); 
-        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10); // Shrinks font if string is long so it fits the line
+        doc.setFontSize(departureDateStr.length > 15 ? 6 : 10);
         doc.text(departureDateStr, 55, curY); 
         doc.line(55, curY+1, 90, curY+1);
         doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("RETURN DATE:", 95, curY);
@@ -2608,7 +2604,6 @@ window.generateOfficialPDF = async function(toNo) {
         doc.setFont("helvetica", "bold"); doc.text("PURPOSE OF TRAVEL:", 20, curY);
         curY += 4;
         
-        // Grouping Same Purposes Over Same/Consecutive Dates
         const purpMap = new Map();
         itin_list.forEach(it => {
             if (!it.purpose) return;
@@ -2616,13 +2611,11 @@ window.generateOfficialPDF = async function(toNo) {
             purpMap.get(it.purpose).push(it.travel_date);
         });
 
-  let finalPurposeStr = "";
+        let finalPurposeStr = "";
         
         if (purpMap.size === 1) {
-            // If there's only 1 unique purpose, summarize it without dating
             finalPurposeStr = Array.from(purpMap.keys())[0];
         } else {
-            // Mixed purposes: group by consecutive dates
             let groupedPurposes = [];
             purpMap.forEach((dates, purp) => {
                 const formattedDates = groupConsecutiveDates(dates);
@@ -2653,18 +2646,18 @@ window.generateOfficialPDF = async function(toNo) {
         drawCheck("LIVE IN", 110, curY, false);
         drawCheck("LIVE OUT", 135, curY, false);
 
-        const renderSigs = (list, imgs, startX, width, roleLabel) => {
+        const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
             if (list.length === 0) return;
             const count = list.length;
             const step = width / count;
-            const imgSize = count > 2 ? 18 : 25;
+            const imgSize = count > 2 ? 18 : 22;
             
             for (let j = 0; j < count; j++) {
                 let cx = startX + (step * j) + (step / 2); 
                 let imgX = cx - (imgSize / 2);
                 
                 if (imgs[j]) { 
-                    try { doc.addImage(imgs[j], 'PNG', imgX, 155, imgSize, imgSize); } catch(e){} 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, customY, imgSize, imgSize); } catch(e){} 
                 }
                 
                 let name = list[j].full_name.toUpperCase();
@@ -2676,57 +2669,69 @@ window.generateOfficialPDF = async function(toNo) {
                 }
                 
                 doc.setFont("helvetica", "bold");
-                doc.text(name, cx, 171, { align: 'center' });
+                doc.text(name, cx, customY + 16, { align: 'center' });
 
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
-                doc.line(lineStart, 173, lineEnd, 173);
+                doc.line(lineStart, customY + 18, lineEnd, customY + 18);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(7);
-                doc.text(roleLabel, cx, 177, { align: 'center' });
+                doc.text(roleLabel, cx, customY + 22, { align: 'center' });
             }
         };
 
-        if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-            doc.text("Recommending Approval:", 20, 156);
-            
-            // Division Chief Signatures (Dynamically handles multiple)
-            renderSigs(dc_list, dc_imgs, 20, 75, "DIVISION CHIEF");
-            
-            // Force aligned Signature positions mapping exactly to renderSigs Y-axes (Y=171, 173, 177)
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 153, 20, 20); } catch(e){} }
-            doc.setFont("helvetica", "bold"); doc.setFontSize(8); 
-            doc.text("RICARDO C. GARCIA", 127, 171, {align: 'center'});
-            doc.line(100, 173, 155, 173); 
-            doc.setFont("helvetica", "normal"); doc.setFontSize(7); 
-            doc.text("PARPO II", 127, 177, {align: 'center'});
-            
-            doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
-            doc.text("RODRIGO O. REALUBIT, CESO VI", 114, 202);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-            doc.text("Regional Director", 128, 206);
+        // SIGNATURE BLOCK (Old Format PDF)
+        let sigTopY = curY + 6;
+        
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("REQUESTED BY:", 20, sigTopY);
+        if (uh_list.length > 0) {
+            renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD", sigTopY + 2);
         } else {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-            doc.text("Recommended by:", 20, 156);
-            
-            // Dynamically splits space for Unit Heads and Chiefs
-            if (!isMARPO) renderSigs(uh_list, uh_imgs, 15, 80, "MARPO / UNIT HEAD");
-            renderSigs(dc_list, dc_imgs, 100, 80, "DIVISION CHIEF");
+            // Draw an empty signature line if no unit/uh_list
+            doc.line(25, sigTopY + 20, 85, sigTopY + 20);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("MARPO / UNIT HEAD", 55, sigTopY + 24, { align: 'center' });
+        }
 
-            // Scaled PARPO II Signature to 24x24 instead of 30x30
-            if(img_p2) { try { doc.addImage(img_p2, 'PNG', 117, 185, 24, 24); } catch(e){} }
-            doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-            doc.text("RICARDO C. GARCIA", 114, 202);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("RECOMMENDING APPROVAL:", 105, sigTopY);
+        renderSigs(dc_list, dc_imgs, 105, 80, "DIVISION CHIEF", sigTopY + 2);
+
+        sigTopY += 28;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+        doc.text("APPROVED BY:", 20, sigTopY);
+
+        const travelStart = new Date(sortedItin[0].travel_date);
+        const travelEnd = new Date(sortedItin[sortedItin.length - 1].travel_date);
+        const durationDays = Math.ceil((travelEnd - travelStart) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL") && durationDays >= 7) {
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', 45, sigTopY + 2, 20, 20); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("RICARDO C. GARCIA", 55, sigTopY + 18, {align: 'center'});
+            doc.line(20, sigTopY + 19, 90, sigTopY + 19);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("PARPO II", 55, sigTopY + 22, {align:"center"});
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("RODRIGO O. REALUBIT, CESO VI", 150, sigTopY + 18, {align: 'center'});
+            doc.line(110, sigTopY + 19, 190, sigTopY + 19);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("Regional Director", 150, sigTopY + 22, {align:"center"});
+        } else {
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', 95, sigTopY + 2, 24, 24); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+            doc.text("RICARDO C. GARCIA", 107, sigTopY + 22, {align: 'center'});
+            doc.line(60, sigTopY + 23, 154, sigTopY + 23);
             doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-            doc.text("PARPO II", 128, 206);
+            doc.text("PARPO II", 107, sigTopY + 27, {align:"center"});
         }
         
         await window.saveSecurePDF(doc, `TO_${toNo}_Secure.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-        
 
 window.generateOfficialPDFNewFormat = async function(toNo) {
     const { jsPDF } = window.jspdf;
@@ -2767,6 +2772,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const { data: itin_list } = await supabase.from('itinerary').select('*').eq('to_no', toNo).order('travel_date');
         const { data: emp_details } = await supabase.from('employees').select('emp_id, full_name, position, station, type');
         
+        const { data: vLog } = await supabase.from('vehicle_logs').select('schedule').eq('to_no', toNo).maybeSingle();
+        
         const od = group_orders[0];
         const names = group_orders.map(m => m.emp_name.toUpperCase()).join(", ");
         const positions = [...new Set(group_orders.map(m => emp_details?.find(e => e.emp_id === m.emp_id)?.position || ""))].join(", ").toUpperCase();
@@ -2801,12 +2808,32 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const uh_imgs = sigs.slice(0, uh_list.length);
         const dc_imgs = sigs.slice(uh_list.length);
 
-        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297); } catch(e){} }
-        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 180, 15, 15, 15); } catch(e){} }
+        // 'FAST' alias applied for native high-res render without fuzzy compression
+        if (img_bg) { try { doc.addImage(img_bg, 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); } catch(e){} }
+        
+        if (img_qr) { try { doc.addImage(img_qr, 'PNG', 182, 9, 16, 16); } catch(e){} }
+
+        // --- APPLIED 1.5 INCH TOP MARGIN HERE (1.5 inch = 38.1 mm) ---
+        let topY = 38.1 - 6; 
+        
+        if (od.to_header) {
+            doc.setTextColor(255, 0, 0); 
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text(od.to_header.toUpperCase(), 105, topY, { align: 'center' });
+            doc.setTextColor(0, 0, 0); 
+            topY += 4;
+        }
+
+        if (od.transport === "GOV'T VEHICLE") {
+            doc.setTextColor(255, 0, 0); 
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("USED GOVERNMENT VEHICLE, SUBJECT TO TEV CLAIM VALIDATION", 105, topY, { align: 'center' });
+            doc.setTextColor(0, 0, 0); 
+        }
 
         // OUTER GRID & DYNAMIC START
         const sx = 10, ew = 190;
-        let curY = 32; 
+        let curY = 38.1; // Shifted relative to exactly 1.5 inch top margin
 
         // ROW 1: Title
         doc.setFillColor(220, 220, 220);
@@ -2826,7 +2853,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         curY += 8;
 
         // ROW 3: TO No / Date of Approval
-        let splitX = 120; // <--- Optimized to give maximum width to the left Name column
+        let splitX = 120;
         doc.line(sx, curY, sx + ew, curY);
         let row3Y = curY;
         doc.setFont("helvetica", "bold");
@@ -2848,7 +2875,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         // ROW 4: Name/Position & Station
         doc.line(sx, curY, sx + ew, curY);
         
-        // Ensure values cleanly clear the bold labels to avoid overlap
         let nameStartX = sx + 34;
         let statStartX = sx + splitX + 32;
 
@@ -2906,7 +2932,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 
         // ROW 5: Means of Transportation
         doc.line(sx, curY, sx + ew, curY);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); // Slightly smaller to prevent crash
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); 
         doc.text("MEANS OF TRANSPORTATION:", sx + 2, curY + 6);
         
         const drawChk = (label, x, y, isChecked) => {
@@ -2915,16 +2941,22 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             doc.text(label, x + 4, y);
         };
         doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-        // Adjusted all checkboxes farther to the right to stop overlap
         drawChk("AIR", sx + 52, curY + 6, od.transport === "AIR");
         drawChk("WATER", sx + 67, curY + 6, od.transport === "WATER");
         drawChk("LAND", sx + 87, curY + 6, od.transport === "LAND");
         drawChk("GOVERNMENT VEHICLE", sx + 107, curY + 6, od.transport === "GOV'T VEHICLE");
+        
+        if (od.transport === "GOV'T VEHICLE" && vLog && vLog.schedule) {
+            doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(255, 0, 0);
+            doc.text(`Sched: ${vLog.schedule}`, sx + 107, curY + 11);
+            doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+        }
+
         drawChk("OTHERS:", sx + 145, curY + 6, od.transport === "OTHERS");
         doc.line(sx + 160, curY + 7, sx + ew - 2, curY + 7);
         doc.setFont("helvetica", "italic"); doc.setFontSize(5);
         doc.text("(Please specify)", sx + 172, curY + 9, {align:"center"});
-        curY += 10;
+        curY += 12;
 
         // ROW 6: Destination
         doc.line(sx, curY, sx + ew, curY);
@@ -3056,101 +3088,108 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         drawChk("LIVE-OUT", sx + 140, curY + 5, false);
         curY += 8;
 
-        // ROW 12: Signatures Grid
+        // Dynamic Signature Render Helper
+        const renderSigs = (list, imgs, startX, width, roleLabel, customY) => {
+            if (list.length === 0) return;
+            const count = list.length;
+            const step = width / count;
+            const imgSize = count > 2 ? 16 : 20;
+            
+            for (let j = 0; j < count; j++) {
+                let cx = startX + (step * j) + (step / 2); 
+                let imgX = cx - (imgSize / 2);
+                
+                if (imgs[j]) { 
+                    try { doc.addImage(imgs[j], 'PNG', imgX, customY, imgSize, imgSize); } catch(e){} 
+                }
+                
+                let name = list[j].full_name.toUpperCase();
+                let fontSize = 7.5;
+                doc.setFontSize(fontSize);
+                while (doc.getTextWidth(name) > (step - 2) && fontSize > 4) {
+                    fontSize -= 0.5; doc.setFontSize(fontSize);
+                }
+                
+                doc.setFont("helvetica", "bold");
+                doc.text(name, cx, customY + 16, { align: 'center' });
+
+                let lineStart = cx - (step / 2) + 2;
+                let lineEnd = cx + (step / 2) - 2;
+                
+                doc.line(lineStart, customY + 17, lineEnd, customY + 17);
+                doc.setFont("helvetica", "normal"); 
+                doc.setFontSize(6);
+                doc.text(roleLabel, cx, customY + 20, { align: 'center' });
+            }
+        };
+
+        // ROW 12: Signatures Grid (RESTORED EXACTLY AS IMAGE 2)
         let sigTopY = curY;
         doc.line(sx, curY, sx + ew, curY);
-        
+
+        // Grid lines (2x2 Structure)
+        doc.line(sx + 85, sigTopY, sx + 85, sigTopY + 56); // Mid vertical
+        doc.line(sx, sigTopY + 28, sx + ew, sigTopY + 28); // Mid horizontal
+        doc.line(sx, sigTopY + 56, sx + ew, sigTopY + 56); // Bottom horizontal
+
+        // TOP-LEFT: REQUESTED BY
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-        doc.text("REQUESTED BY:", sx + 2, sigTopY + 5);
-        
-        // Multi-line Dynamic Requester Names logic that builds up from the line
-        doc.setFont("helvetica", "bold");
-        let reqFontSize = 8;
-        doc.setFontSize(reqFontSize);
-        let reqLines = doc.splitTextToSize(names, 75);
-        while (reqLines.length > 2 && reqFontSize > 4.5) {
-            reqFontSize -= 0.5;
-            doc.setFontSize(reqFontSize);
-            reqLines = doc.splitTextToSize(names, 75);
-        }
-        
-        let ry = sigTopY + 14 - ((reqLines.length - 1) * 3.5); 
-        reqLines.forEach(line => {
-            doc.text(line, sx + 42.5, ry, {align: 'center'});
-            ry += 3.5;
-        });
-
-        doc.line(sx + 5, sigTopY + 16, sx + 80, sigTopY + 16);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-        doc.text("(Name & Position)", sx + 42.5, sigTopY + 19, {align:"center"});
-
-        if (od.remarks && od.remarks.includes("OUTSIDE BICOL")) {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("RECOMMENDED BY (MARPO/UNIT HEAD):", sx + 2, sigTopY + 24);
-            if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
-                doc.text(dc_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
-            }
-            doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("DIVISION CHIEF", sx + 42.5, sigTopY + 37, {align:"center"});
-
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("RECOMMENDED BY (DIVISION CHIEF):", sx + 87, sigTopY + 5);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 6, 18, 18); } catch(e){}
-            doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 22, {align: 'center'});
-            doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("PARPO II", sx + 137.5, sigTopY + 26, {align:"center"});
-
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            doc.text("RODRIGO O. REALUBIT, CESO VI", sx + 137.5, sigTopY + 49, {align: 'center'});
-            doc.line(sx + 90, sigTopY + 50, sx + ew - 5, sigTopY + 50);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("Regional Director", sx + 137.5, sigTopY + 53, {align:"center"});
+        doc.text("REQUESTED BY:", sx + 2, sigTopY + 4);
+        if (uh_list.length > 0) {
+            renderSigs(uh_list, uh_imgs, sx + 2, 80, "MARPO / UNIT HEAD", sigTopY + 6);
         } else {
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("MARPO/UNIT HEAD:", sx + 2, sigTopY + 24);
-            if (uh_list.length > 0) {
-                if (uh_imgs[0]) try { doc.addImage(uh_imgs[0], 'PNG', sx + 32.5, sigTopY + 20, 18, 18); } catch(e){}
-                doc.text(uh_list[0].full_name.toUpperCase(), sx + 42.5, sigTopY + 33, {align: 'center'});
-            }
-            doc.line(sx + 5, sigTopY + 34, sx + 80, sigTopY + 34);
+            doc.line(sx + 10, sigTopY + 24, sx + 75, sigTopY + 24);
             doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("(Name & Position)", sx + 42.5, sigTopY + 37, {align:"center"});
-
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("DIVISION CHIEF:", sx + 87, sigTopY + 5);
-            if (dc_list.length > 0) {
-                if (dc_imgs[0]) try { doc.addImage(dc_imgs[0], 'PNG', sx + 125, sigTopY + 6, 20, 20); } catch(e){}
-                doc.text(dc_list[0].full_name.toUpperCase(), sx + 137.5, sigTopY + 22, {align: 'center'});
-            }
-            doc.line(sx + 90, sigTopY + 23, sx + ew - 5, sigTopY + 23);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("(Name & Position)", sx + 137.5, sigTopY + 26, {align:"center"});
-            
-            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
-            doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
-            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20); } catch(e){}
-            doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 49, {align: 'center'});
-            doc.line(sx + 90, sigTopY + 50, sx + ew - 5, sigTopY + 50);
-            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-            doc.text("(Name & Position of Approving Officer)", sx + 137.5, sigTopY + 53, {align:"center"});
+            doc.text("MARPO / UNIT HEAD", sx + 42.5, sigTopY + 27, {align: 'center'});
         }
-        
-        doc.line(sx + 85, sigTopY, sx + 85, sigTopY + 54); 
-        doc.line(sx, sigTopY + 38, sx + 85, sigTopY + 38); 
-        doc.line(sx + 85, sigTopY + 27, sx + ew, sigTopY + 27); 
 
+        // TOP-RIGHT: RECOMMENDING APPROVAL
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("RECOMMENDING APPROVAL:", sx + 87, sigTopY + 4);
+        renderSigs(dc_list, dc_imgs, sx + 87, 100, "DIVISION CHIEF", sigTopY + 6);
+
+        // BOTTOM-LEFT: CERTIFICATION TEXT
         doc.setFont("helvetica", "bolditalic"); doc.setFontSize(7);
         const cert = "I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other party than those stated in this T.O.";
-        doc.text(doc.splitTextToSize(cert, 82), sx + 2, sigTopY + 42);
+        doc.text(doc.splitTextToSize(cert, 82), sx + 2, sigTopY + 34);
 
-        curY = sigTopY + 54;
+        // BOTTOM-RIGHT: APPROVED BY
+        doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+        doc.text("APPROVED BY:", sx + 87, sigTopY + 32);
+
+        const travelStart = new Date(sortedItin[0].travel_date);
+        const travelEnd = new Date(sortedItin[sortedItin.length - 1].travel_date);
+        const durationDays = Math.ceil((travelEnd - travelStart) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (od.remarks && od.remarks.includes("OUTSIDE BICOL") && durationDays >= 7) {
+            // Split right box into two for PARPO and RD
+            doc.line(sx + 85 + 52.5, sigTopY + 28, sx + 85 + 52.5, sigTopY + 56);
+            
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 95, sigTopY + 34, 16, 16); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+            doc.text("RICARDO C. GARCIA", sx + 111.25, sigTopY + 49, {align: 'center'});
+            doc.line(sx + 88, sigTopY + 50, sx + 134.5, sigTopY + 50);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+            doc.text("PARPO II", sx + 111.25, sigTopY + 53, {align:"center"});
+
+            doc.setFont("helvetica", "bold"); doc.setFontSize(7);
+            doc.text("RODRIGO O. REALUBIT, CESO VI", sx + 163.75, sigTopY + 49, {align: 'center'});
+            doc.line(sx + 140.5, sigTopY + 50, sx + ew - 3, sigTopY + 50);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+            doc.text("Regional Director", sx + 163.75, sigTopY + 53, {align:"center"});
+        } else {
+            // Just PARPO II centered
+            if (img_p2) try { doc.addImage(img_p2, 'PNG', sx + 125, sigTopY + 33, 20, 20); } catch(e){}
+            doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+            doc.text("RICARDO C. GARCIA", sx + 137.5, sigTopY + 50, {align: 'center'});
+            doc.line(sx + 95, sigTopY + 51, sx + 180, sigTopY + 51);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+            doc.text("PARPO II", sx + 137.5, sigTopY + 54, {align:"center"});
+        }
+
+        curY = sigTopY + 56;
 
         // ROW 13: Important Footer
-        doc.line(sx, curY, sx + ew, curY);
         doc.setFont("helvetica", "bold"); doc.setFontSize(7);
         doc.text("IMPORTANT: To be accomplished in Triplicate", sx + 2, curY + 4);
         doc.line(sx, curY + 6, sx + ew, curY + 6);
@@ -3159,14 +3198,12 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         doc.text("Duplicate - Human Resource Copy", sx + 2, curY + 12.5); 
         doc.text("Triplicate - Employee's Copy", sx + 2, curY + 15.5); 
         
-        // Final Dynamic Height Outer Border Calculation (Accounts for dynamic top margin start)
-        doc.rect(sx, 32, ew, curY - 32 + 18);
+        // Final Dynamic Height Outer Border Calculation (Accounts for exact 38.1mm top margin)
+        doc.rect(sx, 38.1, ew, curY - 38.1 + 18);
 
         await window.saveSecurePDF(doc, `TO_${toNo}_New_Format.pdf`);
     } catch (e) { alert("PDF Error: " + e.message); }
 };
-
-            
             
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
@@ -3421,7 +3458,37 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
 
-            if (!start || !end || days <= 0) return alert("Select valid working dates.");
+           if (!start || !end || days <= 0) return alert("Select valid working dates.");
+
+            // LEAVE FILING DEADLINE RESTRICTIONS
+            const fileDiffTime = new Date(start) - new Date(todayStr);
+            const fileDiffDays = Math.ceil(fileDiffTime / (1000 * 60 * 60 * 24));
+
+            if (["Vacation Leave", "Special Privilege Leave", "Mandatory/Forced Leave"].includes(type)) {
+                if (fileDiffDays < 5) {
+                    return alert("⚠️ Filing Constraint: Vacation, Mandatory, and SPL must be filed at least 5 days in advance.");
+                }
+            }
+
+            if (["Sick Leave", "Wellness Leave"].includes(type)) {
+                if (todayStr < start) {
+                    return alert("⚠️ Filing Constraint: Sick Leave and Wellness Leave cannot be filed in advance.");
+                }
+                let nextWDay = new Date(end);
+                let wDayCount = 0;
+                while (wDayCount < 1) {
+                    nextWDay.setDate(nextWDay.getDate() + 1);
+                    const checkStr = nextWDay.toISOString().split('T')[0];
+                    const isHol = cachedHolidays.some(h => h.date === checkStr);
+                    if (nextWDay.getDay() !== 0 && nextWDay.getDay() !== 6 && !isHol) {
+                        wDayCount++;
+                    }
+                }
+                const deadlineStr = nextWDay.toISOString().split('T')[0];
+                if (todayStr > deadlineStr) {
+                    return alert("⚠️ Filing Deadline Expired: Sick Leave and Wellness Leave must be filed on the day or by the next working day after leave.");
+                }
+            }
 
             // --- LEAVE BALANCE CHECK LOGIC ---
             const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
@@ -4739,16 +4806,19 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             document.getElementById('app').innerHTML = `
                 <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
                     <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.roles.join(', ')}</p></div>
-                    <div class="flex items-center space-x-2"><button onclick="showChangePassword()" class="text-xl px-2">🔒</button><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="switchTab('leaves')" class="text-[10px] bg-emerald-600 px-2 py-1.5 rounded font-bold shadow-sm border border-emerald-400 whitespace-nowrap">🍃 LEAVE APPROVAL</button>
+                        <button onclick="showChangePassword()" class="text-xl px-1">🔒</button>
+                        <button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button>
+                    </div>
                 </header>
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
-                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
-                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
-                    <button onclick="switchTab('leaves')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'leaves' ? 'text-emerald-600 font-bold' : 'text-gray-400'}"><span class="text-lg">🍃</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Leaves</span></button>
-                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
-                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/6 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
+                    <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
+                    <button onclick="switchTab('approved')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'approved' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">✅</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Apprv</span></button>
+                    <button onclick="switchTab('denied')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'denied' ? 'text-red-600 font-bold' : 'text-gray-400'}"><span class="text-lg">❌</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Deny</span></button>
+                    <button onclick="switchTab('reports')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'reports' ? 'text-blue-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📋</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Logs</span></button>
+                    <button onclick="switchTab('analytics')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'analytics' ? 'text-purple-600 font-bold' : 'text-gray-400'}"><span class="text-lg">📊</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">Stats</span></button>
                 </nav>
                 <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-40 px-4 py-3 flex justify-between items-center transition-transform duration-300 transform translate-y-full batch-bar-position">
                     <span id="batchCountText" class="font-bold text-sm text-gray-700">0 selected</span>
@@ -4780,7 +4850,22 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     </div>
                 </div>
 
-                <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
+<div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
+
+                <div id="retractLeaveModal" class="hidden absolute inset-0 bg-black/50 z-[60] flex items-center justify-center px-4 modal-fade">
+                    <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
+                        <div class="bg-amber-600 text-white p-4 font-bold text-center relative">
+                            Retract Leave Days
+                            <button onclick="hideRetractLeaveModal()" class="absolute right-4 text-xl leading-none">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <p class="text-sm font-bold text-gray-700">Select dates to retract (deduct from credits):</p>
+                            <div id="retractLeaveDatesList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                            <button onclick="confirmRetractLeaveSpecific()" class="w-full bg-amber-600 text-white font-bold py-3 rounded-xl mt-2">Retract Selected Dates</button>
+                            <button onclick="retractEntireLeave()" class="w-full bg-amber-800 text-white font-bold py-3 rounded-xl mt-2">Retract Entire Leave</button>
+                        </div>
+                    </div>
+                </div>
             `;
             
             if (currentTab === 'pending') loadPendingTab();
@@ -4837,32 +4922,26 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             return remarks + ` | ROUTING_STATUS: ${newStatus}`;
         }
 
-        function getLeaveAppPayload(u, leaveRec) {
+function getLeaveAppPayload(u, leaveRec) {
             const roles = u.roles || [];
             const currentStatus = getLeaveStatus(leaveRec.remarks || "");
             let nextStatus = currentStatus;
             let transType = "APPLICATION";
 
-            const empUnit = leaveRec.unit ? leaveRec.unit.trim().toUpperCase() : "";
-
-            // Evaluate state-machine transition based on CURRENT status. 
             if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
-                nextStatus = empUnit === "PARPO" ? "PENDING_HRMO" : "PENDING_CHIEF";
+                nextStatus = "PENDING_CHIEF";
             } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
                 nextStatus = "PENDING_HRMO";
-            } else if ((currentStatus === "PENDING_HRMO" || currentStatus === "PENDING_CHIEF" || currentStatus === "PENDING_UNIT_HEAD") && roles.some(r => ["HRMO", "ADMIN"].includes(r))) {
-                if (currentStatus === "PENDING_HRMO" || roles.includes("ADMIN")) {
-                    nextStatus = "APPROVED";
-                    transType = "APPROVED";
-                }
+            } else if (currentStatus === "PENDING_HRMO" && roles.includes("HRMO")) {
+                nextStatus = "PENDING_PARPO";
+            } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
+                nextStatus = "APPROVED";
+                transType = "APPROVED";
             }
 
-            // Safety net if status logic needs a bump
-            if (nextStatus === currentStatus) {
-                if (roles.includes("ADMIN")) {
-                    nextStatus = "APPROVED";
-                    transType = "APPROVED";
-                }
+            if (nextStatus === currentStatus && roles.includes("ADMIN")) {
+                nextStatus = "APPROVED";
+                transType = "APPROVED";
             }
 
             return {
@@ -4870,7 +4949,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus)
             };
         }
-        
+            
         // --- CANCEL MODAL LOGIC (Approved Tab) ---
         function showCancelModal(to_no, datesEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
@@ -5564,17 +5643,14 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                     const s = getLeaveStatus(l.remarks || "");
 
-                    if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
-                        const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
+                        if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                         let canSeePending = false;
 
-                        if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && (s === "PENDING_HRMO" || isParpoUnit)) {
-                            canSeePending = true;
-                        } 
-                        if (!isParpoUnit) {
-                            if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
-                            if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
-                        }
+                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
+                        if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
+                        if (roles.includes("HRMO") && s === "PENDING_HRMO") canSeePending = true;
+                        if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
+                        if (roles.includes("ADMIN")) canSeePending = true;
 
                         if(canSeePending) show = true;
 
@@ -5582,12 +5658,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         show = true;
                         textColor = 'text-emerald-600';
                     } 
-                    else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'CANCELLED' || l.transaction_type.includes('DISAPPROVED'))) {
+                   else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type.includes('DISAPPROVED'))) {
                         show = true;
                         textColor = 'text-red-500';
                         borderColor = 'border-red-500';
                     }
-
                     if (show) {
                         let btns = '';
                         if (currentLeaveSubTab === 'pending') {
@@ -5597,8 +5672,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                     <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2 active:scale-95 transition-transform">APPROVE</button>
                                 </div>
                             `;
+                        } else if (currentLeaveSubTab === 'approved' && roles.includes("PARPO") && String(l.type).toUpperCase() !== "SICK LEAVE") {
+                            btns = `
+                                <div class="mt-3 pt-3">
+                                    <button onclick="window.openRetractLeaveModal('${l.id}', '${l.start_date}', '${l.end_date}', '${l.debit}')" class="px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-transform w-full">↩️ RETRACT LEAVE DAYS</button>
+                                </div>
+                            `;
                         }
-
                         pendingItems.push({
                             type: 'LEAVE',
                             id: l.id,
@@ -6071,10 +6151,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
             document.getElementById('mainContent').innerHTML = `
                 <div class="p-4 pb-32 space-y-4">
-                    <p class="text-xs text-slate-600 leading-relaxed bg-white shadow-sm p-4 rounded-xl border border-slate-200">
-                        ${aiText}
-                    </p>
-
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
                             <span class="kpi-label mb-1">Most Visited</span>
@@ -6200,7 +6276,96 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             });
         }
 
-    // Expose functions to window for HTML onclick handlers
+
+// Advanced Leave Retraction Logic
+        let currentRetractLeaveId = null;
+        let currentRetractLeaveDebit = 0;
+
+        window.openRetractLeaveModal = function(id, startDate, endDate, debit) {
+            currentRetractLeaveId = id;
+            currentRetractLeaveDebit = parseFloat(debit);
+            const list = document.getElementById('retractLeaveDatesList');
+            list.innerHTML = '';
+            
+            let curr = new Date(startDate);
+            let end = new Date(endDate);
+            let dates = [];
+            while(curr <= end) {
+                dates.push(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
+            
+            dates.forEach(d => {
+                list.innerHTML += `
+                    <label class="flex items-center space-x-3 p-3 border rounded-xl bg-gray-50 cursor-pointer">
+                        <input type="checkbox" value="${d}" class="retract-leave-cb w-5 h-5 text-amber-600 rounded focus:ring-amber-500 border-gray-300" checked>
+                        <span class="text-sm font-bold text-gray-700">${d}</span>
+                    </label>
+                `;
+            });
+            document.getElementById('retractLeaveModal').style.display = 'flex';
+        };
+
+        window.hideRetractLeaveModal = function() {
+            document.getElementById('retractLeaveModal').style.display = 'none';
+        };
+
+        window.retractEntireLeave = async function() {
+            if(!confirm("Are you sure you want to retract this ENTIRE leave approval?")) return;
+            hideRetractLeaveModal();
+            try {
+                const { data: leaveRec, error } = await supabaseClient.from('leave_ledger').select('remarks').eq('id', currentRetractLeaveId).single();
+                if (error || !leaveRec) throw new Error("Record fetch error.");
+                
+                const updatedRemarks = setLeaveStatus(leaveRec.remarks || "", "PENDING_PARPO");
+                await supabaseClient.from('leave_ledger').update({
+                    transaction_type: "APPLICATION",
+                    remarks: updatedRemarks
+                }).eq('id', currentRetractLeaveId);
+                
+                await window.logActivity(currentRetractLeaveId, 'LEAVE_RETRACTED', `Entire Leave approval retracted`);
+                alert("Leave approval retracted completely!");
+                loadLeavesTab();
+            } catch(e) {
+                alert("Retraction failed: " + e.message);
+            }
+        };
+
+        window.confirmRetractLeaveSpecific = async function() {
+            const checkboxes = document.querySelectorAll('.retract-leave-cb');
+            const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+            
+            if(selectedDates.length === 0) return alert("Select at least one date.");
+            if(selectedDates.length === checkboxes.length) return window.retractEntireLeave();
+
+            hideRetractLeaveModal();
+            try {
+                // Deducting exact selected days dynamically updates standard live leave credits
+                let newDebit = currentRetractLeaveDebit - selectedDates.length;
+                if(newDebit < 0) newDebit = 0; 
+
+                const { data: leaveRec, error } = await supabaseClient.from('leave_ledger').select('remarks').eq('id', currentRetractLeaveId).single();
+                if (error || !leaveRec) throw new Error("Record fetch error.");
+                
+                const updatedRemarks = (leaveRec.remarks || "") + ` | Retracted dates: ${selectedDates.join(', ')}`;
+                
+                await supabaseClient.from('leave_ledger').update({
+                    debit: newDebit,
+                    remarks: updatedRemarks
+                }).eq('id', currentRetractLeaveId);
+
+                await window.logActivity(currentRetractLeaveId, 'LEAVE_RETRACTED_PARTIAL', `Retracted specific days: ${selectedDates.join(', ')}`);
+                alert("Selected days retracted. Leave credits have been automatically updated/refunded!");
+                loadLeavesTab();
+            } catch(e) { 
+                alert("Partial retraction failed: " + e.message); 
+            }
+        };
+            
+
+            
+
+        // Expose functions to window for HTML onclick handlers
         window.handleLogin = handleLogin;
         window.handleBiometricLogin = handleBiometricLogin;
         window.logout = logout;
