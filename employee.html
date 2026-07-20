@@ -3427,18 +3427,21 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
+         // LEAVE APPROVAL ROUTING (Initial Assignment)
+            // 1. Unit (if needed) -> 2. Div Chief -> 3. PARPO -> 4. HRMO
             let routeStatus = "PENDING_CHIEF";
             const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
+            const hasUnit = currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit.toUpperCase() !== "NA";
             
-            if (isPARPOUnit) {
-                routeStatus = "PENDING_PARPO"; 
-            } else if (isMARPO) {
-                routeStatus = "PENDING_CHIEF";
-            } else if (currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit !== "NA") {
+            if (hasUnit && !isPARPOUnit && !isMARPO) {
+                // Step 1: Route to Unit Head first if employee belongs to a standard unit
                 routeStatus = "PENDING_UNIT_HEAD";
-            } 
-                
+            } else {
+                // Step 2: Route directly to Division Chief (PARPO unit employees will also start at Div Chief level here)
+                routeStatus = "PENDING_CHIEF";
+            }
+            
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
                 
                 
