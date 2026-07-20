@@ -6099,12 +6099,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         const content = document.getElementById('mainContent');
         content.innerHTML = `<p class="flex items-center justify-center h-full font-bold animate-pulse text-emerald-600">Syncing Leaves...</p>`;
 
-        // Cancels are purposefully excluded so they do not show in Admin portal
         const [lRes, empRes] = await Promise.all([
-            supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED']).order('created_at', { ascending: false }).limit(3000),
+            supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED']).order('created_at', { ascending: false }).limit(3000),
             supabaseClient.from('employees').select('emp_id, full_name, division, unit')
         ]);
 
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
         let pendingItems = [];
         const roles = currentUser.roles || [];
 
@@ -6127,10 +6127,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                     }
                     if(canSeePending) show = true;
-                } else if (currentLeaveSubTab === 'approved' && l.transaction_type === 'APPROVED') {
+                } else if (currentLeaveSubTab === 'active' && l.transaction_type === 'APPROVED' && l.end_date >= todayStr) {
                     show = true; textColor = 'text-emerald-600';
-                } else if (currentLeaveSubTab === 'denied' && (l.transaction_type === 'DISAPPROVED' || l.transaction_type.includes('DISAPPROVED'))) {
-                    show = true; textColor = 'text-red-500'; borderColor = 'border-red-500';
+                } else if (currentLeaveSubTab === 'history') {
+                    if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) {
+                        show = true; textColor = 'text-gray-600'; borderColor = 'border-gray-400';
+                    }
+                    if (l.transaction_type === 'DISAPPROVED' || l.transaction_type.includes('DISAPPROVED') || l.transaction_type === 'CANCELLED') {
+                        show = true; textColor = 'text-red-500'; borderColor = 'border-red-500';
+                    }
                 }
 
                 if (show) {
@@ -6141,8 +6146,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                 <button onclick="processDirectLeave('${l.id}', 'DISAPPROVED')" class="px-2 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold shadow-sm w-1/2">DENY</button>
                                 <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-2 py-2 dar-green text-white rounded-lg text-[10px] font-bold shadow-md w-1/2">APPROVE</button>
                             </div>`;
+                    } else if (l.transaction_type === 'APPROVED' || l.transaction_type === 'APPLICATION') {
+                        btns = `
+                            <div class="mt-3 pt-3 flex justify-end gap-2">
+                                <button onclick="retractLeaveAppAdmin('${l.id}')" class="px-4 py-2 bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 rounded-lg text-[10px] font-bold shadow-sm">RETRACT</button>
+                            </div>`;
                     }
+
                     pendingItems.push({
+                        emp: emp,
                         html: `<div class="bg-white p-4 rounded-xl border border-gray-200 border-l-4 ${borderColor} shadow-sm mb-4">
                                 ${currentLeaveSubTab === 'pending' ? `<div class="pt-1 mb-2"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
                                 <div class="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
@@ -6166,8 +6178,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             <div class="sticky top-0 bg-gray-100 z-20 pt-4 px-4 pb-2 border-b shadow-sm">
                 <div class="flex bg-slate-200 rounded-xl p-1 mb-3">
                     <button onclick="switchLeaveSubTab('pending')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'pending' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Pending</button>
-                    <button onclick="switchLeaveSubTab('approved')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'approved' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Approved</button>
-                    <button onclick="switchLeaveSubTab('denied')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'denied' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Denied</button>
+                    <button onclick="switchLeaveSubTab('active')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'active' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">Active/Upcoming</button>
+                    <button onclick="switchLeaveSubTab('history')" class="w-1/3 py-1.5 text-xs font-bold rounded-lg transition-all ${currentLeaveSubTab === 'history' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}">History</button>
                 </div>
                 ${currentLeaveSubTab === 'pending' && pendingItems.length > 0 ? `
                     <div class="flex justify-between items-center mt-2">
@@ -6178,13 +6190,76 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         <span class="text-xs text-gray-500 font-bold">${pendingItems.length} Leaves</span>
                     </div>` : ''}
             </div>
-            <div class="p-4 space-y-3 pb-32">`;
+            <div class="p-4 space-y-4 pb-32">`;
 
-        if (pendingItems.length === 0) h += `<div class="flex flex-col items-center justify-center py-10 opacity-50"><span class="text-4xl">🍃</span><p class="font-bold mt-2 text-xs uppercase text-center">No Records Found</p></div>`;
-        else pendingItems.forEach(r => h += r.html);
+        if (pendingItems.length === 0) {
+            h += `<div class="flex flex-col items-center justify-center py-10 opacity-50"><span class="text-4xl">🍃</span><p class="font-bold mt-2 text-xs uppercase text-center">No Records Found</p></div>`;
+        } else {
+            const grouped = {};
+            pendingItems.forEach(item => {
+                const div = item.emp.division || "UNKNOWN DIVISION";
+                const unit = item.emp.unit || "UNKNOWN UNIT";
+                if (!grouped[div]) grouped[div] = {};
+                if (!grouped[div][unit]) grouped[div][unit] = [];
+                grouped[div][unit].push(item);
+            });
 
+            for (const [div, units] of Object.entries(grouped)) {
+                h += `
+                <div class="mb-5 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-emerald-800 text-white px-3 py-2 text-xs font-bold uppercase tracking-wider">
+                        🏢 ${div}
+                    </div>
+                    <div class="p-3 bg-gray-50">`;
+                
+                for (const [unit, items] of Object.entries(units)) {
+                    h += `
+                        <div class="mb-3 last:mb-0">
+                            <h4 class="text-[10px] font-black text-emerald-700 uppercase mb-2 border-b border-emerald-200 pb-1">↳ ${unit}</h4>
+                            <div class="space-y-3 pl-2 border-l-2 border-emerald-100">`;
+                    items.forEach(i => h += i.html);
+                    h += `  </div>
+                        </div>`;
+                }
+                
+                h += `
+                    </div>
+                </div>`;
+            }
+        }
         content.innerHTML = h + `</div>`;
     }
+
+    window.retractLeaveAppAdmin = async function(id) {
+        if (!confirm("Are you sure you want to retract this leave application?")) return;
+        const reason = prompt("Please provide a REASON for retraction:");
+        if (!reason) {
+            alert("Retraction cancelled: Reason is required.");
+            return;
+        }
+
+        document.getElementById('mainContent').innerHTML = `<p class="flex items-center justify-center h-full text-orange-600 font-bold animate-pulse">Retracting...</p>`;
+
+        try {
+            const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', id).single();
+            if (!leaveData) {
+                loadLeavesTab();
+                return;
+            }
+
+            const newRemarks = (leaveData.remarks || "") + ` | RETRACTED BY ${currentUser.fullName}: ${reason}`;
+
+            await supabaseClient.from('leave_ledger').update({
+                transaction_type: 'CANCELLED',
+                remarks: newRemarks
+            }).eq('id', id);
+
+            alert("Leave successfully retracted.");
+        } catch(e) {
+            alert("Error: " + e.message);
+        }
+        loadLeavesTab();
+    };
 
     window.toggleBatchSelection = function(id, isChecked) {
         if (isChecked) selectedLeaves.add(id); else selectedLeaves.delete(id);
@@ -6265,5 +6340,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </body>
 </html>
 </xmp>
+    
 </body>
 </html>
