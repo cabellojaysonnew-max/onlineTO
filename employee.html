@@ -3349,6 +3349,36 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 const diffTime = leaveStart - filingDate;
                 const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
+            } else if (type === "Sick Leave" || type === "Wellness Leave") {
+                // Determine the next working day after the leave's end date
+                let nextWorkingDay = new Date(end);
+                nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
+                
+                while (true) {
+                    let day = nextWorkingDay.getDay();
+                    let dStr = nextWorkingDay.toISOString().split('T')[0];
+                    
+                    let isHol = cachedHolidays.some(h => {
+                        if (h.date !== dStr) return false;
+                        const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
+                        const station = String(currentUser.station || "").toUpperCase().trim();
+                        if (coverage.includes("NATIONWIDE")) return true;
+                        const hasNaga = coverage.includes("NAGA CITY");
+                        const hasCamSur = coverage.includes("CAMARINES SUR");
+                        if (hasNaga && hasCamSur) return true;
+                        if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
+                        if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
+                        return false;
+                    });
+                    
+                    if (day !== 0 && day !== 6 && !isHol) break; // Reached a valid working day
+                    nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
+                }
+                
+                let filingDate = new Date(todayStr);
+                if (filingDate > nextWorkingDay) {
+                    return alert(`${type} must be filed in advance or strictly on the next working day after the leave.`);
+                }
             }
 
             // --- LEAVE BALANCE CHECK LOGIC ---          
@@ -6206,18 +6236,21 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             if (emp && checkScope(emp.division, emp.unit)) {
                 let show = false;
                 const s = getLeaveStatus(l.remarks || "");
-
-                // Logic for showing leaves based on subtab
+// Logic for showing leaves based on subtab
                 if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                     let canSeePending = false;
                     const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
-                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && (s === "PENDING_HRMO" || isParpoUnit)) canSeePending = true;
+                    
+                    // STRICT ROUTING: HRMO only sees PENDING_HRMO. PARPO sees PENDING_PARPO.
+                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
                     if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
+                    
                     if (!isParpoUnit) {
                         if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
                         if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                     }
                     if(canSeePending) { show = true; totalQueue++; }
+                }
                 } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
                     show = true; totalActive++;
                 } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
