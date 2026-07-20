@@ -3265,11 +3265,11 @@ window.cancelLeaveApp = async function(leaveId) {
                 }
                 list.innerHTML = html || "No Travel Orders found.";
         
-            } else {
-                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED']).order('created_at', {ascending: false});
+               } else {
+                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'PENDING_UNIT_HEAD', 'PENDING_CHIEF', 'PENDING_PARPO', 'PENDING_HRMO', 'APPROVED', 'CANCELLED', 'DISAPPROVED', 'RETRACTED']).order('created_at', {ascending: false});
                 let html = '';
-for(let app of leaves || []) {
-                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
+                for(let app of leaves || []) {
+                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type.includes('CANCELLED') || app.transaction_type.includes('DISAPPROVED') || app.transaction_type.includes('RETRACTED') ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
                     const isCancelled = app.transaction_type === 'CANCELLED';
                     const cannotCancel = isApp && app.start_date < todayStr;
