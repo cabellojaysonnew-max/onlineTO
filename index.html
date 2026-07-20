@@ -6382,7 +6382,8 @@ function getLeaveAppPayload(u, leaveRec) {
         loadAdminCalendar();
     };
 
-    window.loadAdminCalendar = async function() {
+
+window.loadAdminCalendar = async function() {
         const content = document.getElementById('mainContent');
         content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
 
@@ -6429,15 +6430,31 @@ function getLeaveAppPayload(u, leaveRec) {
             html += `<div class="bg-slate-50/50 rounded-xl border border-slate-100 min-h-[80px] sm:min-h-[100px]"></div>`;
         }
 
+        // Fast lookup map to append acronyms to the UI to make it informative at a glance
+        const typeAlias = {
+            "Vacation Leave": "VL",
+            "Sick Leave": "SL",
+            "Mandatory/Forced Leave": "FL",
+            "Special Privilege Leave": "SPL",
+            "Maternity Leave": "ML",
+            "Paternity Leave": "PL",
+            "Wellness Leave": "WL"
+        };
+
         for (let d = 1; d <= endDtObj.getDate(); d++) {
             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const isToday = dateStr === todayStr;
             const isFutureOrToday = dateStr >= todayStr;
             
+            // Check if weekend to prevent leave rendering mismatch 
+            const currentDayObj = new Date(year, month, d);
+            const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
+
             let dayLeavesHtml = '';
             
             leaves.forEach(l => {
-                if (dateStr >= l.start_date && dateStr <= l.end_date) {
+                // Ensure we don't render leaves on actual weekend cells
+                if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
                     const emp = emps.find(e => e.emp_id === l.emp_id);
                     if (emp && checkScope(emp.division, emp.unit)) {
                         const isApproved = l.transaction_type === 'APPROVED';
@@ -6452,10 +6469,12 @@ function getLeaveAppPayload(u, leaveRec) {
                         }
                         
                         const lastName = emp.full_name.split(',')[0] || emp.full_name;
+                        const shortType = typeAlias[l.type] || "LV";
                         
                         dayLeavesHtml += `
-                            <div ${clickAction} class="${bgClass} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded mb-1 truncate shadow-sm" title="${emp.full_name} - ${l.type} (${l.transaction_type})">
-                                ${isApproved ? '✅' : '⏳'} ${lastName}
+                            <div ${clickAction} class="${bgClass} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded mb-1 shadow-sm flex items-center justify-between" title="${emp.full_name} | ${l.type} (${l.debit} Days) | ${l.transaction_type}">
+                                <span class="truncate pr-1">${isApproved ? '✅' : '⏳'} ${lastName}</span>
+                                <span class="text-[8px] bg-white/60 px-1 rounded-sm tracking-widest flex-shrink-0">${shortType}</span>
                             </div>
                         `;
                     }
@@ -6463,8 +6482,8 @@ function getLeaveAppPayload(u, leaveRec) {
             });
 
             html += `
-                <div class="bg-white rounded-xl border ${isToday ? 'border-dar-gold ring-1 ring-dar-gold/50' : 'border-slate-200'} min-h-[80px] sm:min-h-[100px] flex flex-col p-1.5 sm:p-2 shadow-sm overflow-hidden">
-                    <span class="text-[10px] sm:text-xs font-black ${isToday ? 'text-dar-gold' : 'text-slate-400'} mb-1 block">${d}</span>
+                <div class="bg-white rounded-xl border ${isToday ? 'border-dar-gold ring-1 ring-dar-gold/50' : (isWeekend ? 'bg-slate-50 border-slate-100' : 'border-slate-200')} min-h-[80px] sm:min-h-[100px] flex flex-col p-1.5 sm:p-2 shadow-sm overflow-hidden">
+                    <span class="text-[10px] sm:text-xs font-black ${isToday ? 'text-dar-gold' : (isWeekend ? 'text-slate-300' : 'text-slate-400')} mb-1 block">${d}</span>
                     <div class="flex-grow overflow-y-auto hide-scroll flex flex-col gap-0.5">
                         ${dayLeavesHtml}
                     </div>
@@ -6481,6 +6500,7 @@ function getLeaveAppPayload(u, leaveRec) {
         html += `</div></div>`;
         content.innerHTML = html;
     };
+        
 
     async function loadLeavesTab() {
         selectedLeaves.clear(); updateBatchActionBar();
