@@ -6519,13 +6519,13 @@ window.loadAdminCalendar = async function() {
             }
         }
 
-        if (!html.includes('bg-white rounded-2xl shadow-sm border')) {
+             if (!hasAnyLeaves) {
             html += `<div class="flex flex-col items-center justify-center py-20 opacity-40"><span class="text-5xl mb-4">📅</span><p class="font-black text-xs tracking-widest uppercase text-slate-500">No Leaves This Month</p></div>`;
         }
 
         html += `</div>`;
         content.innerHTML = html;
-        
+    };  
 
     async function loadLeavesTab() {
         selectedLeaves.clear(); updateBatchActionBar();
