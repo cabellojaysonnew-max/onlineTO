@@ -6410,274 +6410,136 @@ function getLeaveAppPayload(u, leaveRec) {
 
 
 window.loadAdminCalendar = async function() {
-    const content = document.getElementById('mainContent');
-    content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
-
-    const year = adminCalDate.getFullYear();
-    const month = adminCalDate.getMonth();
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    
-    const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
-    const endDtObj = new Date(year, month + 1, 0);
-    const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
-
-    const [lRes, empRes] = await Promise.all([
-        supabaseClient.from('leave_ledger')
-            .select('*')
-            .in('transaction_type', ['APPLICATION', 'APPROVED'])
-            .lte('start_date', endDtStr)
-            .gte('end_date', startDtStr),
-        supabaseClient.from('employees')
-            .select('emp_id, full_name, division, unit')
-    ]);
-
-    const leaves = lRes.data || [];
-    const emps = empRes.data || [];
-    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-
-    let html = `
-        <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
-            <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
-            <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
-            <button onclick="changeAdminCalMonth(1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
-        </div>
-        <div class="p-2 sm:p-5 pb-32">
-            <div class="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2">
-                ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-center font-black text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider">${d}</div>`).join('')}
-            </div>
-            <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
-    `;
-
-    const firstDayOfWeek = new Date(year, month, 1).getDay();
-    for (let i = 0; i < firstDayOfWeek; i++) {
-        html += `<div class="bg-slate-50/40 rounded-2xl border border-slate-100 min-h-[90px] sm:min-h-[120px]"></div>`;
-    }
-
-    const typeAlias = { "Vacation Leave": "VL", "Sick Leave": "SL", "Mandatory/Forced Leave": "FL", "Special Privilege Leave": "SPL", "Maternity Leave": "ML", "Paternity Leave": "PL", "Wellness Leave": "WL" };
-
-    for (let d = 1; d <= endDtObj.getDate(); d++) {
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const isToday = dateStr === todayStr;
-        const currentDayObj = new Date(year, month, d);
-        const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
-
-        let dayLeavesHtml = '';
-        let count = 0;
-
-        leaves.forEach(l => {
-            if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
-                const emp = emps.find(e => e.emp_id === l.emp_id);
-                if (emp && checkScope(emp.division, emp.unit)) {
-                    count++;
-                    const isApproved = l.transaction_type === 'APPROVED';
-                    const badgeStyle = isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800';
-                    const lastName = emp.full_name.split(',')[0] || emp.full_name;
-                    const shortType = typeAlias[l.type] || "LV";
-                    const safeObj = encodeURIComponent(JSON.stringify(l));
-                        
-                    let clickAction = (dateStr >= todayStr) ? `onclick="openRetractModal('${safeObj}')"` : '';
-                    let hoverClass = (dateStr >= todayStr) ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-transform' : '';
-                    
-                    dayLeavesHtml += `
-                        <div ${clickAction} class="${badgeStyle} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded-lg mb-1 shadow-xs flex items-center justify-between" title="${emp.full_name} | ${l.type} (${l.debit}d)">
-                            <span class="truncate pr-1">${isApproved ? '🟢' : '⏳'} ${lastName}</span>
-                            <span class="text-[8px] bg-white px-1 rounded font-black tracking-tighter shadow-2xs">${shortType}</span>
-                        </div>
-                    `;
-                }
-            }
-        });
-
-        html += `
-            <div class="bg-white rounded-2xl border ${isToday ? 'border-emerald-600 ring-2 ring-emerald-500/20 shadow-md' : (isWeekend ? 'bg-slate-50/70 border-slate-200/60' : 'border-slate-200')} min-h-[90px] sm:min-h-[120px] flex flex-col p-1.5 sm:p-2.5 shadow-xs overflow-hidden transition-all">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-xs sm:text-sm font-black ${isToday ? 'text-emerald-700' : (isWeekend ? 'text-slate-300' : 'text-slate-700')}">${d}</span>
-                    ${count > 0 ? `<span class="text-[9px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">${count}</span>` : ''}
-                </div>
-                <div class="flex-grow overflow-y-auto hide-scroll flex flex-col">
-                    ${dayLeavesHtml}
-                </div>
-            </div>
-        `;
-    }
-
-    const lastDayOfWeek = new Date(year, month, endDtObj.getDate()).getDay();
-    for (let i = lastDayOfWeek + 1; i <= 6; i++) {
-        html += `<div class="bg-slate-50/40 rounded-2xl border border-slate-100 min-h-[90px] sm:min-h-[120px]"></div>`;
-    }
-
-    content.innerHTML = html + `</div></div>`;
-};
-        
-
-    async function loadLeavesTab() {
-        selectedLeaves.clear(); updateBatchActionBar();
         const content = document.getElementById('mainContent');
-        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Synchronizing Ledger...</p></div>`;
+        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
+
+        const year = adminCalDate.getFullYear();
+        const month = adminCalDate.getMonth();
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+        const endDtObj = new Date(year, month + 1, 0);
+        const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
 
         const [lRes, empRes] = await Promise.all([
-            supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED', 'RETRACTED']).order('created_at', { ascending: false }).limit(3000),
-            supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+            supabaseClient.from('leave_ledger')
+                .select('*')
+                .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                .lte('start_date', endDtStr)
+                .gte('end_date', startDtStr),
+            supabaseClient.from('employees')
+                .select('emp_id, full_name, division, unit')
         ]);
 
+        const leaves = lRes.data || [];
+        const emps = empRes.data || [];
+        
         const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-        let itemsToRender = [];
-        const roles = currentUser.roles || [];
 
-        let totalQueue = 0;
-        let totalActive = 0;
+        let html = `
+            <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
+                <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
+                <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
+                <button onclick="changeAdminCalMonth(1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
+            </div>
+            <div class="p-2 sm:p-5 pb-32">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-emerald-800 text-white font-bold uppercase tracking-wider">
+                            <tr>
+                                <th class="p-4 border-b border-emerald-900 w-24">Date</th>
+                                <th class="p-4 border-b border-emerald-900">Personnel on Leave</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
 
-        for (let l of (lRes.data || [])) {
-            const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
-            if (emp && checkScope(emp.division, emp.unit)) {
-                let show = false;
-                const s = getLeaveStatus(l.remarks || "");
+        for (let d = 1; d <= endDtObj.getDate(); d++) {
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isToday = dateStr === todayStr;
+            const isFutureOrToday = dateStr >= todayStr;
+            
+            const currentDayObj = new Date(year, month, d);
+            const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
+            const dayName = currentDayObj.toLocaleDateString('en-US', { weekday: 'short' });
 
-            // Logic for showing leaves based on subtab
-                if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
-                    let canSeePending = false;
-                    
-                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
-                    if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
-                    if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
-                    if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
-                    
-                    if(canSeePending) { show = true; totalQueue++; }
-                } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
-                    show = true; totalActive++;
-                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
-                    show = true; 
-                } else if (currentLeaveSubTab === 'previous') {
-                    if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) show = true; 
-                    if (['DISAPPROVED', 'CANCELLED', 'RETRACTED'].includes(l.transaction_type) || l.transaction_type.includes('DISAPPROVED')) show = true; 
-                }
+            let dayLeavesHtml = '';
+            let hasLeave = false;
 
-                if (show) {
-                    let btns = '';
-                    if (currentLeaveSubTab === 'pending') {
-                        btns = `
-                            <button onclick="openDenyModal('${l.id}')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">Deny</button>
-                            <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto mt-2 sm:mt-0">Approve</button>
-                        `;
-                    } else if (l.transaction_type === 'APPROVED' || l.transaction_type === 'APPLICATION') {
-                        // Pass stringified JSON object securely
+            leaves.forEach(l => {
+                if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
+                    const emp = emps.find(e => e.emp_id === l.emp_id);
+                    if (emp && checkScope(emp.division, emp.unit)) {
+                        hasLeave = true;
+                        const isApproved = l.transaction_type === 'APPROVED';
+                        const badgeStyle = isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200';
+                        const statusIcon = isApproved ? '✅' : '⏳';
                         const safeObj = encodeURIComponent(JSON.stringify(l));
-                        btns = `<button onclick="openRetractModal('${safeObj}')" class="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">⚙️ Retract Dates</button>`;
+                        
+                        let clickAction = (dateStr >= todayStr && isApproved) ? `onclick="openRetractModal('${safeObj}')"` : '';
+                        let hoverClass = (dateStr >= todayStr && isApproved) ? 'cursor-pointer hover:shadow-md transition-shadow' : '';
+                        
+                        dayLeavesHtml += `
+                            <div ${clickAction} class="flex flex-col sm:flex-row sm:items-center justify-between p-3 mb-2 bg-white border border-slate-200 rounded-xl shadow-sm ${hoverClass}">
+                                <div class="flex flex-col mb-2 sm:mb-0">
+                                    <span class="font-bold text-slate-800 text-sm flex items-center gap-1">${statusIcon} ${emp.full_name}</span>
+                                    <span class="text-[10px] font-bold tracking-widest text-slate-400 uppercase mt-0.5">${emp.division} ${emp.unit !== 'NA' ? '| ' + emp.unit : ''}</span>
+                                </div>
+                                <div class="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:gap-0.5">
+                                    <span class="font-black text-[9px] uppercase tracking-widest ${badgeStyle} px-2.5 py-1 rounded-full shadow-sm">${l.type}</span>
+                                    <span class="text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 shadow-inner">${l.debit} Days</span>
+                                </div>
+                            </div>
+                        `;
                     }
-
-                    const badge = getStatusBadge(l.transaction_type, s);
-                    const isPending = currentLeaveSubTab === 'pending';
-
-                    itemsToRender.push({
-                        emp: emp,
-                        leaveData: l,
-                        html: `
-                        <div class="p-5 flex flex-col sm:flex-row items-start gap-4 hover:bg-slate-50 transition-colors relative">
-                            ${isPending ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
-                            <div class="flex-grow w-full">
-                                <div class="flex flex-wrap items-center gap-2 mb-2">
-                                    <span class="font-black text-slate-800 text-sm tracking-tight">${emp.full_name}</span>
-                                    ${badge}
-                                </div>
-                                <div class="text-xs text-slate-600 mb-1.5 leading-tight flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                    <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">${l.type}</span> 
-                                    <span class="font-black text-slate-700 bg-slate-200 px-2 py-0.5 rounded">${l.debit} Days</span> 
-                                    <span class="text-slate-500 font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded shadow-sm">📅 ${l.start_date} to ${l.end_date}</span>
-                                </div>
-                                <div class="text-[11px] text-slate-600 bg-white px-3 py-2 rounded-xl mt-3 border border-slate-200 leading-relaxed break-words whitespace-normal shadow-inner">
-                                    <span class="font-bold text-slate-400 uppercase tracking-widest text-[9px] block mb-0.5">Remarks / Logistics</span>
-                                    ${l.remarks || 'No additional remarks provided'}
-                                </div>
-                            </div>
-                            <div class="shrink-0 flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                                ${btns}
-                            </div>
-                        </div>`
-                    });
                 }
-            }
-        }
-
-        // Sort items logically based on view
-        if (currentLeaveSubTab === 'incoming') {
-            itemsToRender.sort((a, b) => new Date(a.leaveData.start_date) - new Date(b.leaveData.start_date));
-        }
-
-        let h = `<div class="p-4 md:p-6 space-y-6">`;
-
-        // KPI Dashboard Summary 
-        if (currentLeaveSubTab === 'pending') {
-            h += `
-                <div class="grid grid-cols-2 gap-4 mb-2">
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Queue Actionable</span>
-                        <span class="text-2xl font-black text-emerald-700 leading-none">${totalQueue}</span>
-                    </div>
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Application</span>
-                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span> <!-- Informative proxy -->
-                    </div>
-                </div>
-            `;
-        } else if (currentLeaveSubTab === 'current') {
-            h += `
-                <div class="grid grid-cols-1 gap-4 mb-2">
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">On Leave Today</span>
-                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        if (currentLeaveSubTab === 'pending' && itemsToRender.length > 0) {
-            h += `
-                <div class="flex justify-between items-center bg-white px-5 py-3.5 rounded-2xl border border-slate-200 shadow-sm">
-                    <label class="flex items-center space-x-3 cursor-pointer text-sm font-bold text-slate-700 group">
-                        <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
-                        <span class="group-hover:text-emerald-700 transition-colors uppercase tracking-widest text-xs">Select All Pending</span>
-                    </label>
-                    <span class="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-full uppercase tracking-widest shadow-inner">${itemsToRender.length} Leaves</span>
-                </div>
-            `;
-        }
-
-        if (itemsToRender.length === 0) {
-            h += `<div class="flex flex-col items-center justify-center py-24 opacity-40"><span class="text-6xl mb-4">🍃</span><p class="font-black text-sm tracking-widest uppercase text-slate-500">No Records Found</p><p class="text-xs text-slate-400 mt-2 text-center max-w-xs">You are completely caught up in this section.</p></div>`;
-        } else {
-            const grouped = {};
-            itemsToRender.forEach(item => {
-                const div = item.emp.division || "UNASSIGNED DIVISION";
-                const unit = item.emp.unit || "UNASSIGNED UNIT";
-                if (!grouped[div]) grouped[div] = {};
-                if (!grouped[div][unit]) grouped[div][unit] = [];
-                grouped[div][unit].push(item);
             });
 
-            for (const [div, units] of Object.entries(grouped)) {
-                h += `
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6 last:mb-0">
-                    <div class="bg-slate-800 text-white px-5 py-3 text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                        <span>🏢</span> ${div}
-                    </div>
-                    <div class="p-2 bg-slate-50">`;
-                
-                for (const [unit, items] of Object.entries(units)) {
-                    h += `
-                        <div class="mb-2 last:mb-0 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                            <h4 class="text-[10px] font-black text-emerald-800 uppercase bg-emerald-50/50 px-5 py-2.5 border-b border-emerald-100/50 flex items-center gap-2">
-                                <span class="text-emerald-500">↳</span> ${unit}
-                            </h4>
-                            <div class="divide-y divide-slate-100">`;
-                    items.forEach(i => h += i.html);
-                    h += `  </div>
-                        </div>`;
-                }
-                h += `</div></div>`;
+            let rowClass = isToday ? "bg-emerald-50/30" : (isWeekend ? "bg-slate-100/50" : "hover:bg-slate-50 transition-colors");
+            let dateTextClass = isToday ? "text-emerald-700" : (isWeekend ? "text-slate-400" : "text-slate-700");
+
+            if (hasLeave) {
+                html += `
+                    <tr class="border-b border-slate-100 ${rowClass}">
+                        <td class="p-3 sm:p-4 align-top border-r border-slate-100">
+                            <div class="font-black ${dateTextClass} text-lg sm:text-xl">${d}</div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">${dayName}</div>
+                        </td>
+                        <td class="p-3 sm:p-4 align-top">
+                            ${dayLeavesHtml}
+                        </td>
+                    </tr>
+                `;
+            } else if (!isWeekend) {
+                html += `
+                    <tr class="border-b border-slate-100 ${rowClass}">
+                        <td class="p-3 sm:p-4 align-top border-r border-slate-100">
+                            <div class="font-black ${dateTextClass} text-lg sm:text-xl">${d}</div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">${dayName}</div>
+                        </td>
+                        <td class="p-3 sm:p-4 align-middle text-slate-400 text-xs italic font-bold tracking-wider uppercase text-center opacity-70">
+                            No leaves recorded
+                        </td>
+                    </tr>
+                `;
+            } else {
+                 html += `
+                    <tr class="border-b border-slate-100 ${rowClass}">
+                        <td class="p-3 sm:p-4 align-top border-r border-slate-200/50">
+                            <div class="font-black ${dateTextClass} text-lg sm:text-xl">${d}</div>
+                            <div class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">${dayName}</div>
+                        </td>
+                        <td class="p-3 sm:p-4 align-middle text-slate-300 text-xs italic font-black tracking-[0.2em] uppercase text-center">
+                            WEEKEND
+                        </td>
+                    </tr>
+                `;
             }
         }
-        content.innerHTML = h + `</div>`;
-    }
+
+        html += `</tbody></table></div></div>`;
+        content.innerHTML = html;
+    };
 
     // MODAL LOGIC FOR DISAPPROVAL AND RETRACTION
     window.closeModals = function() {
