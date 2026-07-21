@@ -1537,13 +1537,13 @@ window.loadCredits = async function() {
         .order('start_date', { ascending: false });
 
     // ---> THE FIX: APPLY THE MATH TO THE BALANCES CORRECTLY <---
-    // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
+    // Leaves are automatically deducted upon APPLICATION.
+    // Balances are returned ONLY if CANCELLED, DISAPPROVED, DENIED, or RETRACTED.
     const currentYear = new Date().getFullYear();
 
     if (ledgers && ledgers.length > 0) {
         ledgers.forEach(l => {
-            if (l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') return;
-
+            if (l.transaction_type === 'CANCELLED' || l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'DENIED' || l.transaction_type === 'RETRACTED') return;
             let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
@@ -1598,14 +1598,16 @@ window.loadCredits = async function() {
                 hasDeductions = true;
                 
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
+
+                const isVoided = l.transaction_type === 'CANCELLED' || l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'DENIED' || l.transaction_type === 'RETRACTED';
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
-                                  (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
+                                  (isVoided ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">${l.transaction_type}</span>` : '');
 
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
-                // Cancelled deductions show crossed-out
-                let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
-                             (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
-
+                // Voided deductions show crossed-out and credit returned
+                let debStr = (dVal > 0 && !isVoided) ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
+                             (isVoided && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
+                
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
                     <td style="padding: 8px 5px; vertical-align: top;">
@@ -3716,6 +3718,29 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             document.getElementById('btn-submit-leave').innerText = "Processing...";
 
             try {
+                const leavePayload = {
+                    emp_id: currentUser.emp_id,
+                    start_date: start,
+                    end_date: end,
+                    type: type,
+                    debit: days,
+                    credit: 0,
+                    transaction_type: 'APPLICATION',
+                    remarks: fullRemarks
+                };
+
+                const { error: insertError } = await supabase.from('leave_ledger').insert([leavePayload]);
+                if (insertError) throw new Error("Database Error: " + insertError.message);
+
+                alert("Leave Application successfully submitted! Balance deducted temporarily pending Admin review.");
+                window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
+            } catch (e) {
+                alert("Error: " + e.message);
+            } finally {
+                isSubmitting = false;
+                document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
+            }
+              };
                 await supabase.from('leave_ledger').insert({
                     transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
                     start_date: start, end_date: end, type: type, debit: days,
