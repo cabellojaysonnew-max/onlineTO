@@ -177,16 +177,6 @@ async function hardReloadSystem() {
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
         .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; white-space: nowrap; }
-
-        /* Responsive Mobile Layout for DTR Calendar */
-        @media (max-width: 768px) {
-            .cal-table thead { display: none; }
-            .cal-table, .cal-table tbody, .cal-table tr, .cal-table td { display: block; width: 100%; }
-            .cal-table tr { margin-bottom: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; padding: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-            .cal-table td { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; border: none !important; white-space: normal; text-align: right; }
-            .cal-table td::before { content: attr(data-label); font-weight: bold; color: var(--dar-green); margin-right: 15px; text-align: left; flex-shrink: 0; }
-            .cal-table td .cal-entry { margin-left: auto; display: block; width: fit-content; }
-        }
         .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
         .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; display: inline-block;}
         .entry-to { background: var(--dar-green); }
