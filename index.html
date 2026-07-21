@@ -1537,13 +1537,13 @@ window.loadCredits = async function() {
         .order('start_date', { ascending: false });
 
     // ---> THE FIX: APPLY THE MATH TO THE BALANCES CORRECTLY <---
-    // Leaves are automatically deducted upon APPLICATION.
-    // Balances are returned ONLY if CANCELLED, DISAPPROVED, DENIED, or RETRACTED.
+    // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
     const currentYear = new Date().getFullYear();
 
     if (ledgers && ledgers.length > 0) {
         ledgers.forEach(l => {
-            if (l.transaction_type === 'CANCELLED' || l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'DENIED' || l.transaction_type === 'RETRACTED') return;
+            if (l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') return;
+
             let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
@@ -1598,16 +1598,14 @@ window.loadCredits = async function() {
                 hasDeductions = true;
                 
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
-
-                const isVoided = l.transaction_type === 'CANCELLED' || l.transaction_type === 'DISAPPROVED' || l.transaction_type === 'DENIED' || l.transaction_type === 'RETRACTED';
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
-                                  (isVoided ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">${l.transaction_type}</span>` : '');
+                                  (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
-                // Voided deductions show crossed-out and credit returned
-                let debStr = (dVal > 0 && !isVoided) ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
-                             (isVoided && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
-                
+                // Cancelled deductions show crossed-out
+                let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
+                             (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
+
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
                     <td style="padding: 8px 5px; vertical-align: top;">
@@ -3183,8 +3181,6 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 };
             
                     
-
-            
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
@@ -3196,8 +3192,8 @@ window.cancelLeaveApp = async function(leaveId) {
 
                 if (fetchError) throw fetchError;
 
-                if (leaveApp.transaction_type === 'APPROVED' && todayStr > leaveApp.start_date) {
-                    alert("Leave can only be cancelled until the day of the leave and cannot be cancelled the next day.");
+                if (leaveApp.transaction_type === 'APPROVED' && leaveApp.start_date < todayStr) {
+                    alert("Approved leave can only be cancelled on or before the exact date of the leave.");
                     return;
                 }
 
@@ -3212,13 +3208,9 @@ window.cancelLeaveApp = async function(leaveId) {
             } catch(e) {
                 alert("Error: " + e.message);
             }
-        };            
-
-            
+        };
         
-
-            
-window.loadStatus = async function() {
+        window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
@@ -3253,7 +3245,7 @@ for(let app of leaves || []) {
                     const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
                     const isCancelled = app.transaction_type === 'CANCELLED';
-                    const cannotCancel = isApp && todayStr > app.start_date;
+                    const cannotCancel = isApp && app.start_date < todayStr;
                     
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -3265,6 +3257,7 @@ for(let app of leaves || []) {
                         <div class="action-group" style="margin-top: 8px;">
                         ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
                             ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
+                            ${isApp ? `<button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.retractLeaveApp('${app.id}')">Retract</button>` : ''}
                         </div>
                     </div>`;
                 }
@@ -3275,8 +3268,29 @@ for(let app of leaves || []) {
             
             };
 
+        window.retractLeaveApp = async function(leaveId) {
+            const { data: app } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).single();
+            if(!app) return;
+            const daysToRetract = prompt(`Approved Leave is ${app.debit} days.\nHow many days do you want to retract?`);
+            if(!daysToRetract || isNaN(daysToRetract) || parseFloat(daysToRetract) <= 0 || parseFloat(daysToRetract) > app.debit) return alert("Invalid number of days.");
             
-     
+            if(confirm(`Retract ${daysToRetract} days from this leave? This will refund your credits automatically.`)) {
+                await supabase.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
+                    start_date: todayStr, end_date: todayStr, type: app.type, credit: parseFloat(daysToRetract),
+                    transaction_type: "CREDIT", remarks: `Retracted ${daysToRetract} days from leave`
+                });
+                
+                if (parseFloat(daysToRetract) == app.debit) {
+                     await supabase.from('leave_ledger').update({ transaction_type: 'CANCELLED', remarks: (app.remarks || '') + ' | FULLY RETRACTED' }).eq('id', leaveId);
+                } else {
+                     await supabase.from('leave_ledger').update({ debit: app.debit - parseFloat(daysToRetract), remarks: (app.remarks || '') + ` | RETRACTED ${daysToRetract} days` }).eq('id', leaveId);
+                }
+                alert("Leave successfully retracted and credits refunded.");
+                window.loadStatus();
+            }
+        };
+
    window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
@@ -3718,29 +3732,6 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             document.getElementById('btn-submit-leave').innerText = "Processing...";
 
             try {
-                const leavePayload = {
-                    emp_id: currentUser.emp_id,
-                    start_date: start,
-                    end_date: end,
-                    type: type,
-                    debit: days,
-                    credit: 0,
-                    transaction_type: 'APPLICATION',
-                    remarks: fullRemarks
-                };
-
-                const { error: insertError } = await supabase.from('leave_ledger').insert([leavePayload]);
-                if (insertError) throw new Error("Database Error: " + insertError.message);
-
-                alert("Leave Application successfully submitted! Balance deducted temporarily pending Admin review.");
-                window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
-            } catch (e) {
-                alert("Error: " + e.message);
-            } finally {
-                isSubmitting = false;
-                document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
-            }
-              };
                 await supabase.from('leave_ledger').insert({
                     transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
                     start_date: start, end_date: end, type: type, debit: days,
@@ -6160,449 +6151,783 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </xmp>
 
 
-
-
-
-
-
-
-
-
-
-
-<xmp id="leave_console" style="display: none;">
-<!DOCTYPE html>
+<xmp id="leave_console" style="display: none;"><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DAR CS I - Admin Leave Processing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Leave Processing Administration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <style>
-        :root {
-            --dar-green: #003811;
-            --dar-gold: #D4AF37;
-            --bg-main: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --danger: #dc2626;
-            --success: #16a34a;
-            --warning: #f59e0b;
-        }
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        .dar-green { background-color: #003811; }
+        .text-dar-green { color: #003811; }
+        .dar-gold { background-color: #D4AF37; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         
-        .header { background: var(--dar-green); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--dar-gold); position: sticky; top: 0; z-index: 100; }
-        .header h2 { margin: 0; font-size: 18px; letter-spacing: 1px; }
+        /* Modern UI Elements */
+        .batch-checkbox { appearance: none; width: 1.25rem; height: 1.25rem; border: 2px solid #cbd5e1; border-radius: 0.375rem; outline: none; cursor: pointer; position: relative; background-color: white; transition: all 0.2s ease; }
+        .batch-checkbox:hover { border-color: #94a3b8; }
+        .batch-checkbox:checked { background-color: #003811; border-color: #003811; }
+        .batch-checkbox:checked::after { content: '✓'; position: absolute; color: white; font-size: 0.875rem; font-weight: bold; top: 50%; left: 50%; transform: translate(-50%, -50%); }
         
-        .container { padding: 20px; max-width: 1200px; margin: 0 auto; }
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
         
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { padding: 10px 20px; border: none; background: #e5e7eb; color: var(--text-main); font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-        .tab-btn.active { background: var(--dar-green); color: white; }
-        
-        .view-section { display: none; }
-        .view-section.active { display: block; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; background: white; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-        th { background: var(--dar-green); color: white; position: sticky; top: 0; }
-        tr:hover { background: #f9fafb; }
-        
-        .row-pending { cursor: context-menu; }
-        
-        /* Context Menu Styles */
-        #context-menu {
-            display: none; position: absolute; z-index: 1000; background: white; border: 1px solid #ddd;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; width: 220px; overflow: hidden;
-        }
-        .context-item { padding: 12px 15px; font-size: 13px; cursor: pointer; font-weight: bold; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
-        .context-item:hover { background: #f3f4f6; }
-        .context-item.approve { color: var(--success); border-bottom: 1px solid #eee; }
-        .context-item.disapprove { color: var(--danger); }
-        .context-item.exigency { color: var(--warning); border-top: 1px solid #eee; }
-
-        .btn { padding: 10px 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; }
-        .btn-primary { background: var(--dar-green); }
-        .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
-        
-        .badge { padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }
-
-        @media print {
-            .no-print { display: none !important; }
-            body { background: white; }
-            .card { box-shadow: none; border: none; padding: 0; }
-            table th { background: #eee !important; color: black !important; }
-        }
+        /* Animations */
+        .modal-fade { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
-<body onclick="hideContextMenu()">
+<body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left">
+    <div id="app" class="w-full h-full flex flex-col relative"></div>
 
-    <div class="header no-print">
-        <h2>🍃 ADMIN LEAVE PROCESSING</h2>
-        <div id="admin-status" style="font-size: 12px; color: var(--dar-gold);">Connected</div>
-    </div>
+    <script type="module">
+    const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    let currentUser = null;
+    let currentLeaveSubTab = 'pending';
+    let selectedLeaves = new Set();
+    let currentActionContext = null; // For modals
+    let adminCalDate = new Date();
 
-    <!-- Custom Right Click Context Menu -->
-    <div id="context-menu" class="no-print">
-        <div class="context-item approve" onclick="processLeave('APPROVED')">✅ Approve Leave</div>
-        <div class="context-item disapprove" onclick="processLeave('DISAPPROVED')">❌ Disapprove</div>
-        <div class="context-item exigency" onclick="processLeave('EXIGENCY')">⚠️ Disapprove (Exigency of Service)</div>
-    </div>
+    async function hashPassword(msg) {
+        if (!msg) return "";
+        return sha256(msg);
+    }
 
-    <div class="container">
-        <div class="tabs no-print">
-            <button class="tab-btn active" onclick="switchTab('pending-leaves', this)">Pending Applications</button>
-            <button class="tab-btn" onclick="switchTab('force-leave-batch', this)">Force Leave Batch Credit</button>
-        </div>
+    // Seamless Session Verification (Shares with Travel Order Console)
+    function checkSession() {
+        const stored = localStorage.getItem('dar_admin_session');
+        if (stored) {
+            const session = JSON.parse(stored);
+            if (Date.now() - session.time < 30 * 24 * 60 * 60 * 1000) currentUser = session.user;
+            else localStorage.removeItem('dar_admin_session');
+        }
+    }
 
-        <!-- PENDING LEAVES SECTION -->
-        <div id="pending-leaves" class="view-section active">
-            <div class="card">
-                <h3 style="margin-top: 0; color: var(--dar-green);">Leave Applications Queue</h3>
-                <p style="font-size: 12px; color: gray; margin-bottom: 15px;">Right-click on any row to Approve, Disapprove, or apply Exigency of Service.</p>
-                
-                <div style="overflow-x: auto; max-height: 60vh;">
-                    <table id="pending-table">
-                        <thead>
-                            <tr>
-                                <th>Employee</th>
-                                <th>Type of Leave</th>
-                                <th>Inclusive Dates</th>
-                                <th>Days</th>
-                                <th>Particulars / Remarks</th>
-                                <th>Filed On</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pending-body">
-                            <tr><td colspan="6" style="text-align:center;">Loading applications...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    function render() { if (!currentUser) renderLogin(); else renderMain(); }
 
-        <!-- FORCE LEAVE BATCH SECTION -->
-        <div id="force-leave-batch" class="view-section">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;" class="no-print">
-                    <div>
-                        <h3 style="margin: 0; color: var(--dar-green);">Annual Force Leave Compliance Check</h3>
-                        <p style="font-size: 12px; color: gray; margin: 5px 0 0 0;">Identifies employees lacking the required 5-day Mandatory Leave.</p>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-gold" onclick="window.print()">🖨️ Print Report</button>
-                        <button class="btn btn-primary" onclick="batchProcessForceLeave()">⚡ Execute Batch Deduction</button>
+    function renderLogin() {
+        document.getElementById('app').innerHTML = `
+            <div class="flex-grow flex flex-col justify-center items-center px-6 dar-green h-full">
+                <div class="z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div class="dar-gold h-2 w-full"></div>
+                    <div class="p-8">
+                        <h1 class="text-dar-green font-bold text-3xl font-serif mb-1 text-center">DAR</h1>
+                        <p class="text-[10px] text-slate-400 font-bold tracking-widest mb-6 uppercase text-center">Leave Console</p>
+                        <div class="space-y-4">
+                            <div><label class="block text-xs font-bold text-slate-700 mb-1">USERNAME</label><input type="text" id="username" class="w-full px-4 py-3 bg-slate-50 border rounded-xl focus:outline-none focus:border-emerald-600 transition-colors"></div>
+                            <div><label class="block text-xs font-bold text-slate-700 mb-1">PASSWORD</label><input type="password" id="password" class="w-full px-4 py-3 bg-slate-50 border rounded-xl focus:outline-none focus:border-emerald-600 transition-colors"></div>
+                            <p id="loginError" class="text-rose-600 text-[10px] font-bold text-center hidden"></p>
+                            <button onclick="handleLogin()" id="loginBtn" class="w-full mt-2 dar-green text-white font-bold py-3.5 rounded-xl shadow-lg hover:bg-emerald-900 transition-colors">SECURE LOG IN</button>
+                        </div>
                     </div>
                 </div>
+            </div>`;
+    }
 
-                <div style="overflow-x: auto;">
-                    <table id="batch-fl-table">
-                        <thead>
-                            <tr>
-                                <th>Emp ID</th>
-                                <th>Employee Name</th>
-                                <th>Total VL Balance</th>
-                                <th>Used FL/VL (Approved)</th>
-                                <th>Exigency Credits</th>
-                                <th>Remaining FL Required</th>
-                            </tr>
-                        </thead>
-                        <tbody id="batch-fl-body">
-                            <tr><td colspan="6" style="text-align:center;">Analyzing compliance data...</td></tr>
-                        </tbody>
-                    </table>
+    window.handleLogin = async function() {
+        const uBox = document.getElementById('username').value.trim();
+        const pBox = document.getElementById('password').value.trim();
+        const err = document.getElementById('loginError');
+        try {
+            const hashedPBox = await hashPassword(pBox);
+            const { data: users } = await supabaseClient.from('users').select('*');
+            const u = (users || []).find(x => x.username === uBox && (x.password === pBox || x.password === hashedPBox));
+            if (u) {
+                currentUser = { 
+                    username: u.username, fullName: u.full_name, 
+                    roles: u.role ? u.role.split(',').map(r => r.trim().toUpperCase()) : [], 
+                    divisions: u.division ? u.division.split(',').map(d => d.trim().toUpperCase()) : [], 
+                    units: u.unit ? u.unit.split(',').map(x => x.trim().toUpperCase()) : [],
+                    emp_id: u.id
+                };
+                localStorage.setItem('dar_admin_session', JSON.stringify({ user: currentUser, time: Date.now() }));
+                render();
+            } else { err.innerText = "Check credentials."; err.classList.remove("hidden"); }
+        } catch (e) { err.innerText = "Error authenticating."; err.classList.remove("hidden"); }
+    };
+
+    window.logout = function() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); };
+
+    function renderMain() {
+        document.getElementById('app').innerHTML = `
+            <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-30">
+                <div class="overflow-hidden text-left">
+                    <h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1>
+                    <p class="text-[10px] text-dar-gold tracking-widest font-bold uppercase">Leave Processing & Validation</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="logout()" class="text-xs bg-white/10 hover:bg-white/20 transition-colors px-4 py-1.5 rounded-full font-bold shadow-sm">Logout</button>
+                </div>
+            </header>
+            
+            <div class="flex-none bg-white border-b border-slate-200 shadow-sm z-20 relative">
+                <div class="flex px-2 pt-2 overflow-x-auto hide-scroll justify-start">
+                    <button onclick="switchLeaveSubTab('pending')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'pending' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Action Required</button>
+                    <button onclick="switchLeaveSubTab('current')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'current' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Current Day</button>
+                    <button onclick="switchLeaveSubTab('incoming')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'incoming' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Incoming</button>
+                    <button onclick="switchLeaveSubTab('previous')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'previous' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Previous</button>
+                    <button onclick="switchLeaveSubTab('calendar')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'calendar' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Calendar</button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <script>
-        // Supabase Init
-        const supabaseUrl = 'https://ytfpiyfapvybihlngxks.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ'; 
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-slate-100 relative z-10 scroll-smooth pb-32"></main>
+            
+            <div id="batchActionBar" class="fixed w-full left-0 bg-white border-t border-slate-200 shadow-[0_-10px_30px_rgba(0,0,0,0.1)] z-40 px-5 py-4 flex justify-between items-center transition-transform duration-300 transform translate-y-full pb-safe" style="bottom: 0;">
+                <span id="batchCountText" class="font-black text-sm text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200 shadow-sm">0 selected</span>
+                <div class="space-x-3 flex">
+                    <button onclick="openDenyModal('BATCH')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold shadow-sm transition-colors uppercase tracking-wider">Deny</button>
+                    <button onclick="processBatchLeave('APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-xs font-bold shadow-md transition-colors uppercase tracking-wider">Approve</button>
+                </div>
+            </div>
 
-        let selectedRowData = null;
-        let batchComplianceData = [];
-        const currentYear = new Date().getFullYear();
+            <!-- Enhanced Modals -->
+            
+            <!-- Deny Modal -->
+            <div id="denyModal" class="hidden fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center px-4 backdrop-blur-sm modal-fade">
+                <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                    <div class="bg-rose-600 text-white p-4 font-bold text-center flex justify-between items-center shadow-sm">
+                        <span class="uppercase tracking-widest text-xs">Disapprove Leave</span>
+                        <button onclick="closeModals()" class="text-white hover:text-rose-200 font-normal text-lg">✕</button>
+                    </div>
+                    <div class="p-6 flex-grow">
+                        <label class="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Mandatory Reason for Denial</label>
+                        <textarea id="denyReasonInput" rows="3" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-rose-500 bg-slate-50 transition-colors" placeholder="State reason for disapproval..."></textarea>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-slate-50">
+                        <button onclick="confirmDeny()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors uppercase tracking-wider text-xs">Confirm Disapproval</button>
+                    </div>
+                </div>
+            </div>
 
-        window.onload = () => {
-            loadPendingApplications();
+            <!-- Retract Modal -->
+            <div id="retractModal" class="hidden fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center px-4 backdrop-blur-sm modal-fade">
+                <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                    <div class="bg-indigo-600 text-white p-4 font-bold text-center flex justify-between items-center shadow-sm">
+                        <span class="uppercase tracking-widest text-xs">Retract Approved Leave</span>
+                        <button onclick="closeModals()" class="text-white hover:text-indigo-200 font-normal text-lg">✕</button>
+                    </div>
+                    <div class="p-5 overflow-y-auto flex-grow bg-slate-50/50">
+                        <div class="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl text-indigo-800 text-xs">
+                            <span class="font-bold block mb-1">Instruction:</span>
+                            Select the <b>exact specific dates</b> that should be retracted and credited back to the employee's balance.
+                        </div>
+                        <p class="text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest border-b border-slate-200 pb-1">Select Dates to Retract</p>
+                        <div id="retractDatesContainer" class="space-y-2 mb-5 max-h-48 overflow-y-auto pr-1 hide-scroll"></div>
+                        
+                        <label class="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-widest border-b border-slate-200 pb-1">Mandatory Reason</label>
+                        <textarea id="retractReasonInput" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-indigo-500 bg-white shadow-inner transition-colors" placeholder="Why are these dates being retracted?"></textarea>
+                    </div>
+                    <div class="p-4 border-t border-slate-100 bg-white">
+                        <button onclick="confirmRetract()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md transition-colors uppercase tracking-wider text-xs">Process Retraction</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (currentLeaveSubTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
+    }
+
+    window.switchLeaveSubTab = function(subTab) {
+        currentLeaveSubTab = subTab;
+        selectedLeaves.clear();
+        updateBatchActionBar();
+        const tabs = document.querySelectorAll('header + div button');
+        tabs.forEach(t => {
+            t.classList.remove('border-emerald-700', 'text-emerald-800');
+            t.classList.add('border-transparent', 'text-slate-500');
+        });
+        const tabMap = { 'pending': 0, 'current': 1, 'incoming': 2, 'previous': 3, 'calendar': 4 };
+        const activeIdx = tabMap[subTab];
+        if(tabs[activeIdx]) {
+            tabs[activeIdx].classList.remove('border-transparent', 'text-slate-500');
+            tabs[activeIdx].classList.add('border-emerald-700', 'text-emerald-800');
+        }
+        
+        if (subTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
+    };
+
+    const checkScope = (div, unit) => {
+        const roles = currentUser.roles || [];
+        if (roles.some(r => ["PARPO", "ADMIN", "HRMO"].includes(r))) return true;
+        const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
+        const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+        if (roles.includes("CHIEF")) return dMatch;
+        const oUnits = unit ? unit.split(',').map(x => x.trim().toUpperCase()) : [];
+        const uMatch = oUnits.some(u => currentUser.units.includes(u));
+        return dMatch && uMatch;
+    };
+
+    function getLeaveStatus(remarks) {
+        const m = remarks.match(/ROUTING_STATUS:\s*([^\s|]+)/);
+        return m ? m[1].toUpperCase() : 'PENDING_CHIEF';
+    }
+
+    function setLeaveStatus(remarks, newStatus) {
+        if (remarks.includes('ROUTING_STATUS:')) return remarks.replace(/ROUTING_STATUS:\s*([^\s|]+)/, `ROUTING_STATUS: ${newStatus}`);
+        return remarks + ` | ROUTING_STATUS: ${newStatus}`;
+    }
+
+
+function getLeaveAppPayload(u, leaveRec) {
+        const roles = u.roles || [];
+        const currentStatus = getLeaveStatus(leaveRec.remarks || "");
+        let nextStatus = currentStatus;
+        let transType = "APPLICATION";
+
+        if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
+            nextStatus = "PENDING_CHIEF";
+        } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
+            nextStatus = "PENDING_PARPO";
+        } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
+            nextStatus = "PENDING_HRMO";
+        } else if (currentStatus === "PENDING_HRMO" && roles.some(r => ["HRMO", "ADMIN"].includes(r))) {
+            nextStatus = "APPROVED"; transType = "APPROVED";
+        }
+
+        if (nextStatus === currentStatus && roles.includes("ADMIN")) { nextStatus = "APPROVED"; transType = "APPROVED"; }
+
+        return { transaction_type: transType, remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus) };
+    }
+        
+
+        
+
+    function getStatusBadge(type, subStatus) {
+        if (type === 'APPLICATION') return `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>${subStatus || 'PENDING'}</span>`;
+        if (type === 'APPROVED') return `<span class="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">APPROVED</span>`;
+        if (type === 'DISAPPROVED' || type.includes('DISAPPROVED')) return `<span class="bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">DISAPPROVED</span>`;
+        if (type === 'CANCELLED') return `<span class="bg-slate-200 text-slate-600 border border-slate-300 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">CANCELLED</span>`;
+        if (type === 'RETRACTED') return `<span class="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">RETRACTED</span>`;
+        return `<span class="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">${type}</span>`;
+    }
+
+    window.changeAdminCalMonth = function(dir) {
+        adminCalDate.setMonth(adminCalDate.getMonth() + dir);
+        loadAdminCalendar();
+    };
+
+
+window.loadAdminCalendar = async function() {
+        const content = document.getElementById('mainContent');
+        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
+
+        const year = adminCalDate.getFullYear();
+        const month = adminCalDate.getMonth();
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+        const endDtObj = new Date(year, month + 1, 0);
+        const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
+
+        const [lRes, empRes] = await Promise.all([
+            supabaseClient.from('leave_ledger')
+                .select('*')
+                .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                .lte('start_date', endDtStr)
+                .gte('end_date', startDtStr),
+            supabaseClient.from('employees')
+                .select('emp_id, full_name, division, unit')
+        ]);
+
+        const leaves = lRes.data || [];
+        const emps = empRes.data || [];
+        
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+        let html = `
+            <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
+                <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
+                <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
+                <button onclick="changeAdminCalMonth(1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
+            </div>
+            <div class="p-2 sm:p-4 pb-32">
+                <div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+                    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-center font-black text-[9px] sm:text-xs text-slate-500 uppercase">${d}</div>`).join('')}
+                </div>
+                <div class="grid grid-cols-7 gap-1 sm:gap-2">
+        `;
+
+        const firstDayObj = new Date(year, month, 1);
+        const firstDayOfWeek = firstDayObj.getDay();
+        
+        for (let i = 0; i < firstDayOfWeek; i++) {
+            html += `<div class="bg-slate-50/50 rounded-xl border border-slate-100 min-h-[80px] sm:min-h-[100px]"></div>`;
+        }
+
+        // Fast lookup map to append acronyms to the UI to make it informative at a glance
+        const typeAlias = {
+            "Vacation Leave": "VL",
+            "Sick Leave": "SL",
+            "Mandatory/Forced Leave": "FL",
+            "Special Privilege Leave": "SPL",
+            "Maternity Leave": "ML",
+            "Paternity Leave": "PL",
+            "Wellness Leave": "WL"
         };
 
-        function switchTab(id, btn) {
-            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            btn.classList.add('active');
+        for (let d = 1; d <= endDtObj.getDate(); d++) {
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isToday = dateStr === todayStr;
+            const isFutureOrToday = dateStr >= todayStr;
             
-            if(id === 'pending-leaves') loadPendingApplications();
-            if(id === 'force-leave-batch') loadBatchForceLeaveData();
-        }
+            // Check if weekend to prevent leave rendering mismatch 
+            const currentDayObj = new Date(year, month, d);
+            const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
 
-        // --- PENDING LEAVES LOGIC ---
-        async function loadPendingApplications() {
-            try {
-                const { data, error } = await supabase
-                    .from('leave_ledger')
-                    .select('*, employees(full_name, vl_balance, sl_balance, spl_balance, wl_balance)')
-                    .eq('transaction_type', 'APPLICATION')
-                    .order('created_at', { ascending: true });
-
-                if (error) throw error;
-                
-                const tbody = document.getElementById('pending-body');
-                tbody.innerHTML = '';
-
-                if (!data || data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:gray;">No pending leave applications.</td></tr>';
-                    return;
-                }
-
-                data.forEach(leave => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'row-pending';
-                    // Attach right-click context menu event
-                    tr.oncontextmenu = (e) => showContextMenu(e, leave);
-                    
-                    const fDate = new Date(leave.created_at).toLocaleDateString();
-                    tr.innerHTML = `
-                        <td style="font-weight:bold;">${leave.employees?.full_name || leave.emp_id}</td>
-                        <td style="color:var(--dar-green); font-weight:bold;">${leave.type}</td>
-                        <td>${leave.start_date} to ${leave.end_date}</td>
-                        <td><span class="badge" style="background:#fefce8; color:#854d0e;">${leave.debit} days</span></td>
-                        <td style="font-size:11px; color:gray; max-width: 200px;">${leave.remarks || '-'}</td>
-                        <td>${fDate}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch (err) {
-                console.error(err);
-                alert("Failed to load applications: " + err.message);
-            }
-        }
-
-        // --- CONTEXT MENU LOGIC ---
-        function showContextMenu(e, leaveData) {
-            e.preventDefault();
-            selectedRowData = leaveData;
+            let dayLeavesHtml = '';
             
-            const menu = document.getElementById('context-menu');
-            menu.style.display = 'block';
-            
-            // Boundary detection to keep menu on screen
-            const maxX = window.innerWidth - menu.offsetWidth;
-            const maxY = window.innerHeight - menu.offsetHeight;
-            menu.style.left = Math.min(e.pageX, maxX) + 'px';
-            menu.style.top = Math.min(e.pageY, maxY) + 'px';
-        }
-
-        function hideContextMenu() {
-            document.getElementById('context-menu').style.display = 'none';
-        }
-
-        // Calculates dynamic exact balance duplicating Employee Portal Math
-        async function getExactDynamicBalance(emp_id, leaveType) {
-            const { data: emp } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', emp_id).single();
-            if (!emp) return 0;
-
-            const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('*')
-                .eq('emp_id', emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
-
-            let baseBalance = 0;
-            if (leaveType.includes('VACATION') || leaveType.includes('MANDATORY')) baseBalance = parseFloat(emp.vl_balance || 0);
-            else if (leaveType.includes('SICK')) baseBalance = parseFloat(emp.sl_balance || 0);
-            else if (leaveType.includes('SPECIAL PRIVILEGE')) baseBalance = parseFloat(emp.spl_balance || 0);
-            else if (leaveType.includes('WELLNESS')) baseBalance = parseFloat(emp.wl_balance || 0);
-            else return 999; // Assume unlimited for Others/CTO (CTO checks are done client side prior to insert)
-
-            if (ledgers) {
-                ledgers.forEach(l => {
-                    let transYear = parseInt((l.start_date || l.created_at).substring(0, 4));
-                    let lType = (l.type || '').toUpperCase();
-                    
-                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-
-                    // Yearly leaves only tally current year
-                    if ((lType.includes('SPECIAL PRIVILEGE') || lType.includes('WELLNESS')) && transYear !== currentYear) return;
-                    
-                    if (lType === leaveType.toUpperCase() || 
-                       (leaveType.toUpperCase().includes('VACATION') && (lType.includes('VL') || lType.includes('MANDATORY') || lType.includes('LATE') || lType.includes('UNDERTIME')))) {
-                        baseBalance = baseBalance + cVal - dVal;
-                    }
-                });
-            }
-            return baseBalance;
-        }
-
-        async function processLeave(action) {
-            if (!selectedRowData) return;
-            const data = selectedRowData;
-            hideContextMenu();
-
-            try {
-                let updatePayload = {};
-
-                if (action === 'DISAPPROVED') {
-                    if(!confirm(`Disapprove ${data.type} for ${data.employees?.full_name}?`)) return;
-                    updatePayload = { transaction_type: 'DISAPPROVED', remarks: (data.remarks ? data.remarks + ' | ' : '') + 'DISAPPROVED' };
-                
-                } else if (action === 'EXIGENCY') {
-                    if(!confirm(`Disapprove ${data.type} due to Exigency of the Service?\n\n(This will be counted towards their 5-day mandatory force leave compliance).`)) return;
-                    updatePayload = { transaction_type: 'DISAPPROVED', remarks: 'Disapproved due to Exigency of the service' };
-                
-                } else if (action === 'APPROVED') {
-                    if(!confirm(`Approve ${data.type} for ${data.employees?.full_name}?`)) return;
-                    
-                    // Fallback Rule Check: "If there is no more sick leave, SPL, or wellness leave, all leave will be credited as vacation leave."
-                    if (['Sick Leave', 'Special Privilege Leave', 'Wellness Leave'].includes(data.type)) {
-                        const currentBalance = await getExactDynamicBalance(data.emp_id, data.type);
+            leaves.forEach(l => {
+                // Ensure we don't render leaves on actual weekend cells
+                if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
+                    const emp = emps.find(e => e.emp_id === l.emp_id);
+                    if (emp && checkScope(emp.division, emp.unit)) {
+                        const isApproved = l.transaction_type === 'APPROVED';
+                        const bgClass = isApproved ? 'bg-emerald-100 border-emerald-200 text-emerald-800' : 'bg-amber-100 border-amber-200 text-amber-800';
+                        const safeObj = encodeURIComponent(JSON.stringify(l));
                         
-                        if (currentBalance < data.debit) {
-                            alert(`Insufficient ${data.type} balance (${currentBalance.toFixed(3)} days).\n\nSystem will automatically route this deduction to Vacation Leave per HR rules.`);
-                            updatePayload = { 
-                                transaction_type: 'APPROVED', 
-                                type: 'Vacation Leave', 
-                                remarks: (data.remarks ? data.remarks + ' | ' : '') + `Automatically credited to VL due to insufficient ${data.type} balance.` 
-                            };
-                        } else {
-                            updatePayload = { transaction_type: 'APPROVED' };
-                        }
-                    } else {
-                        updatePayload = { transaction_type: 'APPROVED' };
-                    }
-                }
-
-                // Apply update via Upsert/Update logic safely adhering to ledger rules
-                const { error } = await supabase.from('leave_ledger').update(updatePayload).eq('id', data.id);
-                if (error) throw error;
-                
-                loadPendingApplications(); // Refresh table
-
-            } catch (err) {
-                console.error(err);
-                alert("Processing failed: " + err.message);
-            }
-        }
-
-        // --- BATCH FORCE LEAVE PROCESSING LOGIC ---
-        async function loadBatchForceLeaveData() {
-            const tbody = document.getElementById('batch-fl-body');
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Analyzing compliance data...</td></tr>';
-            batchComplianceData = [];
-
-            try {
-                // 1. Fetch all regular employees
-                const { data: emps, error: eErr } = await supabase.from('employees').select('emp_id, full_name, vl_balance').eq('type', 'REGULAR').order('full_name');
-                if (eErr) throw eErr;
-
-                // 2. Fetch all leave ledger history for current year (Approved VL/FL, and Exigency)
-                const { data: ledgers, error: lErr } = await supabase.from('leave_ledger')
-                    .select('*')
-                    .gte('start_date', `${currentYear}-01-01`)
-                    .lte('start_date', `${currentYear}-12-31`);
-                
-                if (lErr) throw lErr;
-
-                let html = '';
-                
-                for (const emp of emps) {
-                    let usedFL = 0;
-                    let exigencyCredits = 0;
-
-                    // Calculate current dynamic VL balance for display reference
-                    let currentVL = await getExactDynamicBalance(emp.emp_id, 'Vacation Leave');
-
-                    // Filter employee's ledgers for compliance
-                    const empLedgers = ledgers.filter(l => l.emp_id === emp.emp_id);
-                    
-                    empLedgers.forEach(l => {
-                        let debitVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-                        let remarks = String(l.remarks || "").toLowerCase();
-
-                        // Count Approved Vacation or Mandatory Leave towards the 5 days
-                        if (l.transaction_type === 'APPROVED' && (l.type === 'Vacation Leave' || l.type === 'Mandatory/Forced Leave')) {
-                            usedFL += debitVal;
+                        let clickAction = '';
+                        let hoverClass = '';
+                        if (isFutureOrToday) {
+                            clickAction = `onclick="openRetractModal('${safeObj}')"`;
+                            hoverClass = 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-transform';
                         }
                         
-                        // Count Disapproved due to Exigency
-                        if (l.transaction_type === 'DISAPPROVED' && remarks.includes('exigency')) {
-                            exigencyCredits += debitVal;
-                        }
-                    });
-
-                    let totalCompliance = usedFL + exigencyCredits;
-                    let remainingFL = Math.max(0, 5 - totalCompliance);
-
-                    if (remainingFL > 0) {
-                        batchComplianceData.push({
-                            emp_id: emp.emp_id,
-                            name: emp.full_name,
-                            remaining_fl: remainingFL
-                        });
-
-                        html += `
-                            <tr>
-                                <td>${emp.emp_id}</td>
-                                <td style="font-weight:bold;">${emp.full_name}</td>
-                                <td>${currentVL.toFixed(3)}</td>
-                                <td style="color:var(--success); font-weight:bold;">${usedFL}</td>
-                                <td style="color:var(--warning); font-weight:bold;">${exigencyCredits}</td>
-                                <td><span class="badge" style="background:#fef2f2; color:#991b1b; padding: 6px 12px; font-size: 11px;">Deduct ${remainingFL} Days</span></td>
-                            </tr>
+                        const lastName = emp.full_name.split(',')[0] || emp.full_name;
+                        const shortType = typeAlias[l.type] || "LV";
+                        
+                        dayLeavesHtml += `
+                            <div ${clickAction} class="${bgClass} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded mb-1 shadow-sm flex items-center justify-between" title="${emp.full_name} | ${l.type} (${l.debit} Days) | ${l.transaction_type}">
+                                <span class="truncate pr-1">${isApproved ? '✅' : '⏳'} ${lastName}</span>
+                                <span class="text-[8px] bg-white/60 px-1 rounded-sm tracking-widest flex-shrink-0">${shortType}</span>
+                            </div>
                         `;
                     }
                 }
+            });
 
-                if (batchComplianceData.length === 0) {
-                    html = '<tr><td colspan="6" style="text-align:center; color:var(--success); font-weight:bold;">All employees are fully compliant with the 5-day Mandatory Force Leave.</td></tr>';
+            html += `
+                <div class="bg-white rounded-xl border ${isToday ? 'border-dar-gold ring-1 ring-dar-gold/50' : (isWeekend ? 'bg-slate-50 border-slate-100' : 'border-slate-200')} min-h-[80px] sm:min-h-[100px] flex flex-col p-1.5 sm:p-2 shadow-sm overflow-hidden">
+                    <span class="text-[10px] sm:text-xs font-black ${isToday ? 'text-dar-gold' : (isWeekend ? 'text-slate-300' : 'text-slate-400')} mb-1 block">${d}</span>
+                    <div class="flex-grow overflow-y-auto hide-scroll flex flex-col gap-0.5">
+                        ${dayLeavesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        const lastDayObj = new Date(year, month, endDtObj.getDate());
+        const lastDayOfWeek = lastDayObj.getDay();
+        for (let i = lastDayOfWeek + 1; i <= 6; i++) {
+            html += `<div class="bg-slate-50/50 rounded-xl border border-slate-100 min-h-[80px] sm:min-h-[100px]"></div>`;
+        }
+
+        html += `</div></div>`;
+        content.innerHTML = html;
+    };
+        
+
+    async function loadLeavesTab() {
+        selectedLeaves.clear(); updateBatchActionBar();
+        const content = document.getElementById('mainContent');
+        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Synchronizing Ledger...</p></div>`;
+
+        const [lRes, empRes] = await Promise.all([
+            supabaseClient.from('leave_ledger').select('*').in('transaction_type', ['APPLICATION', 'APPROVED', 'DISAPPROVED', 'CANCELLED', 'RETRACTED']).order('created_at', { ascending: false }).limit(3000),
+            supabaseClient.from('employees').select('emp_id, full_name, division, unit')
+        ]);
+
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+        let itemsToRender = [];
+        const roles = currentUser.roles || [];
+
+        let totalQueue = 0;
+        let totalActive = 0;
+
+        for (let l of (lRes.data || [])) {
+            const emp = (empRes.data || []).find(e => e.emp_id === l.emp_id);
+            if (emp && checkScope(emp.division, emp.unit)) {
+                let show = false;
+                const s = getLeaveStatus(l.remarks || "");
+
+            // Logic for showing leaves based on subtab
+                if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
+                    let canSeePending = false;
+                    
+                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
+                    if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
+                    if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
+                    if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
+                    
+                    if(canSeePending) { show = true; totalQueue++; }
+                } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
+                    show = true; totalActive++;
+                } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
+                    show = true; 
+                } else if (currentLeaveSubTab === 'previous') {
+                    if (l.transaction_type === 'APPROVED' && l.end_date < todayStr) show = true; 
+                    if (['DISAPPROVED', 'CANCELLED', 'RETRACTED'].includes(l.transaction_type) || l.transaction_type.includes('DISAPPROVED')) show = true; 
                 }
 
-                tbody.innerHTML = html;
+                if (show) {
+                    let btns = '';
+                    if (currentLeaveSubTab === 'pending') {
+                        btns = `
+                            <button onclick="openDenyModal('${l.id}')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">Deny</button>
+                            <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto mt-2 sm:mt-0">Approve</button>
+                        `;
+                    } else if (l.transaction_type === 'APPROVED' || l.transaction_type === 'APPLICATION') {
+                        // Pass stringified JSON object securely
+                        const safeObj = encodeURIComponent(JSON.stringify(l));
+                        btns = `<button onclick="openRetractModal('${safeObj}')" class="px-5 py-2.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">⚙️ Retract Dates</button>`;
+                    }
 
-            } catch (err) {
-                console.error(err);
-                alert("Failed to analyze batch data: " + err.message);
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading data.</td></tr>';
+                    const badge = getStatusBadge(l.transaction_type, s);
+                    const isPending = currentLeaveSubTab === 'pending';
+
+                    itemsToRender.push({
+                        emp: emp,
+                        leaveData: l,
+                        html: `
+                        <div class="p-5 flex flex-col sm:flex-row items-start gap-4 hover:bg-slate-50 transition-colors relative">
+                            ${isPending ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
+                            <div class="flex-grow w-full">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span class="font-black text-slate-800 text-sm tracking-tight">${emp.full_name}</span>
+                                    ${badge}
+                                </div>
+                                <div class="text-xs text-slate-600 mb-1.5 leading-tight flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                    <span class="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">${l.type}</span> 
+                                    <span class="font-black text-slate-700 bg-slate-200 px-2 py-0.5 rounded">${l.debit} Days</span> 
+                                    <span class="text-slate-500 font-semibold bg-white border border-slate-200 px-2 py-0.5 rounded shadow-sm">📅 ${l.start_date} to ${l.end_date}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 bg-white px-3 py-2 rounded-xl mt-3 border border-slate-200 leading-relaxed break-words whitespace-normal shadow-inner">
+                                    <span class="font-bold text-slate-400 uppercase tracking-widest text-[9px] block mb-0.5">Remarks / Logistics</span>
+                                    ${l.remarks || 'No additional remarks provided'}
+                                </div>
+                            </div>
+                            <div class="shrink-0 flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                                ${btns}
+                            </div>
+                        </div>`
+                    });
+                }
             }
         }
 
-        async function batchProcessForceLeave() {
-            if (batchComplianceData.length === 0) return alert("No employees require force leave deduction.");
-            
-            if (!confirm(`You are about to automatically deduct Mandatory Force Leave credits from ${batchComplianceData.length} employees.\n\nProceed?`)) return;
+        // Sort items logically based on view
+        if (currentLeaveSubTab === 'incoming') {
+            itemsToRender.sort((a, b) => new Date(a.leaveData.start_date) - new Date(b.leaveData.start_date));
+        }
 
-            try {
-                const batchInserts = batchComplianceData.map(emp => ({
-                    emp_id: emp.emp_id,
-                    type: 'Mandatory/Forced Leave',
-                    start_date: `${currentYear}-12-31`, // Logged end of year for tracking
-                    end_date: `${currentYear}-12-31`,
-                    debit: emp.remaining_fl,
-                    transaction_type: 'DEDUCTION',
-                    remarks: 'Automatic Batch Force Leave Credit (End of Year Compliance)'
-                }));
+        let h = `<div class="p-4 md:p-6 space-y-6">`;
 
-                const { error } = await supabase.from('leave_ledger').insert(batchInserts);
-                if (error) throw error;
+        // KPI Dashboard Summary 
+        if (currentLeaveSubTab === 'pending') {
+            h += `
+                <div class="grid grid-cols-2 gap-4 mb-2">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Queue Actionable</span>
+                        <span class="text-2xl font-black text-emerald-700 leading-none">${totalQueue}</span>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Application</span>
+                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span> <!-- Informative proxy -->
+                    </div>
+                </div>
+            `;
+        } else if (currentLeaveSubTab === 'current') {
+            h += `
+                <div class="grid grid-cols-1 gap-4 mb-2">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center items-start">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">On Leave Today</span>
+                        <span class="text-2xl font-black text-indigo-700 leading-none">${itemsToRender.length}</span>
+                    </div>
+                </div>
+            `;
+        }
 
-                alert("✅ Batch processing successful. All non-compliant employees have had their required Force Leave deducted.");
-                loadBatchForceLeaveData(); // Refresh list to show all cleared
-            } catch (err) {
-                console.error(err);
-                alert("Batch execution failed: " + err.message);
+        if (currentLeaveSubTab === 'pending' && itemsToRender.length > 0) {
+            h += `
+                <div class="flex justify-between items-center bg-white px-5 py-3.5 rounded-2xl border border-slate-200 shadow-sm">
+                    <label class="flex items-center space-x-3 cursor-pointer text-sm font-bold text-slate-700 group">
+                        <input type="checkbox" class="batch-checkbox" onchange="selectAllPending(this)">
+                        <span class="group-hover:text-emerald-700 transition-colors uppercase tracking-widest text-xs">Select All Pending</span>
+                    </label>
+                    <span class="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-full uppercase tracking-widest shadow-inner">${itemsToRender.length} Leaves</span>
+                </div>
+            `;
+        }
+
+        if (itemsToRender.length === 0) {
+            h += `<div class="flex flex-col items-center justify-center py-24 opacity-40"><span class="text-6xl mb-4">🍃</span><p class="font-black text-sm tracking-widest uppercase text-slate-500">No Records Found</p><p class="text-xs text-slate-400 mt-2 text-center max-w-xs">You are completely caught up in this section.</p></div>`;
+        } else {
+            const grouped = {};
+            itemsToRender.forEach(item => {
+                const div = item.emp.division || "UNASSIGNED DIVISION";
+                const unit = item.emp.unit || "UNASSIGNED UNIT";
+                if (!grouped[div]) grouped[div] = {};
+                if (!grouped[div][unit]) grouped[div][unit] = [];
+                grouped[div][unit].push(item);
+            });
+
+            for (const [div, units] of Object.entries(grouped)) {
+                h += `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6 last:mb-0">
+                    <div class="bg-slate-800 text-white px-5 py-3 text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                        <span>🏢</span> ${div}
+                    </div>
+                    <div class="p-2 bg-slate-50">`;
+                
+                for (const [unit, items] of Object.entries(units)) {
+                    h += `
+                        <div class="mb-2 last:mb-0 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                            <h4 class="text-[10px] font-black text-emerald-800 uppercase bg-emerald-50/50 px-5 py-2.5 border-b border-emerald-100/50 flex items-center gap-2">
+                                <span class="text-emerald-500">↳</span> ${unit}
+                            </h4>
+                            <div class="divide-y divide-slate-100">`;
+                    items.forEach(i => h += i.html);
+                    h += `  </div>
+                        </div>`;
+                }
+                h += `</div></div>`;
             }
         }
+        content.innerHTML = h + `</div>`;
+    }
+
+    // MODAL LOGIC FOR DISAPPROVAL AND RETRACTION
+    window.closeModals = function() {
+        document.getElementById('denyModal').style.display = 'none';
+        document.getElementById('retractModal').style.display = 'none';
+        currentActionContext = null;
+    }
+
+    window.openDenyModal = function(id) {
+        currentActionContext = id; // 'BATCH' or specific ID
+        document.getElementById('denyReasonInput').value = '';
+        document.getElementById('denyModal').style.display = 'flex';
+    }
+
+    window.confirmDeny = async function() {
+        const reason = document.getElementById('denyReasonInput').value.trim();
+        if (!reason) return alert("A mandatory reason for disapproval is required.");
+
+        closeModals();
+
+        if (currentActionContext === 'BATCH') {
+            const leaveIds = Array.from(selectedLeaves);
+            document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Processing Batch Denial...</p></div>`;
+            const { data: lResData } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
+            const leavePromises = leaveIds.map(async (id) => {
+                const leaveData = (lResData || []).find(l => l.id === id);
+                if (leaveData) {
+                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
+                    await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
+                }
+            });
+            await Promise.all(leavePromises);
+            selectedLeaves.clear();
+            updateBatchActionBar();
+        } else {
+            document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Denying Record...</p></div>`;
+            const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', currentActionContext).single();
+            if (leaveData) {
+                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
+                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', currentActionContext);
+            }
+        }
+        loadLeavesTab();
+    }
+
+    window.openRetractModal = function(safeObjEncoded) {
+        const leaveObj = JSON.parse(decodeURIComponent(safeObjEncoded));
+        currentActionContext = leaveObj;
+
+        const start = new Date(leaveObj.start_date + "T00:00:00");
+        const end = new Date(leaveObj.end_date + "T00:00:00");
+        
+        let datesHtml = '';
+        let curr = new Date(start);
+        
+        while (curr <= end) {
+            let day = curr.getDay();
+            let isWeekend = (day === 0 || day === 6);
+            let dateStr = curr.toISOString().split('T')[0];
+            let displayStr = curr.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+            // Highlight weekends so admin is aware
+            datesHtml += `
+                <label class="flex items-center space-x-3 p-3 border border-slate-200 rounded-xl ${isWeekend ? 'bg-slate-100 opacity-60' : 'bg-white hover:bg-indigo-50/50'} cursor-pointer transition-colors shadow-sm">
+                    <input type="checkbox" value="${dateStr}" class="retract-date-cb w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" ${isWeekend ? '' : 'checked'}>
+                    <span class="text-sm font-bold text-slate-700">${displayStr} ${isWeekend ? '<span class="text-[9px] uppercase tracking-widest text-slate-400 ml-2 font-black">(Weekend)</span>' : ''}</span>
+                </label>
+            `;
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        document.getElementById('retractDatesContainer').innerHTML = datesHtml;
+        document.getElementById('retractReasonInput').value = '';
+        document.getElementById('retractModal').style.display = 'flex';
+    }
+
+    window.confirmRetract = async function() {
+        const leaveData = currentActionContext;
+        const checkboxes = document.querySelectorAll('.retract-date-cb:checked');
+        const reason = document.getElementById('retractReasonInput').value.trim();
+
+        if (checkboxes.length === 0) return alert("Please select at least one specific date to retract.");
+        if (!reason) return alert("A mandatory reason for retraction is required to ensure audit compliance.");
+
+        const retractedDates = Array.from(checkboxes).map(cb => cb.value);
+        let daysToRetract = checkboxes.length;
+
+        // Failsafe: Never retract more than the logged debit
+        if (daysToRetract > leaveData.debit) {
+            daysToRetract = leaveData.debit; 
+        }
+
+        closeModals();
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⚙️</span><p class="font-bold text-xs uppercase tracking-widest text-indigo-600">Processing Retraction Ledger Protocol...</p></div>`;
+
+        try {
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+            // 1. Insert CREDIT to refund the specifically retracted days back to the employee's balance ledger
+            await supabaseClient.from('leave_ledger').insert({
+                transaction_id: crypto.randomUUID(), 
+                emp_id: leaveData.emp_id,
+                start_date: todayStr, 
+                end_date: todayStr, 
+                type: leaveData.type, 
+                credit: daysToRetract,
+                transaction_type: "CREDIT", 
+                remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
+            });
+
+            // 2. Update the existing transaction record specifically mapped to RETRACTED or reduced partial days
+            if (daysToRetract >= leaveData.debit) {
+                // Fully Retracted implies the whole chunk goes back
+                await supabaseClient.from('leave_ledger').update({ 
+                    transaction_type: 'RETRACTED', 
+                    remarks: (leaveData.remarks || '') + ` | FULLY RETRACTED BY ${currentUser.fullName}: ${reason}` 
+                }).eq('id', leaveData.id);
+            } else {
+                // Partially Retracted (Deduct the days from original leave but leave status as APPROVED)
+                await supabaseClient.from('leave_ledger').update({ 
+                    debit: leaveData.debit - daysToRetract, 
+                    remarks: (leaveData.remarks || '') + ` | PARTIALLY RETRACTED DATES: [${retractedDates.join(', ')}] BY ${currentUser.fullName}: ${reason}` 
+                }).eq('id', leaveData.id);
+            }
+
+            alert(`Successfully retracted ${daysToRetract} day(s) and refunded the employee's credits.`);
+        } catch(e) {
+            alert("Database Error: " + e.message);
+        }
+        
+        // Reload whichever tab we were currently looking at
+        if (currentLeaveSubTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
+    }
+
+    // BATCH & TOGGLE SELECTIONS
+    window.toggleBatchSelection = function(id, isChecked) {
+        if (isChecked) selectedLeaves.add(id); else selectedLeaves.delete(id);
+        updateBatchActionBar();
+    }
+
+    window.selectAllPending = function(checkbox) {
+        const checkboxes = document.querySelectorAll('.batch-checkbox');
+        checkboxes.forEach(cb => {
+            if(cb.value && cb.value !== "on") {
+                cb.checked = checkbox.checked;
+                if (checkbox.checked) selectedLeaves.add(cb.value); else selectedLeaves.delete(cb.value);
+            }
+        });
+        updateBatchActionBar();
+    }
+
+    function updateBatchActionBar() {
+        const bar = document.getElementById('batchActionBar');
+        if (selectedLeaves.size > 0) {
+            document.getElementById('batchCountText').innerText = `${selectedLeaves.size} selected`;
+            bar.classList.remove('translate-y-full');
+        } else bar.classList.add('translate-y-full');
+    }
+
+    window.processBatchLeave = async function(action) {
+        if (selectedLeaves.size === 0) return;
+        
+        if (action === 'DISAPPROVED') {
+            openDenyModal('BATCH');
+            return;
+        }
+
+        updateBatchActionBar();
+        document.getElementById('batchActionBar').classList.add('translate-y-full');
+
+        const leaveIds = Array.from(selectedLeaves);
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Approving Batch Leaves...</p></div>`;
+
+        const { data: lResData } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
+        const leavePromises = leaveIds.map(async (id) => {
+            const leaveData = (lResData || []).find(l => l.id === id);
+            if (leaveData) {
+                const p = getLeaveAppPayload(currentUser, leaveData);
+                if (p && Object.keys(p).length > 0) {
+                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                }
+            }
+        });
+        await Promise.all(leavePromises);
+
+        selectedLeaves.clear(); loadLeavesTab();
+    };
+
+    window.processDirectLeave = async function(id, action) {
+        if (action === 'DISAPPROVED') {
+            openDenyModal(id);
+            return;
+        }
+
+        const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', id).single();
+        if (!leaveData) return;
+        
+        const p = getLeaveAppPayload(currentUser, leaveData);
+        if (!p || Object.keys(p).length === 0) return alert("Approval failed: Your role is not configured to approve this record.");
+        
+        document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Advancing Leave Approval...</p></div>`;
+        await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+        
+        loadLeavesTab();
+    };
+
+    checkSession();
+    render();
     </script>
 </body>
-</html>
-</xmp>
+</html></xmp>
+
 
     
 </body>
