@@ -6442,9 +6442,7 @@ window.loadAdminCalendar = async function() {
         
         const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-
-
-    let html = `
+        let html = `
             <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
                 <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
                 <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
@@ -6452,6 +6450,8 @@ window.loadAdminCalendar = async function() {
             </div>
             <div class="p-4 pb-32 space-y-4">
         `;
+
+        let hasAnyLeaves = false;
 
         for (let d = 1; d <= endDtObj.getDate(); d++) {
             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -6470,6 +6470,7 @@ window.loadAdminCalendar = async function() {
                     const emp = emps.find(e => e.emp_id === l.emp_id);
                     if (emp && checkScope(emp.division, emp.unit)) {
                         leaveCount++;
+                        hasAnyLeaves = true;
                         const isApproved = l.transaction_type === 'APPROVED';
                         const bgClass = isApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200';
                         const textClass = isApproved ? 'text-emerald-800' : 'text-amber-800';
@@ -6477,7 +6478,7 @@ window.loadAdminCalendar = async function() {
                         
                         let actionBtn = '';
                         if (isFutureOrToday) {
-                            actionBtn = `<button onclick="openRetractModal('${safeObj}')" class="px-4 py-2 bg-white border shadow-sm rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors w-full sm:w-auto">⚙️ Manage Leave</button>`;
+                            actionBtn = `<button onclick="openRetractModal('${safeObj}')" class="px-4 py-2 bg-white border shadow-sm rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors w-full sm:w-auto">⚙️ Manage</button>`;
                         }
                         
                         dayLeavesHtml += `
@@ -6519,13 +6520,13 @@ window.loadAdminCalendar = async function() {
             }
         }
 
-             if (!hasAnyLeaves) {
+        if (!hasAnyLeaves) {
             html += `<div class="flex flex-col items-center justify-center py-20 opacity-40"><span class="text-5xl mb-4">📅</span><p class="font-black text-xs tracking-widest uppercase text-slate-500">No Leaves This Month</p></div>`;
         }
 
         html += `</div>`;
         content.innerHTML = html;
-    };  
+    };
 
     async function loadLeavesTab() {
         selectedLeaves.clear(); updateBatchActionBar();
