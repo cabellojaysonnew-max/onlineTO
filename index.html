@@ -3181,6 +3181,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
 };
             
                     
+
+            
 window.cancelLeaveApp = async function(leaveId) {
             if(!confirm("Are you sure you want to cancel this leave application?")) return;
             try {
@@ -3192,8 +3194,8 @@ window.cancelLeaveApp = async function(leaveId) {
 
                 if (fetchError) throw fetchError;
 
-                if (leaveApp.transaction_type === 'APPROVED' && leaveApp.start_date < todayStr) {
-                    alert("Approved leave can only be cancelled on or before the exact date of the leave.");
+                if (leaveApp.transaction_type === 'APPROVED' && todayStr > leaveApp.start_date) {
+                    alert("Leave can only be cancelled until the day of the leave and cannot be cancelled the next day.");
                     return;
                 }
 
@@ -3208,9 +3210,13 @@ window.cancelLeaveApp = async function(leaveId) {
             } catch(e) {
                 alert("Error: " + e.message);
             }
-        };
+        };            
+
+            
         
-        window.loadStatus = async function() {
+
+            
+window.loadStatus = async function() {
             const filterNode = document.querySelector('input[name="statusFilter"]:checked');
             const filter = filterNode ? filterNode.value : "TO";
             const list = document.getElementById('status-list'); list.innerHTML = "Fetching...";
@@ -3245,7 +3251,7 @@ for(let app of leaves || []) {
                     const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
                     const isCancelled = app.transaction_type === 'CANCELLED';
-                    const cannotCancel = isApp && app.start_date < todayStr;
+                    const cannotCancel = isApp && todayStr > app.start_date;
                     
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -3257,7 +3263,6 @@ for(let app of leaves || []) {
                         <div class="action-group" style="margin-top: 8px;">
                         ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
                             ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
-                            ${isApp ? `<button class="btn btn-warning btn-small" style="background:#ea580c; color:white;" onclick="window.retractLeaveApp('${app.id}')">Retract</button>` : ''}
                         </div>
                     </div>`;
                 }
@@ -3268,29 +3273,8 @@ for(let app of leaves || []) {
             
             };
 
-        window.retractLeaveApp = async function(leaveId) {
-            const { data: app } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).single();
-            if(!app) return;
-            const daysToRetract = prompt(`Approved Leave is ${app.debit} days.\nHow many days do you want to retract?`);
-            if(!daysToRetract || isNaN(daysToRetract) || parseFloat(daysToRetract) <= 0 || parseFloat(daysToRetract) > app.debit) return alert("Invalid number of days.");
             
-            if(confirm(`Retract ${daysToRetract} days from this leave? This will refund your credits automatically.`)) {
-                await supabase.from('leave_ledger').insert({
-                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
-                    start_date: todayStr, end_date: todayStr, type: app.type, credit: parseFloat(daysToRetract),
-                    transaction_type: "CREDIT", remarks: `Retracted ${daysToRetract} days from leave`
-                });
-                
-                if (parseFloat(daysToRetract) == app.debit) {
-                     await supabase.from('leave_ledger').update({ transaction_type: 'CANCELLED', remarks: (app.remarks || '') + ' | FULLY RETRACTED' }).eq('id', leaveId);
-                } else {
-                     await supabase.from('leave_ledger').update({ debit: app.debit - parseFloat(daysToRetract), remarks: (app.remarks || '') + ` | RETRACTED ${daysToRetract} days` }).eq('id', leaveId);
-                }
-                alert("Leave successfully retracted and credits refunded.");
-                window.loadStatus();
-            }
-        };
-
+     
    window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
@@ -6426,122 +6410,104 @@ function getLeaveAppPayload(u, leaveRec) {
 
 
 window.loadAdminCalendar = async function() {
-        const content = document.getElementById('mainContent');
-        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
+    const content = document.getElementById('mainContent');
+    content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
 
-        const year = adminCalDate.getFullYear();
-        const month = adminCalDate.getMonth();
-        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        
-        const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
-        const endDtObj = new Date(year, month + 1, 0);
-        const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
+    const year = adminCalDate.getFullYear();
+    const month = adminCalDate.getMonth();
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+    const endDtObj = new Date(year, month + 1, 0);
+    const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
 
-        const [lRes, empRes] = await Promise.all([
-            supabaseClient.from('leave_ledger')
-                .select('*')
-                .in('transaction_type', ['APPLICATION', 'APPROVED'])
-                .lte('start_date', endDtStr)
-                .gte('end_date', startDtStr),
-            supabaseClient.from('employees')
-                .select('emp_id, full_name, division, unit')
-        ]);
+    const [lRes, empRes] = await Promise.all([
+        supabaseClient.from('leave_ledger')
+            .select('*')
+            .in('transaction_type', ['APPLICATION', 'APPROVED'])
+            .lte('start_date', endDtStr)
+            .gte('end_date', startDtStr),
+        supabaseClient.from('employees')
+            .select('emp_id, full_name, division, unit')
+    ]);
 
-        const leaves = lRes.data || [];
-        const emps = empRes.data || [];
-        
-        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    const leaves = lRes.data || [];
+    const emps = empRes.data || [];
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-        let html = `
-            <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
-                <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
-                <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
-                <button onclick="changeAdminCalMonth(1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
+    let html = `
+        <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
+            <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
+            <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
+            <button onclick="changeAdminCalMonth(1)" class="px-3 py-1.5 bg-slate-100 rounded-xl text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
+        </div>
+        <div class="p-2 sm:p-5 pb-32">
+            <div class="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2">
+                ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-center font-black text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider">${d}</div>`).join('')}
             </div>
-            <div class="p-2 sm:p-4 pb-32">
-                <div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
-                    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="text-center font-black text-[9px] sm:text-xs text-slate-500 uppercase">${d}</div>`).join('')}
-                </div>
-                <div class="grid grid-cols-7 gap-1 sm:gap-2">
-        `;
+            <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
+    `;
 
-        const firstDayObj = new Date(year, month, 1);
-        const firstDayOfWeek = firstDayObj.getDay();
-        
-        for (let i = 0; i < firstDayOfWeek; i++) {
-            html += `<div class="bg-slate-50/50 rounded-xl border border-slate-100 min-h-[80px] sm:min-h-[100px]"></div>`;
-        }
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    for (let i = 0; i < firstDayOfWeek; i++) {
+        html += `<div class="bg-slate-50/40 rounded-2xl border border-slate-100 min-h-[90px] sm:min-h-[120px]"></div>`;
+    }
 
-        // Fast lookup map to append acronyms to the UI to make it informative at a glance
-        const typeAlias = {
-            "Vacation Leave": "VL",
-            "Sick Leave": "SL",
-            "Mandatory/Forced Leave": "FL",
-            "Special Privilege Leave": "SPL",
-            "Maternity Leave": "ML",
-            "Paternity Leave": "PL",
-            "Wellness Leave": "WL"
-        };
+    const typeAlias = { "Vacation Leave": "VL", "Sick Leave": "SL", "Mandatory/Forced Leave": "FL", "Special Privilege Leave": "SPL", "Maternity Leave": "ML", "Paternity Leave": "PL", "Wellness Leave": "WL" };
 
-        for (let d = 1; d <= endDtObj.getDate(); d++) {
-            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const isToday = dateStr === todayStr;
-            const isFutureOrToday = dateStr >= todayStr;
-            
-            // Check if weekend to prevent leave rendering mismatch 
-            const currentDayObj = new Date(year, month, d);
-            const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
+    for (let d = 1; d <= endDtObj.getDate(); d++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const isToday = dateStr === todayStr;
+        const currentDayObj = new Date(year, month, d);
+        const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
 
-            let dayLeavesHtml = '';
-            
-            leaves.forEach(l => {
-                // Ensure we don't render leaves on actual weekend cells
-                if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
-                    const emp = emps.find(e => e.emp_id === l.emp_id);
-                    if (emp && checkScope(emp.division, emp.unit)) {
-                        const isApproved = l.transaction_type === 'APPROVED';
-                        const bgClass = isApproved ? 'bg-emerald-100 border-emerald-200 text-emerald-800' : 'bg-amber-100 border-amber-200 text-amber-800';
-                        const safeObj = encodeURIComponent(JSON.stringify(l));
+        let dayLeavesHtml = '';
+        let count = 0;
+
+        leaves.forEach(l => {
+            if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
+                const emp = emps.find(e => e.emp_id === l.emp_id);
+                if (emp && checkScope(emp.division, emp.unit)) {
+                    count++;
+                    const isApproved = l.transaction_type === 'APPROVED';
+                    const badgeStyle = isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800';
+                    const lastName = emp.full_name.split(',')[0] || emp.full_name;
+                    const shortType = typeAlias[l.type] || "LV";
+                    const safeObj = encodeURIComponent(JSON.stringify(l));
                         
-                        let clickAction = '';
-                        let hoverClass = '';
-                        if (isFutureOrToday) {
-                            clickAction = `onclick="openRetractModal('${safeObj}')"`;
-                            hoverClass = 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-transform';
-                        }
-                        
-                        const lastName = emp.full_name.split(',')[0] || emp.full_name;
-                        const shortType = typeAlias[l.type] || "LV";
-                        
-                        dayLeavesHtml += `
-                            <div ${clickAction} class="${bgClass} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded mb-1 shadow-sm flex items-center justify-between" title="${emp.full_name} | ${l.type} (${l.debit} Days) | ${l.transaction_type}">
-                                <span class="truncate pr-1">${isApproved ? '✅' : '⏳'} ${lastName}</span>
-                                <span class="text-[8px] bg-white/60 px-1 rounded-sm tracking-widest flex-shrink-0">${shortType}</span>
-                            </div>
-                        `;
-                    }
+                    let clickAction = (dateStr >= todayStr) ? `onclick="openRetractModal('${safeObj}')"` : '';
+                    let hoverClass = (dateStr >= todayStr) ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-transform' : '';
+                    
+                    dayLeavesHtml += `
+                        <div ${clickAction} class="${badgeStyle} ${hoverClass} border text-[9px] sm:text-[10px] font-bold px-1.5 py-1 rounded-lg mb-1 shadow-xs flex items-center justify-between" title="${emp.full_name} | ${l.type} (${l.debit}d)">
+                            <span class="truncate pr-1">${isApproved ? '🟢' : '⏳'} ${lastName}</span>
+                            <span class="text-[8px] bg-white px-1 rounded font-black tracking-tighter shadow-2xs">${shortType}</span>
+                        </div>
+                    `;
                 }
-            });
+            }
+        });
 
-            html += `
-                <div class="bg-white rounded-xl border ${isToday ? 'border-dar-gold ring-1 ring-dar-gold/50' : (isWeekend ? 'bg-slate-50 border-slate-100' : 'border-slate-200')} min-h-[80px] sm:min-h-[100px] flex flex-col p-1.5 sm:p-2 shadow-sm overflow-hidden">
-                    <span class="text-[10px] sm:text-xs font-black ${isToday ? 'text-dar-gold' : (isWeekend ? 'text-slate-300' : 'text-slate-400')} mb-1 block">${d}</span>
-                    <div class="flex-grow overflow-y-auto hide-scroll flex flex-col gap-0.5">
-                        ${dayLeavesHtml}
-                    </div>
+        html += `
+            <div class="bg-white rounded-2xl border ${isToday ? 'border-emerald-600 ring-2 ring-emerald-500/20 shadow-md' : (isWeekend ? 'bg-slate-50/70 border-slate-200/60' : 'border-slate-200')} min-h-[90px] sm:min-h-[120px] flex flex-col p-1.5 sm:p-2.5 shadow-xs overflow-hidden transition-all">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs sm:text-sm font-black ${isToday ? 'text-emerald-700' : (isWeekend ? 'text-slate-300' : 'text-slate-700')}">${d}</span>
+                    ${count > 0 ? `<span class="text-[9px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">${count}</span>` : ''}
                 </div>
-            `;
-        }
+                <div class="flex-grow overflow-y-auto hide-scroll flex flex-col">
+                    ${dayLeavesHtml}
+                </div>
+            </div>
+        `;
+    }
 
-        const lastDayObj = new Date(year, month, endDtObj.getDate());
-        const lastDayOfWeek = lastDayObj.getDay();
-        for (let i = lastDayOfWeek + 1; i <= 6; i++) {
-            html += `<div class="bg-slate-50/50 rounded-xl border border-slate-100 min-h-[80px] sm:min-h-[100px]"></div>`;
-        }
+    const lastDayOfWeek = new Date(year, month, endDtObj.getDate()).getDay();
+    for (let i = lastDayOfWeek + 1; i <= 6; i++) {
+        html += `<div class="bg-slate-50/40 rounded-2xl border border-slate-100 min-h-[90px] sm:min-h-[120px]"></div>`;
+    }
 
-        html += `</div></div>`;
-        content.innerHTML = html;
-    };
+    content.innerHTML = html + `</div></div>`;
+};
         
 
     async function loadLeavesTab() {
