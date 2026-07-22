@@ -4871,16 +4871,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
         function logout() { currentUser = null; localStorage.removeItem('dar_admin_session'); render(); }
 
-function renderMain() {
+        function renderMain() {
             document.getElementById('app').innerHTML = `
                 <header class="flex-none w-full h-16 dar-green text-white px-5 flex justify-between items-center shadow-md z-50">
                     <div class="overflow-hidden text-left"><h1 class="font-bold text-lg leading-tight truncate">${currentUser.fullName}</h1><p class="text-[10px] text-dar-gold tracking-wide font-bold uppercase">${currentUser.roles.join(', ')}</p></div>
                     <div class="flex items-center space-x-2"><button onclick="showChangePassword()" class="text-xl px-2">🔒</button><button onclick="logout()" class="text-xs bg-white/20 px-3 py-1.5 rounded-full font-bold">Logout</button></div>
                 </header>
-
-                <!-- NEW MINIMAL PARPO SUMMARY BAR -->
-                <div id="parpo-summary-bar" class="hidden flex-none w-full bg-slate-200 text-[9px] text-slate-600 font-bold uppercase tracking-widest text-center py-1.5 px-2 truncate z-40 shadow-inner"></div>
-
                 <main id="mainContent" class="flex-grow w-full overflow-y-auto bg-gray-100 relative z-10 scroll-smooth"></main>
                 <nav class="flex-none w-full h-16 bg-white border-t flex z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                     <button onclick="switchTab('pending')" class="flex flex-col items-center justify-center w-1/5 ${currentTab === 'pending' ? 'text-dar-green font-bold' : 'text-gray-400'}"><span class="text-lg">📥</span><span class="text-[8px] uppercase tracking-tighter mt-0.5">TO Req</span></button>
@@ -4922,45 +4918,6 @@ function renderMain() {
 
                 <div id="hrNotifModal" class="hidden absolute inset-0 bg-black/60 z-[70] flex items-center justify-center px-4 modal-fade"><div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative"><div class="dar-gold h-2 w-full"></div><div class="p-6"><div class="flex items-center space-x-3 mb-4"><span class="text-3xl">📢</span><div><h2 class="font-bold text-lg text-gray-800 leading-tight">HR Notification</h2><p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Important Update</p></div></div><div id="hrNotifContent" class="space-y-3 max-h-60 overflow-y-auto text-sm text-gray-700"></div><button onclick="closeHRNotifModal()" class="w-full mt-6 dar-green text-white font-bold py-3 rounded-xl shadow-md">Acknowledge</button></div></div></div>
             `;
-            
-            // --- NEW LOGIC: FETCH AND DISPLAY PENDING AT CHIEF LEVEL FOR PARPO ONLY ---
-            if (currentUser.roles.includes("PARPO")) {
-                supabaseClient.from('travel_orders')
-                    .select('to_no, division')
-                    .eq('status', 'PENDING_CHIEF')
-                    .then(({data}) => {
-                        if(data && data.length > 0) {
-                            let counts = {};
-                            let uniqueTos = new Set();
-                            
-                            data.forEach(r => {
-                                if(!uniqueTos.has(r.to_no)) {
-                                    uniqueTos.add(r.to_no);
-                                    let div = r.division ? r.division.split(',')[0].trim() : 'UNASSIGNED';
-                                    counts[div] = (counts[div] || 0) + 1;
-                                }
-                            });
-                            
-                            let summaryText = Object.entries(counts).map(([div, count]) => `${div}: ${count}`).join(' • ');
-                            let bar = document.getElementById('parpo-summary-bar');
-                            if(bar && summaryText) {
-                                bar.innerText = `⏳ Pending at Chief Level: ${summaryText}`;
-                                bar.classList.remove('hidden');
-                            }
-                        }
-                    });
-            }
-            // -------------------------------------------------------------------------
-
-            if (currentTab === 'pending') loadPendingTab();
-            else {
-                hideBatchActionBar();
-                if (currentTab === 'approved') loadStatusTab('APPROVED');
-                else if (currentTab === 'denied') loadStatusTab('DISAPPROVED');
-                else if (currentTab === 'reports') loadReportsTab();
-                else loadAnalyticsTab();
-            }
-        }
             
             if (currentTab === 'pending') loadPendingTab();
             else {
