@@ -173,7 +173,6 @@ async function hardReloadSystem() {
         
         .action-group { display: flex; gap: 8px; margin-top: 10px; }
         .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
-
         .cal-container { background: white; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
         .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
         .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
@@ -413,7 +412,13 @@ async function hardReloadSystem() {
                         <input type="checkbox" id="leave-half-day-end" style="width: auto; margin: 0; padding: 0;" onchange="window.calculateLeaveDays()"> Half Day End
                     </label>
                 </div>
-                <label style="margin-top: 10px;">Number of Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 14px;">0</span></label>
+                <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid #e5e7eb;">
+                    <label style="margin-bottom: 5px;">Chargeable Working Days: <span id="leave-days-count" style="color: var(--dar-green); font-size: 16px; font-weight: bold;">0</span></label>
+                    <div id="leave-breakdown" style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                        Select dates to see working days calculation.
+                    </div>
+                </div>
+                
                 <h4 style="margin-top: 15px;">4. Commutation</h4>
                 <select id="leave-commutation">
                     <option value="Not Requested">Not Requested</option>
@@ -3319,75 +3324,121 @@ for(let app of leaves || []) {
             };
 
         
-        window.calculateLeaveDays = async function() {
+
+window.calculateLeaveDays = async function() {
             const start = document.getElementById('leave-from').value;
             const end = document.getElementById('leave-to').value;
+            const countEl = document.getElementById('leave-days-count');
+            const breakdownEl = document.getElementById('leave-breakdown');
+            
             if (!start || !end) return;
 
             const sDate = new Date(start);
             const eDate = new Date(end);
             if (sDate > eDate) {
                 document.getElementById('leave-to').value = start;
-                document.getElementById('leave-days-count').innerText = "1";
+                countEl.innerText = "1";
+                if(breakdownEl) breakdownEl.innerHTML = "";
                 return;
             }
 
-const { data: schedOverrides } = await supabase.from('schedule_override').select('start_date, end_date, start_time, end_time, schedule_type').in('emp_id', [currentUser.emp_id, 'ALL']).gte('end_date', start).lte('start_date', end);
+            // Pull the latest setup by ordering via created_at descending
+            const { data: schedOverrides } = await supabase.from('schedule_override')
+                .select('start_date, end_date, start_time, end_time, schedule_type, created_at')
+                .in('emp_id', [currentUser.emp_id, 'ALL'])
+                .order('created_at', { ascending: false });
+
             let count = 0;
+            let excludedWeekends = 0;
+            let excludedHolidays = 0;
+            let excludedFridays = 0;
             let cur = new Date(sDate);
+
             while (cur <= eDate) {
                 const dateStr = cur.toISOString().split('T')[0];
                 const day = cur.getDay();
-const isHoliday = cachedHolidays.some(h => {
-    if (h.date !== dateStr) return false;
-    
-    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-    const station = String(currentUser.station || "").toUpperCase().trim();
-    
-    if (coverage.includes("NATIONWIDE")) return true;
-    
-    const hasNaga = coverage.includes("NAGA CITY");
-    const hasCamSur = coverage.includes("CAMARINES SUR");
-    
-    if (hasNaga && hasCamSur) return true;
-    
-    if (hasNaga && !hasCamSur) {
-        return station.includes("DARPO") || station === "DARPO-CS1";
-    }
-    if (hasCamSur && !hasNaga) {
-        return station.includes("DARMO") || station !== "DARPO-CS1";
-    }
-    
-    return false;
-});
-
                 
-                let isWorkingDay = (day !== 0 && day !== 6 && !isHoliday);
+                const isWeekend = (day === 0 || day === 6);
 
-                if (schedOverrides) {
-                    const override = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date);
-                    if (override) {
-                        if (override.schedule_type === "Fixed" && override.start_time === "07:00:00" && override.end_time === "18:00:00" && day === 5) {
-                            isWorkingDay = false;
-                        } else if (!isHoliday) {
-                            isWorkingDay = true;
+                const isHoliday = cachedHolidays.some(h => {
+                    if (h.date !== dateStr) return false;
+                    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
+                    const station = String(currentUser.station || "").toUpperCase().trim();
+                    
+                    if (coverage.includes("NATIONWIDE")) return true;
+                    const hasNaga = coverage.includes("NAGA CITY");
+                    const hasCamSur = coverage.includes("CAMARINES SUR");
+                    
+                    if (hasNaga && hasCamSur) return true;
+                    if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
+                    if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
+                    return false;
+                });
+
+                    let isCWWFriday = false;
+                    let isCWW = false;
+                    if (schedOverrides && schedOverrides.length > 0) {
+                        // Takes the latest date-specific override, or falls back to the absolute latest active setup
+                        const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
+                        if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                            isCWW = true;
+                            if (day === 5) {
+                                isCWWFriday = true;
+                            }
                         }
                     }
-                }
 
-            if (isWorkingDay) count++;
+                    if (isHoliday && !isWeekend) {
+                        excludedHolidays++;
+                    } else if (isWeekend) {
+                        excludedWeekends++;
+                    } else if (isCWWFriday) {
+                        excludedFridays++;
+                    } else {
+                        let dayDeduction = 1.0;
+                        if (isCWW) {
+                            const lTypeElement = document.querySelector('input[name="ltype"]:checked');
+                            const lType = lTypeElement ? lTypeElement.value : '';
+                            // 1.25 deduction exclusively for VL and SL during CWW
+                            if (lType === "Vacation Leave" || lType === "Sick Leave") {
+                                dayDeduction = 1.25;
+                            }
+                        }
+                        count += dayDeduction; 
+                    }
+
+                
                 cur.setDate(cur.getDate() + 1);
             }
 
 const halfStartCheck = document.getElementById('leave-half-day-start');
             const halfEndCheck = document.getElementById('leave-half-day-end');
-            const selectedLeaveType = document.querySelector('input[name="ltype"]:checked').value;
             
+            // Determine active schedule to adjust half-day values properly
+            let isCWWActive = false;
+            if (schedOverrides && schedOverrides.length > 0) {
+                const activeOverride = schedOverrides.find(s => start >= s.start_date && start <= s.end_date) || schedOverrides[0];
+                if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                    isCWWActive = true;
+                }
+            }
+            
+            const lTypeElement = document.querySelector('input[name="ltype"]:checked');
+            const lType = lTypeElement ? lTypeElement.value : '';
+            
+            let halfDayValue = 0.5;
+            let minAllowed = 1.5;
+            if (isCWWActive && (lType === "Vacation Leave" || lType === "Sick Leave")) {
+                halfDayValue = 0.625; // Half of 1.25 day deduction
+                minAllowed = 1.875; // Equivalent minimum to 1.5 days under CWW
+            }
+
             let deduction = 0;
-            if (halfStartCheck && halfStartCheck.checked) deduction += 0.5;
-            if (halfEndCheck && halfEndCheck.checked) deduction += 0.5;
+            if (halfStartCheck && halfStartCheck.checked) deduction += halfDayValue;
+            if (halfEndCheck && halfEndCheck.checked) deduction += halfDayValue;
+            
             if (deduction > 0) {
-                if ((count - deduction) < 1.5) {
+                if ((count - deduction) < minAllowed) {
                     alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
@@ -3399,7 +3450,23 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     count -= deduction;
                 }
             }
-            document.getElementById('leave-days-count').innerText = count;
+    
+            countEl.innerText = count;
+
+            // Render details so admin knows exactly why a day wasn't counted
+            if(breakdownEl) {
+                let infoArr = [];
+                if(excludedWeekends > 0) infoArr.push(`<b>${excludedWeekends}</b> Weekend(s)`);
+                if(excludedHolidays > 0) infoArr.push(`<b>${excludedHolidays}</b> Holiday(s)`);
+                if(excludedFridays > 0) infoArr.push(`<b>${excludedFridays}</b> CWW Friday(s)`);
+                if(deduction > 0 && count > 0) infoArr.push(`<b>${deduction}</b> Half-day deduction(s)`);
+                
+                if (infoArr.length > 0) {
+                    breakdownEl.innerHTML = `Automatically excluded: ${infoArr.join(', ')}`;
+                } else {
+                    breakdownEl.innerHTML = `All selected dates are standard working days.`;
+                }
+            }
 
             const ctoCheck = document.getElementById('vl-cto-credit');         
             const isCtoCredited = ctoCheck && ctoCheck.checked;
@@ -3434,6 +3501,8 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 if(submitBtn) submitBtn.disabled = false;
             }
         };
+
+            
 
             window.submitLeave = async function() {
             if (isSubmitting) return;
@@ -3559,20 +3628,22 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
-         // LEAVE APPROVAL ROUTING (Initial Assignment)
-            // 1. Unit (if needed) -> 2. Div Chief -> 3. PARPO -> 4. HRMO
+
+            // LEAVE APPROVAL ROUTING (Initial Assignment)
             let routeStatus = "PENDING_CHIEF";
-            const isPARPOUnit = currentUser.unit && String(currentUser.unit).toUpperCase() === "PARPO";
+            const empUnitStr = currentUser.unit ? String(currentUser.unit).toUpperCase().trim() : "";
             const isMARPO = currentUser.position && String(currentUser.position).toUpperCase().includes("MARPO");
-            const hasUnit = currentUser.unit && currentUser.unit.trim() !== "" && currentUser.unit.toUpperCase() !== "NA";
             
-            if (hasUnit && !isPARPOUnit && !isMARPO) {
-                // Step 1: Route to Unit Head first if employee belongs to a standard unit
+            if (empUnitStr === "PARPO") {
+                routeStatus = "PENDING_PARPO";
+            } else if (empUnitStr.includes("DARMO")) {
+                routeStatus = isMARPO ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD"; // MARPO evaluates here as Unit Head
+            } else if (empUnitStr !== "" && empUnitStr !== "NA") {
                 routeStatus = "PENDING_UNIT_HEAD";
             } else {
-                // Step 2: Route directly to Division Chief (PARPO unit employees will also start at Div Chief level here)
                 routeStatus = "PENDING_CHIEF";
             }
+                
             
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
                 
@@ -6070,7 +6141,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 </xmp>
 
 
-<xmp id="leave_console" style="display: none;"><!DOCTYPE html><html lang="en"><head>
+<xmp id="leave_console" style="display: none;"><!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Leave Processing Administration</title>
@@ -6099,7 +6172,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         /* Animations */
         .modal-fade { animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    </style></head><body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left"><div id="app" class="w-full h-full flex flex-col relative"></div><script type="module">
+    </style>
+</head>
+<body class="h-[100dvh] w-full flex flex-col overflow-hidden text-slate-800 bg-slate-50 text-left">
+    <div id="app" class="w-full h-full flex flex-col relative"></div>
+
+    <script type="module">
     const SUPABASE_URL = "https://ytfpiyfapvybihlngxks.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -6108,6 +6186,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     let currentLeaveSubTab = 'pending';
     let selectedLeaves = new Set();
     let currentActionContext = null; // For modals
+    let adminCalDate = new Date();
 
     async function hashPassword(msg) {
         if (!msg) return "";
@@ -6187,6 +6266,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     <button onclick="switchLeaveSubTab('current')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'current' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Current Day</button>
                     <button onclick="switchLeaveSubTab('incoming')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'incoming' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Incoming</button>
                     <button onclick="switchLeaveSubTab('previous')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'previous' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Previous</button>
+                    <button onclick="switchLeaveSubTab('calendar')" class="flex-1 min-w-[100px] max-w-[150px] py-3 text-xs font-bold border-b-[3px] transition-colors ${currentLeaveSubTab === 'calendar' ? 'border-emerald-700 text-emerald-800' : 'border-transparent text-slate-500 hover:text-slate-700'}">Calendar</button>
                 </div>
             </div>
 
@@ -6243,7 +6323,12 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 </div>
             </div>
         `;
-        loadLeavesTab();
+        
+        if (currentLeaveSubTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
     }
 
     window.switchLeaveSubTab = function(subTab) {
@@ -6255,13 +6340,18 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             t.classList.remove('border-emerald-700', 'text-emerald-800');
             t.classList.add('border-transparent', 'text-slate-500');
         });
-        const tabMap = { 'pending': 0, 'current': 1, 'incoming': 2, 'previous': 3 };
+        const tabMap = { 'pending': 0, 'current': 1, 'incoming': 2, 'previous': 3, 'calendar': 4 };
         const activeIdx = tabMap[subTab];
         if(tabs[activeIdx]) {
             tabs[activeIdx].classList.remove('border-transparent', 'text-slate-500');
             tabs[activeIdx].classList.add('border-emerald-700', 'text-emerald-800');
         }
-        loadLeavesTab();
+        
+        if (subTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
     };
 
     const checkScope = (div, unit) => {
@@ -6285,15 +6375,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         return remarks + ` | ROUTING_STATUS: ${newStatus}`;
     }
 
-    function getLeaveAppPayload(u, leaveRec) {
+
+function getLeaveAppPayload(u, leaveRec) {
         const roles = u.roles || [];
         const currentStatus = getLeaveStatus(leaveRec.remarks || "");
         let nextStatus = currentStatus;
         let transType = "APPLICATION";
-        const empUnit = leaveRec.unit ? leaveRec.unit.trim().toUpperCase() : "";
 
         if (currentStatus === "PENDING_UNIT_HEAD" && roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r))) {
-            nextStatus = empUnit === "PARPO" ? "PENDING_HRMO" : "PENDING_CHIEF";
+            nextStatus = "PENDING_CHIEF";
         } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
             nextStatus = "PENDING_PARPO";
         } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
@@ -6306,6 +6396,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
         return { transaction_type: transType, remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus) };
     }
+        
+
+        
 
     function getStatusBadge(type, subStatus) {
         if (type === 'APPLICATION') return `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>${subStatus || 'PENDING'}</span>`;
@@ -6315,6 +6408,125 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         if (type === 'RETRACTED') return `<span class="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">RETRACTED</span>`;
         return `<span class="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">${type}</span>`;
     }
+
+    window.changeAdminCalMonth = function(dir) {
+        adminCalDate.setMonth(adminCalDate.getMonth() + dir);
+        loadAdminCalendar();
+    };
+
+
+window.loadAdminCalendar = async function() {
+        const content = document.getElementById('mainContent');
+        content.innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Loading Calendar...</p></div>`;
+
+        const year = adminCalDate.getFullYear();
+        const month = adminCalDate.getMonth();
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        const startDtStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+        const endDtObj = new Date(year, month + 1, 0);
+        const endDtStr = `${year}-${String(month+1).padStart(2,'0')}-${String(endDtObj.getDate()).padStart(2,'0')}`;
+
+        const [lRes, empRes] = await Promise.all([
+            supabaseClient.from('leave_ledger')
+                .select('*')
+                .in('transaction_type', ['APPLICATION', 'APPROVED'])
+                .lte('start_date', endDtStr)
+                .gte('end_date', startDtStr),
+            supabaseClient.from('employees')
+                .select('emp_id, full_name, division, unit')
+        ]);
+
+        const leaves = lRes.data || [];
+        const emps = empRes.data || [];
+        
+        const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+        let html = `
+            <div class="sticky top-0 bg-white z-20 px-4 py-3 border-b border-slate-200 shadow-sm flex justify-between items-center">
+                <button onclick="changeAdminCalMonth(-1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">◀ Prev</button>
+                <h2 class="font-black text-sm uppercase tracking-widest text-emerald-800">${monthNames[month]} ${year}</h2>
+                <button onclick="changeAdminCalMonth(1)" class="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs hover:bg-slate-200 transition-colors">Next ▶</button>
+            </div>
+            <div class="p-4 pb-32 space-y-4">
+        `;
+
+        let hasAnyLeaves = false;
+
+        for (let d = 1; d <= endDtObj.getDate(); d++) {
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isToday = dateStr === todayStr;
+            const isFutureOrToday = dateStr >= todayStr;
+            
+            const currentDayObj = new Date(year, month, d);
+            const isWeekend = currentDayObj.getDay() === 0 || currentDayObj.getDay() === 6;
+            const dayName = currentDayObj.toLocaleDateString('en-US', { weekday: 'short' });
+
+            let dayLeavesHtml = '';
+            let leaveCount = 0;
+            
+            leaves.forEach(l => {
+                if (dateStr >= l.start_date && dateStr <= l.end_date && !isWeekend) {
+                    const emp = emps.find(e => e.emp_id === l.emp_id);
+                    if (emp && checkScope(emp.division, emp.unit)) {
+                        leaveCount++;
+                        hasAnyLeaves = true;
+                        const isApproved = l.transaction_type === 'APPROVED';
+                        const bgClass = isApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200';
+                        const textClass = isApproved ? 'text-emerald-800' : 'text-amber-800';
+                        const safeObj = encodeURIComponent(JSON.stringify(l));
+                        
+                        let actionBtn = '';
+                        if (isFutureOrToday) {
+                            actionBtn = `<button onclick="openRetractModal('${safeObj}')" class="px-4 py-2 bg-white border shadow-sm rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors w-full sm:w-auto">⚙️ Manage</button>`;
+                        }
+                        
+                        dayLeavesHtml += `
+                            <div class="${bgClass} border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <div class="shrink-0 text-xl">${isApproved ? '✅' : '⏳'}</div>
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-sm ${textClass} leading-tight">${emp.full_name}</span>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="text-[10px] bg-white/60 border border-black/10 px-1.5 py-0.5 rounded uppercase tracking-widest font-black text-slate-600">${l.type}</span>
+                                            <span class="text-[10px] font-bold opacity-75">${l.debit} Day(s)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="shrink-0">
+                                    ${actionBtn}
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            });
+
+            if (leaveCount > 0) {
+                html += `
+                    <div class="bg-white rounded-2xl shadow-sm border ${isToday ? 'border-dar-gold ring-2 ring-dar-gold/30' : 'border-slate-200'} overflow-hidden">
+                        <div class="bg-slate-50 px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-xl font-black ${isToday ? 'text-dar-gold' : 'text-slate-800'}">${d}</span>
+                                <span class="text-xs font-bold uppercase tracking-widest text-slate-400">${dayName}</span>
+                            </div>
+                            <span class="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-inner">${leaveCount} Leave${leaveCount > 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="p-3 flex flex-col gap-2">
+                            ${dayLeavesHtml}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        if (!hasAnyLeaves) {
+            html += `<div class="flex flex-col items-center justify-center py-20 opacity-40"><span class="text-5xl mb-4">📅</span><p class="font-black text-xs tracking-widest uppercase text-slate-500">No Leaves This Month</p></div>`;
+        }
+
+        html += `</div>`;
+        content.innerHTML = html;
+    };
 
     async function loadLeavesTab() {
         selectedLeaves.clear(); updateBatchActionBar();
@@ -6338,21 +6550,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             if (emp && checkScope(emp.division, emp.unit)) {
                 let show = false;
                 const s = getLeaveStatus(l.remarks || "");
-// Logic for showing leaves based on subtab
+
+            // Logic for showing leaves based on subtab
                 if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                     let canSeePending = false;
-                    const isParpoUnit = emp.unit && emp.unit.trim().toUpperCase() === "PARPO";
                     
-                    // STRICT ROUTING: HRMO only sees PENDING_HRMO. PARPO sees PENDING_PARPO.
                     if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
                     if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
+                    if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
+                    if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
                     
-                    if (!isParpoUnit) {
-                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
-                        if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
-                    }
                     if(canSeePending) { show = true; totalQueue++; }
-                }
                 } else if (currentLeaveSubTab === 'current' && l.transaction_type === 'APPROVED' && l.start_date <= todayStr && l.end_date >= todayStr) {
                     show = true; totalActive++;
                 } else if (currentLeaveSubTab === 'incoming' && l.start_date > todayStr && ['APPLICATION', 'APPROVED'].includes(l.transaction_type)) {
@@ -6617,7 +6825,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         } catch(e) {
             alert("Database Error: " + e.message);
         }
-        loadLeavesTab();
+        
+        // Reload whichever tab we were currently looking at
+        if (currentLeaveSubTab === 'calendar') {
+            loadAdminCalendar();
+        } else {
+            loadLeavesTab();
+        }
     }
 
     // BATCH & TOGGLE SELECTIONS
@@ -6695,9 +6909,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     checkSession();
     render();
     </script>
-    </body>
-</html>
-</xmp>
+</body>
+</html></xmp>
 
 
     
