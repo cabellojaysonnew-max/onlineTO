@@ -2297,14 +2297,14 @@ window.generateOfficialPDF = async function(toNo) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
-
 // HELPER: Groups dates into formats like "March 1-3 & 5, 2026" or "June 1, 2 & 5, 2026"
     const groupConsecutiveDates = (dates) => {
         if (!dates || !dates.length) return "";
-        const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
+        const sorted = dates.map(d => new Date(d.replace(/-/g, '/'))).sort((a, b) => a - b);
         
         const monthYearGroups = {};
-        sorted.forEach(d => {
+   
+    sorted.forEach(d => {
             const key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
             if (!monthYearGroups[key]) monthYearGroups[key] = [];
             monthYearGroups[key].push(d.getDate());
@@ -2703,9 +2703,9 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
     const doc = new jsPDF('p', 'mm', 'a4'); 
     const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
 
-    const groupConsecutiveDates = (dates) => {
+  const groupConsecutiveDates = (dates) => {
         if (!dates || !dates.length) return "";
-        const sorted = dates.map(d => new Date(d)).sort((a, b) => a - b);
+        const sorted = dates.map(d => new Date(d.replace(/-/g, '/'))).sort((a, b) => a - b);
         const monthYearGroups = {};
         sorted.forEach(d => {
             const key = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
