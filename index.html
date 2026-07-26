@@ -3520,7 +3520,13 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 const diffTime = leaveStart - filingDate;
                 const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
-            } else if (type === "Sick Leave" || type === "Wellness Leave") {
+       } else if (type === "Sick Leave" || type === "Wellness Leave") {
+                // Fetch the user's schedule to check for Compressed Work Week (CWW)
+                const { data: schedOverrides } = await supabase.from('schedule_override')
+                    .select('start_date, end_date, start_time, end_time, schedule_type')
+                    .in('emp_id', [currentUser.emp_id, 'ALL'])
+                    .order('created_at', { ascending: false });
+
                 // Determine the next working day after the leave's end date
                 let nextWorkingDay = new Date(end);
                 nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
@@ -3541,8 +3547,18 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                         if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
                         return false;
                     });
+
+                    // Check if the current day in the loop is a CWW Friday
+                    let isCWWFriday = false;
+                    if (day === 5 && schedOverrides && schedOverrides.length > 0) {
+                        const activeOverride = schedOverrides.find(s => dStr >= s.start_date && dStr <= s.end_date) || schedOverrides[0];
+                        if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
+                            isCWWFriday = true;
+                        }
+                    }
                     
-                    if (day !== 0 && day !== 6 && !isHol) break; // Reached a valid working day
+                    // Skip Sundays (0), Saturdays (6), Holidays, AND CWW Fridays
+                    if (day !== 0 && day !== 6 && !isHol && !isCWWFriday) break; 
                     nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
                 }
                 
@@ -3551,7 +3567,7 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     return alert(`${type} must be filed in advance or strictly on the next working day after the leave.`);
                 }
             }
-
+                
             // --- LEAVE BALANCE CHECK LOGIC ---          
             const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
