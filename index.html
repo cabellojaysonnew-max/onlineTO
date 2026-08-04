@@ -5049,7 +5049,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         // --- SHARED SCOPE CHECK ---
         const checkScope = (div, unit) => {
             const roles = currentUser.roles || [];
-            if (roles.some(r => ["PARPO", "VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN", "HRMO"].includes(r))) return true;
+            // ADDED: "PARPO_I", "PARPO I", "PARPO1" to provincial-level approvers
+            if (roles.some(r => ["PARPO", "PARPO_II", "PARPO II", "PARPO_I", "PARPO I", "PARPO1", "VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN", "HRMO"].includes(r))) return true;
             
             const oDivs = div ? div.split(',').map(x => x.trim().toUpperCase()) : [];
             const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
@@ -5345,21 +5346,39 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     uh_signed_time: nowISO 
                 };
             }
-
+        // MODIFIED: Intercept Division Chief approval to route ARBDSP orders to PARPO I
             if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
+                const isARBDSP = toRecord && (
+                    String(toRecord.division || "").toUpperCase().includes("ARBDSP") ||
+                    String(toRecord.unit || "").toUpperCase().includes("ARBDSP") ||
+                    String(toRecord.fund_source || "").toUpperCase().includes("ARBDSP")
+                );
+
                 return { 
-                    status: "PENDING_PARPO", 
+                    status: isARBDSP ? "PENDING_PARPO_I" : "PENDING_PARPO", 
                     dc_signed: u.fullName, 
                     dc_signed_time: nowISO 
                 };
             }
-            if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
+
+            // ADDED: Handle PARPO I approval step before PARPO II
+            if (currentStatus === "PENDING_PARPO_I" && roles.some(r => ["PARPO_I", "PARPO I", "PARPO1", "PARPO_1", "ADMIN"].includes(r))) {
+                return { 
+                    status: "PENDING_PARPO", 
+                    parpo1_signed: u.fullName, 
+                    parpo1_signed_time: nowISO 
+                };
+            }
+
+            // MODIFIED: Ensure PARPO II checks cover standard PARPO role names
+            if (currentStatus === "PENDING_PARPO" && roles.some(r => ["PARPO", "PARPO_II", "PARPO II", "PARPO2", "ADMIN"].includes(r))) {
                 return { 
                     status: "APPROVED", 
                     parpo_signed: u.fullName, 
                     parpo_signed_time: nowISO 
                 };
             }
+
             
             return {};
         }
@@ -5395,13 +5414,15 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                     const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
 
                     if (roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r)) && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (roles.includes("PARPO") && s === "PENDING_PARPO") show = true;
+                    else if (roles.some(r => ["PARPO", "PARPO_II", "PARPO II", "PARPO2"].includes(r)) && s === "PENDING_PARPO") show = true;
+                    // ADDED: PARPO I queue visibility
+                    else if (roles.some(r => ["PARPO_I", "PARPO I", "PARPO1", "PARPO_1"].includes(r)) && s === "PENDING_PARPO_I") show = true;
                     else if (roles.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
                     else if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD" && dMatch) {
                         if (unitsCanSign.length > 0 && hasUnsignedUnit) {
                             show = true;
                         }
-                    }
+                    }             
                 }
                 
                 if (show) {
@@ -5507,8 +5528,10 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
                     if (tabStatus === 'APPROVED') {
                         let canSeeApproved = false;
-                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && ['PENDING_CHIEF', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
-                        if (roles.includes("CHIEF") && ['PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
+                        // MODIFIED: Added 'PENDING_PARPO_I' to visible tracking statuses
+                        if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && ['PENDING_CHIEF', 'PENDING_PARPO_I', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
+                        if (roles.includes("CHIEF") && ['PENDING_PARPO_I', 'PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
+                        if (roles.some(r => ["PARPO_I", "PARPO I", "PARPO1", "PARPO_1"].includes(r)) && ['PENDING_PARPO', 'APPROVED'].includes(o.status)) canSeeApproved = true;
                         if (roles.some(r => ["PARPO", "VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN", "HRMO"].includes(r)) && o.status === 'APPROVED') canSeeApproved = true;
 
                         if (canSeeApproved) {
@@ -5517,8 +5540,13 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                 displayStatus = 'PENDING CHIEF';
                                 borderColor = 'border-yellow-500';
                                 textColor = 'text-yellow-600';
+                            // ADDED: Styling for PENDING PARPO I
+                            } else if (o.status === 'PENDING_PARPO_I') {
+                                displayStatus = 'PENDING PARPO I';
+                                borderColor = 'border-purple-500';
+                                textColor = 'text-purple-600';
                             } else if (o.status === 'PENDING_PARPO') {
-                                displayStatus = 'PENDING PARPO';
+                                displayStatus = 'PENDING PARPO II';
                                 borderColor = 'border-blue-500';
                                 textColor = 'text-blue-600';
                             } else if (o.status === 'APPROVED') {
@@ -5527,7 +5555,11 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                 textColor = 'text-dar-green';
                             }
                         }
-                    } else if (tabStatus === 'DISAPPROVED') {
+                    }
+                    
+                
+                
+                else if (tabStatus === 'DISAPPROVED') {
                         if (o.status === 'DISAPPROVED' || o.status === 'CANCELLED' || o.status.includes('DISAPPROVED') || o.status.includes('CANCELLED')) {
                             show = true;
                             displayStatus = o.status;
