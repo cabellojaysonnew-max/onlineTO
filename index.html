@@ -2375,7 +2375,19 @@ window.generateOfficialPDF = async function(toNo) {
         let dc_list = [];
         if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
             const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
-            if (data) dc_list = data;
+            if (data) dc_list = data.map(u => ({ ...u, custom_role: "DIVISION CHIEF" }));
+        }
+
+        // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
+        const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
+        if (isARBDSP) {
+            const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
+            if (p1Data && p1Data.length > 0) {
+                dc_list.push({ ...p1Data[0], custom_role: "PARPO I" });
+            } else if (od.parpo1_signed) {
+                // Fallback if role lookup fails but signature name was recorded
+                dc_list.push({ full_name: od.parpo1_signed, username: "", custom_role: "PARPO I" });
+            }
         }
 
         const qrUrl = encodeURIComponent(`https://cabellojaysonnew-max.github.io/onlineTO/verifier.html?to_no=${toNo}`);
@@ -2422,9 +2434,13 @@ window.generateOfficialPDF = async function(toNo) {
                 let auditText = [
                     `UH: ${od.uh_signed_time ? new Date(od.uh_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
                     `DC: ${od.dc_signed_time ? new Date(od.dc_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`,
-                    `PARPO: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
+                    // ADDED: Include PARPO I timestamp if ARBDSP order or if signed
+                    ...(od.parpo1_signed_time || od.division?.toUpperCase().includes("ARBDSP") ? [`P1: ${od.parpo1_signed_time ? new Date(od.parpo1_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`] : []),
+                    `P2: ${od.parpo_signed_time ? new Date(od.parpo_signed_time).toLocaleString('en-US', { hour12: false }) : 'N/A'}`
                 ];
                 doc.text(auditText, 190, 36, {align: 'center'});
+
+                
             } catch(e){} 
         }
 
@@ -2758,9 +2774,20 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         let dc_list = [];
         if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
             const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
-            if (data) dc_list = data;
+            if (data) dc_list = data.map(u => ({ ...u, custom_role: "DIVISION CHIEF" }));
         }
 
+        // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
+        const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
+        if (isARBDSP) {
+            const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
+            if (p1Data && p1Data.length > 0) {
+                dc_list.push({ ...p1Data[0], custom_role: "PARPO I" });
+            } else if (od.parpo1_signed) {
+                // Fallback if role lookup fails but signature name was recorded
+                dc_list.push({ full_name: od.parpo1_signed, username: "", custom_role: "PARPO I" });
+            }
+        }
         const qrUrl = encodeURIComponent(`https://cabellojaysonnew-max.github.io/onlineTO/verifier.html?to_no=${toNo}`);
         
         const [img_bg, img_qr, img_p2, ...sigs] = await Promise.all([
@@ -3081,11 +3108,13 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
                 let lineStart = cx - (step / 2) + 2;
                 let lineEnd = cx + (step / 2) - 2;
                 
+
                 doc.line(lineStart, customY + 17, lineEnd, customY + 17);
                 doc.setFont("helvetica", "normal"); 
                 doc.setFontSize(6);
-                doc.text(roleLabel, cx, customY + 20, { align: 'center' });
-            }
+                // MODIFIED: Uses custom_role ("PARPO I") if available, otherwise defaults to roleLabel
+                doc.text(list[j].custom_role || roleLabel, cx, customY + 20, { align: 'center' });
+             }
         };
 
         // ROW 12: Signatures Grid (RESTORED EXACTLY AS IMAGE 2)
