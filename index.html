@@ -1715,14 +1715,15 @@ window.handleStartDateChange = function() {
             }
         };
 
-        // ADDED: Missing delete function for the Itinerary Builder
+
+            // ADDED: Missing delete function for the Itinerary Builder
         window.removeItinCard = function(cardId, dateStr) {
             const cardElement = document.getElementById(cardId);
             if (cardElement) {
                 cardElement.remove(); // Removes the UI card
             }
-            // Removes the dropped day from the submission payload
-            itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
+            // Removes only the deleted day from the submission payload
+            itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId && it.date !== dateStr);
         };
 
 
@@ -1926,12 +1927,8 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     }
                 }
 
-                if (editingToNo) {
-                    await supabase.from('itinerary').delete().eq('to_no', editingToNo);
-                    await supabase.from('travel_orders').delete().eq('to_no', editingToNo);
-                }
-                
-                for (let conflict of conflictsToProcess) {
+            // Do not delete original data here; keep until safe submission
+                    for (let conflict of conflictsToProcess) {
                     if (conflict.status.includes("PENDING")) {
                         await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
                         await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
@@ -2044,7 +2041,13 @@ return {
                 
                 batchItin.forEach(it => it.to_no = finalToNo);
                 
+                if (editingToNo) {
+                    await supabase.from('itinerary').delete().eq('to_no', editingToNo);
+                    await supabase.from('travel_orders').delete().eq('to_no', editingToNo);
+                }
+                
                 const { error: toError } = await supabase.from('travel_orders').insert(batchPersonnel);
+                
                 if (toError) throw new Error("Travel Order DB Error: " + toError.message);
                 
                 const { error: itinError } = await supabase.from('itinerary').insert(batchItin);
@@ -3541,60 +3544,14 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const comm = document.getElementById('leave-commutation').value;
 
         if (!start || !end || days <= 0) return alert("Select valid working dates.");
-
-            if (type === "Vacation Leave") {
+        if (type === "Vacation Leave") {
                 const filingDate = new Date(todayStr);
                 const leaveStart = new Date(start);
                 const diffTime = leaveStart - filingDate;
                 const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
-       } else if (type === "Sick Leave" || type === "Wellness Leave") {
-                // Fetch the user's schedule to check for Compressed Work Week (CWW)
-                const { data: schedOverrides } = await supabase.from('schedule_override')
-                    .select('start_date, end_date, start_time, end_time, schedule_type')
-                    .in('emp_id', [currentUser.emp_id, 'ALL'])
-                    .order('created_at', { ascending: false });
-
-                // Determine the next working day after the leave's end date
-                let nextWorkingDay = new Date(end);
-                nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
-                
-                while (true) {
-                    let day = nextWorkingDay.getDay();
-                    let dStr = nextWorkingDay.toISOString().split('T')[0];
-                    
-                    let isHol = cachedHolidays.some(h => {
-                        if (h.date !== dStr) return false;
-                        const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-                        const station = String(currentUser.station || "").toUpperCase().trim();
-                        if (coverage.includes("NATIONWIDE")) return true;
-                        const hasNaga = coverage.includes("NAGA CITY");
-                        const hasCamSur = coverage.includes("CAMARINES SUR");
-                        if (hasNaga && hasCamSur) return true;
-                        if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
-                        if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
-                        return false;
-                    });
-
-                    // Check if the current day in the loop is a CWW Friday
-                    let isCWWFriday = false;
-                    if (day === 5 && schedOverrides && schedOverrides.length > 0) {
-                        const activeOverride = schedOverrides.find(s => dStr >= s.start_date && dStr <= s.end_date) || schedOverrides[0];
-                        if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                            isCWWFriday = true;
-                        }
-                    }
-                    
-                    // Skip Sundays (0), Saturdays (6), Holidays, AND CWW Fridays
-                    if (day !== 0 && day !== 6 && !isHol && !isCWWFriday) break; 
-                    nextWorkingDay.setDate(nextWorkingDay.getDate() + 1);
-                }
-                
-                let filingDate = new Date(todayStr);
-                if (filingDate > nextWorkingDay) {
-                    return alert(`${type} must be filed in advance or strictly on the next working day after the leave.`);
-                }
             }
+ 
                 
             // --- LEAVE BALANCE CHECK LOGIC ---          
             const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
