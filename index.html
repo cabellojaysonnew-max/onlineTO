@@ -3260,14 +3260,15 @@ window.cancelLeaveApp = async function(leaveId) {
                 }
                 list.innerHTML = html || "No Travel Orders found.";
         
-            } else {
-                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED']).order('created_at', {ascending: false});
+       } else {
+                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED', 'DISAPPROVED', 'DISAPPROVED DUE TO EXIGENCY OF THE SERVICE']).order('created_at', {ascending: false});
                 let html = '';
 for(let app of leaves || []) {
-                    const sCls = app.transaction_type === 'APPROVED' ? 'bg-approved' : (app.transaction_type === 'CANCELLED' ? 'bg-cancelled' : 'bg-pending');
                     const isApp = app.transaction_type === 'APPROVED';
-                    const isCancelled = app.transaction_type === 'CANCELLED';
-                    const cannotCancel = app.start_date < todayStr;
+                    const isCancelled = app.transaction_type.includes('CANCELLED') || app.transaction_type.includes('DISAPPROVED');
+                    const sCls = isApp ? 'bg-approved' : (isCancelled ? 'bg-cancelled' : 'bg-pending');
+                
+                const cannotCancel = app.start_date < todayStr;
                     
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -3317,14 +3318,20 @@ for(let app of leaves || []) {
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
 
-            if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
-                let ctoOption = type === "Vacation Leave" ? `
+if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
+                let ctoOption = "";
+                if (type === "Vacation Leave") {
+                    const ctoBal = currentUser.cto_balance ? parseFloat(currentUser.cto_balance) : 0;
+                    if (ctoBal > 0) {
+                        ctoOption = `
                     <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
                         <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
-                    </label>` : "";
+                    </label>`;
+                    }
+                }
 
                 container.innerHTML = `
-                    ${ctoOption}
+                ${ctoOption}
                     <div class="radio-group">
                         <div class="radio-item"><input type="radio" name="ldetail" value="Within Philippines" checked> Within Philippines</div>
                         <div class="radio-item"><input type="radio" name="ldetail" value="Abroad"> Abroad</div>
@@ -3521,18 +3528,21 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     }
                 });
                 
+
                 let availableCtoDays = (earned - used - ledgerUsed) / 8;
                 if (availableCtoDays < count) {
                     alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
                     if(submitBtn) submitBtn.disabled = true;
+                    countEl.innerText = count;
                 } else {
                     if(submitBtn) submitBtn.disabled = false;
+                    countEl.innerText = `${count} (CTO CREDIT)`;
                 }
             } else {
                 if(submitBtn) submitBtn.disabled = false;
+                countEl.innerText = count;
             }
         };
-
             
 
             window.submitLeave = async function() {
@@ -3716,6 +3726,38 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                             await window.logActivity(to_no, 'MODIFIED_ROUTED_BACK', 'Pending TO overridden and routed back due to Leave conflict');
                         }
                     }
+                }
+
+                const { error: insertErr } = await supabase.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(),
+                    emp_id: currentUser.emp_id,
+                    start_date: start,
+                    end_date: end,
+                    type: type,
+                    debit: days,
+                    transaction_type: 'APPLICATION',
+                    remarks: fullRemarks
+                });
+
+                if (insertErr) throw new Error("Leave insert failed: " + insertErr.message);
+
+                alert("Leave Application Submitted.");
+                window.loadStatus();
+                
+                document.getElementById('leave-from').value = '';
+                document.getElementById('leave-to').value = '';
+                document.getElementById('leave-days-count').innerText = '0';
+                if(document.getElementById('leave-breakdown')) document.getElementById('leave-breakdown').innerHTML = 'Select dates to see working days calculation.';
+                if(document.getElementById('leave-specify')) document.getElementById('leave-specify').value = '';
+                
+                window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
+
+            } catch(e) {
+                alert("Error: " + e.message);
+            } finally {
+                isSubmitting = false;
+            }
+        };
                 }
             }
                 
