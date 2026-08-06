@@ -1517,7 +1517,7 @@ window.loadCredits = async function() {
     let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
     let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
-    let currentCTO = emp && emp.cto_balance ? parseFloat(emp.cto_balance).toFixed(3) : "0.000";
+    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0) * 8;
 
     // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
@@ -1527,7 +1527,6 @@ window.loadCredits = async function() {
         .order('start_date', { ascending: false });
 
     // ---> THE FIX: APPLY THE MATH TO THE BALANCES CORRECTLY <---
-    // We ignore 'APPLICATION' (pending) AND 'CANCELLED' so it only deducts when finalized
     const currentYear = new Date().getFullYear();
 
     if (ledgers && ledgers.length > 0) {
@@ -1538,28 +1537,23 @@ window.loadCredits = async function() {
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
             
-            // Extract the transaction year
             let transDateStr = l.start_date || l.created_at || '';
             let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
 
             if (lType.includes('SPECIAL PRIVILEGE')) {
-                // SPL is yearly: Only deduct if the transaction happened this year
                 if (transYear === currentYear) {
                     currentSPL = currentSPL + cVal - dVal;
                 }
             }
             else if (lType.includes('WELLNESS')) {
-                // Wellness is yearly: Only deduct if the transaction happened this year
                 if (transYear === currentYear) {
                     currentWL = currentWL + cVal - dVal;
                 }
             }
             else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) {
-                // VL is cumulative: Always apply math
                 currentVL = currentVL + cVal - dVal;
             }
             else if (lType.includes('SL') || lType.includes('SICK')) {
-                // SL is cumulative: Always apply math
                 currentSL = currentSL + cVal - dVal;
             }
         });
@@ -1583,16 +1577,14 @@ window.loadCredits = async function() {
             let cVal = isNaN(rawCredit) ? 0 : Math.abs(rawCredit);
             let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
-            // Show row if it has values OR if it's a Manual Input/Application/Cancelled
             if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') {
                 hasDeductions = true;
                 
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
-                                  (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
+                                      (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
-                // Cancelled deductions show crossed-out
                 let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
                              (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
@@ -1612,7 +1604,6 @@ window.loadCredits = async function() {
     
     if (!hasDeductions) deductionsHtml = `<p style="font-size:11px; color:gray; margin-top:10px;">No leave records found.</p>`;
 
-    // Render the Finalized Math (Converting back to 3 decimal places)
     container.innerHTML = `
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:12px; margin-bottom: 15px;">
             <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Vacation:</strong> <span style="color: var(--success); font-weight: bold;">${currentVL.toFixed(3)}</span></div>
@@ -1624,7 +1615,7 @@ window.loadCredits = async function() {
         ${deductionsHtml}
     `;
 
-    // 4. CTO STATUS HISTORY
+    // 4. CTO STATUS HISTORY & HOURLY MATH
     const { data: cto } = await supabase.from('cto_records').select('*').eq('emp_id', currentUser.emp_id).order('date', {ascending: false});
     
     let ctoHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 5px;">
@@ -1635,18 +1626,27 @@ window.loadCredits = async function() {
             <th style="padding: 5px; text-align: left;">Remarks</th>
         </tr>`;
     let hasCto = false;
+    let ctoEarned = 0, ctoUsed = 0;
     
     if(cto && cto.length > 0) {
         cto.forEach(c => {
             const ttype = (c.transaction_type || '').toUpperCase();
-            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED') {
+            const rmk = (c.remarks || '').toUpperCase();
+            const hrs = parseFloat(c.calculated_hours || "0") || 0;
+            if (ttype === 'POSTED' || ttype === 'EARNED' || rmk === 'PROCESSED') {
+                ctoEarned += hrs;
+            } else if (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
+                ctoUsed += hrs;
+            }
+
+            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED' || rmk === 'CTO DEDUCTION' || rmk === 'PROCESSED') {
                 hasCto = true;
-                let color = ttype === 'USED' ? 'var(--danger)' : 'var(--success)';
-                let sign = ttype === 'USED' ? '-' : '+';
+                let color = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? 'var(--danger)' : 'var(--success)';
+                let sign = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? '-' : '+';
                 ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 5px;">${c.date}</td>
-                    <td style="padding: 5px;">${ttype}</td>
-                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${parseFloat(c.calculated_hours).toFixed(3)}</td>
+                    <td style="padding: 5px;">${ttype || rmk}</td>
+                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${hrs.toFixed(3)}</td>
                     <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
                 </tr>`;
             }
@@ -1656,14 +1656,15 @@ window.loadCredits = async function() {
 
     if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
     
+    const totalCtoHours = baseCtoHours + ctoEarned - ctoUsed;
+
     ctoContainer.innerHTML = `
         <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
-            <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${currentCTO} hrs</span>
+            <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${totalCtoHours.toFixed(2)} hrs</span>
         </div>
         ${ctoHtml}
     `;
-};
-        
+};        
         
         
         window.showEmployeeQR = function() {
