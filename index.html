@@ -3545,7 +3545,7 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
         };
             
 
-            window.submitLeave = async function() {
+window.submitLeave = async function() {
             if (isSubmitting) return;
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const start = document.getElementById('leave-from').value;
@@ -3553,16 +3553,15 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
 
-        if (!start || !end || days <= 0) return alert("Select valid working dates.");
-        if (type === "Vacation Leave") {
+            if (!start || !end || days <= 0) return alert("Select valid working dates.");
+            if (type === "Vacation Leave") {
                 const filingDate = new Date(todayStr);
                 const leaveStart = new Date(start);
                 const diffTime = leaveStart - filingDate;
                 const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
             }
- 
-                
+
             // --- LEAVE BALANCE CHECK LOGIC ---          
             const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
@@ -3604,7 +3603,6 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                     }
                 }
             }
-            // --------------------------------------
 
             // CTO CHECK LOGIC
             const ctoCheck = document.getElementById('vl-cto-credit');
@@ -3639,7 +3637,6 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (isCtoCredited) detailStr += " (Credited to CTO)";
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
-
             // LEAVE APPROVAL ROUTING (Initial Assignment)
             let routeStatus = "PENDING_CHIEF";
             const empUnitStr = currentUser.unit ? String(currentUser.unit).toUpperCase().trim() : "";
@@ -3648,17 +3645,14 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             if (empUnitStr === "PARPO") {
                 routeStatus = "PENDING_PARPO";
             } else if (empUnitStr.includes("DARMO")) {
-                routeStatus = isMARPO ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD"; // MARPO evaluates here as Unit Head
+                routeStatus = isMARPO ? "PENDING_CHIEF" : "PENDING_UNIT_HEAD";
             } else if (empUnitStr !== "" && empUnitStr !== "NA") {
                 routeStatus = "PENDING_UNIT_HEAD";
             } else {
                 routeStatus = "PENDING_CHIEF";
             }
-                
             
             const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
-                
-                
 
             const dates_to_check = [];
             let curr = new Date(start);
@@ -3668,14 +3662,14 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 curr.setDate(curr.getDate() + 1);
             }
 
-       const activeToReq = await supabase.from('travel_orders').select('to_no, status, transport, unit, emp_name').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
+            const activeToReq = await supabase.from('travel_orders').select('to_no, status, transport, unit, emp_name').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
             const { data: toConflicts } = await supabase.from('itinerary').select('to_no, travel_date')
                 .gte('travel_date', start).lte('travel_date', end)
                 .in('to_no', (activeToReq.data || []).map(t => t.to_no));
             
-            if(toConflicts && toConflicts.length > 0) {
+            if (toConflicts && toConflicts.length > 0) {
                 const uniqueToNos = [...new Set(toConflicts.map(t => t.to_no))];
-                for(let to_no of uniqueToNos) {
+                for (let to_no of uniqueToNos) {
                     const toData = activeToReq.data.find(t => t.to_no === to_no);
                     const { data: fullItin } = await supabase.from('itinerary').select('id, travel_date').eq('to_no', to_no);
                     
@@ -3727,7 +3721,13 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                         }
                     }
                 }
+            }
 
+            isSubmitting = true;
+            const submitBtn = document.getElementById('btn-submit-leave');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing..."; }
+
+            try {
                 const { error: insertErr } = await supabase.from('leave_ledger').insert({
                     transaction_id: crypto.randomUUID(),
                     emp_id: currentUser.emp_id,
@@ -3747,39 +3747,15 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
                 document.getElementById('leave-from').value = '';
                 document.getElementById('leave-to').value = '';
                 document.getElementById('leave-days-count').innerText = '0';
-                if(document.getElementById('leave-breakdown')) document.getElementById('leave-breakdown').innerHTML = 'Select dates to see working days calculation.';
-                if(document.getElementById('leave-specify')) document.getElementById('leave-specify').value = '';
+                if (document.getElementById('leave-breakdown')) document.getElementById('leave-breakdown').innerHTML = 'Select dates to see working days calculation.';
+                if (document.getElementById('leave-specify')) document.getElementById('leave-specify').value = '';
                 
                 window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
-
             } catch(e) {
                 alert("Error: " + e.message);
             } finally {
                 isSubmitting = false;
-            }
-        };
-                }
-            }
-                
-            isSubmitting = true;
-            document.getElementById('btn-submit-leave').innerText = "Processing...";
-
-            try {
-                await supabase.from('leave_ledger').insert({
-                    transaction_id: crypto.randomUUID(), emp_id: currentUser.emp_id,
-                    start_date: start, end_date: end, type: type, debit: days,
-                    transaction_type: "APPLICATION", remarks: fullRemarks
-                });
-                alert("Leave Application Submitted.");
-                document.getElementById('leave-from').value = '';
-                document.getElementById('leave-to').value = '';
-                document.getElementById('leave-days-count').innerText = "0";
-                window.switchTab('status-view', document.querySelectorAll('.nav-item')[2]);
-            } catch(e) {
-                alert("Error: " + e.message);
-            } finally {
-                isSubmitting = false;
-                document.getElementById('btn-submit-leave').innerText = "📄 SUBMIT LEAVE APPLICATION";
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "📄 SUBMIT LEAVE APPLICATION"; }
             }
         };
 
