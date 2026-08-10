@@ -1708,11 +1708,13 @@ window.loadCredits = async function() {
         
         window.removePersonnel = function(i) { personnelDraft.splice(i,1); window.renderPersonnel(); };
 
-window.handleStartDateChange = function() {
+        window.handleStartDateChange = function() {
             const fromDate = document.getElementById('itin-from').value;
             if (fromDate) {
-                document.getElementById('itin-to').value = fromDate;
-                window.generateItinFields();
+                document.getElementById('itin-to').value = '';
+                document.getElementById('itin-to').min = fromDate;
+                document.getElementById('dynamic-itin-fields').innerHTML = '';
+                itineraryDraft = [];
             }
         };
 
@@ -2277,15 +2279,18 @@ window.modifyPendingTO = async function(toNo) {
                              <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
                              <span style="color:var(--danger); font-size:11px; font-weight:bold; cursor:pointer;" onclick="window.removeItinCard('${cardId}', '${i.travel_date}')">DELETE</span>
                         </div>
-                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${i.destination}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                        <input type="text" id="dest-${idx}" placeholder="Destination" value="${(i.destination || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${idx > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${idx}').value = document.getElementById('purp-${idx-1}').value; else document.getElementById('purp-${idx}').value = '';"> Copy previous purpose</label>` : ''}
                         <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
+                        <input type="text" id="fund-${idx}" list="fund-sources-list" placeholder="Fund Source (Select or Type)" value="${(myTo.fund_source || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${pbddSelect}
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${myTo.report_to}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${(myTo.report_to || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:0;">
                     </div>`;
-                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId });
+                itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, fundId: `fund-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId, hasPSO: false });
             });
-            
+
+
+    
             window.renderPersonnel();
             
             if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
