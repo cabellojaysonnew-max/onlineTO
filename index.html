@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
+  <script>
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
         const APP_VERSION = "v1.3"; 
-        if (localStorage.getItem("dar_app_version") !== APP_VERSION) const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+        if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
         }
     </script>
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <!-- MOVED TO MASTER PAGE: Aggressive cache control for the root shell -->
@@ -2384,8 +2385,6 @@ window.generateOfficialPDF = async function(toNo) {
             const { data } = await supabase.from('users').select('full_name, username').in('unit', uniqueUnits);
             if (data) uh_list = data;
         }
-
-        let dc_list = [];
 
         let dc_list = [];
         if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
