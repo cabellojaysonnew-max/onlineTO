@@ -6,7 +6,7 @@
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
         const APP_VERSION = "v1.3"; 
-        if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
+        if (localStorage.getItem("dar_app_version") !== APP_VERSION) const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
         }
@@ -1321,10 +1321,14 @@ window.generateTEVPDF = async function() {
                     if (mData && mData.full_name) { chiefName = mData.full_name.toUpperCase(); }
                     chiefPos = "MARPO";
                 } else {
-                    const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
-                    const { data: chiefData } = await supabase.from('users').select('full_name').eq('division', baseDiv).eq('role', 'CHIEF').maybeSingle();
-                    if (chiefData && chiefData.full_name) { chiefName = chiefData.full_name.toUpperCase(); }
-                    chiefPos = "DIVISION CHIEF";
+                  const baseDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "";
+                    const { data: chiefData } = await supabase.from('users').select('full_name, role').eq('division', baseDiv).in('role', ['CHIEF', 'PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1']).maybeSingle();
+                    if (chiefData && chiefData.full_name) { 
+                        chiefName = chiefData.full_name.toUpperCase(); 
+                        chiefPos = ['PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1'].includes(chiefData.role?.toUpperCase()) ? "PARPO I" : "DIVISION CHIEF";
+                    } else {
+                        chiefPos = "DIVISION CHIEF";
+                    }
                 }
 
                 // LOOP THROUGH EACH DAY to create a separate page/form
@@ -2382,14 +2386,17 @@ window.generateOfficialPDF = async function(toNo) {
         }
 
         let dc_list = [];
+
+        let dc_list = [];
         if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
-            const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
-            if (data) dc_list = data.map(u => ({ ...u, custom_role: "DIVISION CHIEF" }));
+            const { data } = await supabase.from('users').select('full_name, username, role').in('division', uniqueDivs).in('role', ['CHIEF', 'PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1']);
+            if (data) dc_list = data.map(u => ({ ...u, custom_role: ['PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1'].includes(u.role?.toUpperCase()) ? "PARPO I" : "DIVISION CHIEF" }));
         }
 
         // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
         const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
-        if (isARBDSP) {
+        if (isARBDSP && !dc_list.some(dc => dc.custom_role === "PARPO I")) {
+        
             const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
             if (p1Data && p1Data.length > 0) {
                 dc_list.push({ ...p1Data[0], custom_role: "PARPO I" });
@@ -2780,15 +2787,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             if (data) uh_list = data;
         }
 
-        let dc_list = [];
+         let dc_list = [];
         if (currentUser.unit !== "PARPO" && uniqueDivs.length > 0) {
-            const { data } = await supabase.from('users').select('full_name, username').in('division', uniqueDivs).eq('role', 'CHIEF');
-            if (data) dc_list = data.map(u => ({ ...u, custom_role: "DIVISION CHIEF" }));
+            const { data } = await supabase.from('users').select('full_name, username, role').in('division', uniqueDivs).in('role', ['CHIEF', 'PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1']);
+            if (data) dc_list = data.map(u => ({ ...u, custom_role: ['PARPO I', 'PARPO_I', 'PARPO1', 'PARPO_1'].includes(u.role?.toUpperCase()) ? "PARPO I" : "DIVISION CHIEF" }));
         }
 
         // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
         const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
-        if (isARBDSP) {
+        if (isARBDSP && !dc_list.some(dc => dc.custom_role === "PARPO I")) {
             const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
             if (p1Data && p1Data.length > 0) {
                 dc_list.push({ ...p1Data[0], custom_role: "PARPO I" });
