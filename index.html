@@ -4992,8 +4992,8 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
 
 
         
-        // --- CANCEL MODAL LOGIC (Approved Tab) ---
-        function showCancelModal(to_no, datesEncoded) {
+      // --- CANCEL MODAL LOGIC (Approved Tab) ---
+        window.showCancelModal = function(to_no, datesEncoded) {
             const dates = JSON.parse(decodeURIComponent(datesEncoded));
             currentCancelToNo = to_no;
             const list = document.getElementById('cancelDatesList');
@@ -5009,17 +5009,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             document.getElementById('cancelModal').style.display = 'flex';
         }
 
-        function hideCancelModal() {
+        window.hideCancelModal = function() {
             document.getElementById('cancelModal').style.display = 'none';
         }
 
-        function cancelEntireTO() {
+        window.cancelEntireTO = async function() {
             if(confirm("Are you sure you want to cancel this ENTIRE Travel Order?")) {
                 hideCancelModal();
-                processFullCancel(currentCancelToNo);
+                await processFullCancel(currentCancelToNo);
             }
         }
-
+          
         async function confirmCancelTO() {
             const checkboxes = document.querySelectorAll('.cancel-date-cb');
             const selectedDates = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
