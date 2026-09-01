@@ -1798,8 +1798,8 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
                 const dateStr = currentDt.toISOString().split('T')[0];
-                const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit:'' };
-                
+                const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit: userUnit };
+              
                 if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
                     container.innerHTML += `
                         <div class="card" style="border-left: 4px solid var(--danger);">
@@ -1935,14 +1935,15 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                     }
                 }
 
-            // Do not delete original data here; keep until safe submission
+                    // Do not delete original data here; keep until safe submission
                     for (let conflict of conflictsToProcess) {
                     if (conflict.status.includes("PENDING")) {
-                        await supabase.from('itinerary').delete().eq('to_no', conflict.to_no);
-                        await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no);
-                        await window.logActivity(conflict.to_no, 'OVERWRITTEN_PENDING', `Pending Travel Order overwritten by ${currentUser.full_name}`);
+                        const { data: others } = await supabase.from('travel_orders').select('emp_id').eq('to_no', conflict.to_no).neq('emp_id', currentUser.emp_id);
+                        await supabase.from('travel_orders').delete().eq('to_no', conflict.to_no).eq('emp_id', currentUser.emp_id);
+                        if (!others || others.length === 0) { await supabase.from('itinerary').delete().eq('to_no', conflict.to_no); }
+                        await window.logActivity(conflict.to_no, 'WITHDRAWN_CONFLICT', `User ${currentUser.full_name} withdrew due to conflict override`);
                     } else if (conflict.status === "APPROVED") {
-                        const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
+                      const { data: oldItin } = await supabase.from('itinerary').select('*').eq('to_no', conflict.to_no).order('travel_date');
                         const remainingDays = oldItin.filter(day => day.travel_date !== conflict.affected_date);
                         
                         await supabase.from('travel_orders').update({ status: 'CANCELLED' }).eq('to_no', conflict.to_no);
