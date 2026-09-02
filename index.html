@@ -1524,15 +1524,6 @@ window.loadCredits = async function() {
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
     let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0) * 8;
 
-    // FETCH SCHEDULE OVERRIDES & HOLIDAYS ONCE FOR DYNAMIC CREDITING
-    const { data: schedOverrides } = await supabase.from('schedule_override')
-        .select('start_date, end_date, start_time, end_time, schedule_type, created_at')
-        .in('emp_id', [currentUser.emp_id, 'ALL'])
-        .order('created_at', { ascending: false });
-        
-    const { data: hols } = await supabase.from('holidays').select('date, description, coverage');
-    const dynamicHolidays = hols || [];
-
     // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
         .select('*')
@@ -1550,74 +1541,7 @@ window.loadCredits = async function() {
             let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
-
-            // === DYNAMIC DEDUCTION RECALCULATION based on schedule_overrides ===
-            if (dVal > 0 && l.start_date && l.end_date && ['APPROVED', 'DEDUCTION'].includes(l.transaction_type)) {
-                let sDate = new Date(l.start_date);
-                let eDate = new Date(l.end_date);
-                
-                if (sDate <= eDate && !isNaN(sDate) && !isNaN(eDate)) {
-                    let dynamicDebit = 0;
-                    let cur = new Date(sDate);
-                    
-                    let hasStartHalfDay = (l.remarks && l.remarks.includes("Half Day Start")) || false;
-                    let hasEndHalfDay = (l.remarks && l.remarks.includes("Half Day End")) || false;
-                    
-                    if (!hasStartHalfDay && !hasEndHalfDay && (dVal % 1 !== 0)) {
-                        hasEndHalfDay = true;
-                    }
-                    
-                    while (cur <= eDate) {
-                        const dateStr = cur.toISOString().split('T')[0];
-                        const day = cur.getDay();
-                        const isWeekend = (day === 0 || day === 6);
-                        
-                        const isHoliday = dynamicHolidays.some(h => {
-                            if (h.date !== dateStr) return false;
-                            const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-                            const station = String(currentUser.station || "").toUpperCase().trim();
-                            if (coverage.includes("NATIONWIDE")) return true;
-                            const hasNaga = coverage.includes("NAGA CITY");
-                            const hasCamSur = coverage.includes("CAMARINES SUR");
-                            if (hasNaga && hasCamSur) return true;
-                            if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
-                            if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
-                            return false;
-                        });
-
-                        let isCWWFriday = false;
-                        let isCWW = false;
-                        
-                        if (schedOverrides && schedOverrides.length > 0) {
-                            const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
-                            if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                                isCWW = true;
-                                if (day === 5) isCWWFriday = true;
-                            }
-                        }
-
-                        if (!isHoliday && !isWeekend && !isCWWFriday) {
-                            let dayDeduction = 1.0;
-                            if (isCWW && (lType.includes('VL') || lType.includes('VACATION') || lType.includes('SL') || lType.includes('SICK'))) {
-                                dayDeduction = 1.25;
-                            }
-                            
-                            if ((cur.getTime() === sDate.getTime() && hasStartHalfDay) || (cur.getTime() === eDate.getTime() && hasEndHalfDay)) {
-                                dayDeduction = dayDeduction / 2;
-                            }
-                            
-                            dynamicDebit += dayDeduction;
-                        }
-                        cur.setDate(cur.getDate() + 1);
-                    }
-                    
-                    if (dynamicDebit > 0 || (dVal > 0 && dynamicDebit === 0)) {
-                        dVal = Math.max(0, dynamicDebit);
-                        l.debit = dVal;
-                    }
-                }
-            }
-
+            
             let transDateStr = l.start_date || l.created_at || '';
             let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
 
@@ -1639,7 +1563,7 @@ window.loadCredits = async function() {
             }
         });
     }
-  
+
     // 3. GENERATE DUAL-COLUMN LEDGER
     let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
         <tr style="background: var(--dar-green); color: white;">
@@ -3634,140 +3558,47 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
         };
             
 
-
-
 window.submitLeave = async function() {
-    if (isSubmitting) return;
-    const typeElement = document.querySelector('input[name="ltype"]:checked');
-    if (!typeElement) return alert("Please select a leave type.");
-    const type = typeElement.value;
-    
-    const start = document.getElementById('leave-from').value;
-    const end = document.getElementById('leave-to').value;
-    const daysText = document.getElementById('leave-days-count').innerText;
-    const days = parseFloat(daysText);
-    const comm = document.getElementById('leave-commutation').value;
-    const detailsEl = document.getElementById('leave-specify');
-    const details = detailsEl ? detailsEl.value.trim() : "";
+            if (isSubmitting) return;
+            const type = document.querySelector('input[name="ltype"]:checked').value;
+            const start = document.getElementById('leave-from').value;
+            const end = document.getElementById('leave-to').value;
+            const days = parseFloat(document.getElementById('leave-days-count').innerText);
+            const comm = document.getElementById('leave-commutation').value;
 
-    if (!start || !end || isNaN(days) || days <= 0) return alert("Select valid working dates.");
+            if (!start || !end || days <= 0) return alert("Select valid working dates.");
+            if (type === "Vacation Leave") {
+                const filingDate = new Date(todayStr);
+                const leaveStart = new Date(start);
+                const diffTime = leaveStart - filingDate;
+                const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
+            }
 
-    if (type === "Vacation Leave") {
-        const filingDate = new Date(todayStr);
-        const leaveStart = new Date(start);
-        const diffTime = leaveStart - filingDate;
-        const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
-    }
+            // --- LEAVE BALANCE CHECK LOGIC ---          
+            const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
+            let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
+            let currentSPL = empData && empData.spl_balance ? parseFloat(empData.spl_balance) : 0;
+            let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
 
-    isSubmitting = true;
-    const submitBtn = document.getElementById('btn-submit-leave');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
+            const { data: ledgers } = await supabase.from('leave_ledger')
+                .select('type, credit, debit, transaction_type')
+                .eq('emp_id', currentUser.emp_id)
+                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
 
-    try {
-        // 1. STRICT OVERLAP PREVENTION (Stops Double Posting at Database Level)
-        const { data: overlappingLeaves, error: overlapError } = await supabase.from('leave_ledger')
-            .select('id')
-            .eq('emp_id', currentUser.emp_id)
-            .in('transaction_type', ['APPLICATION', 'APPROVED'])
-            .lte('start_date', end)
-            .gte('end_date', start);
-
-        if (overlapError) throw overlapError;
-        
-        if (overlappingLeaves && overlappingLeaves.length > 0) {
-            alert("Conflict: You already have an existing or pending leave application during these dates. Double posting is prevented.");
-            return;
-        }
-
-        // 2. CONSTRUCT REMARKS & DETAILS
-        const halfStartCheck = document.getElementById('leave-half-day-start')?.checked;
-        const halfEndCheck = document.getElementById('leave-half-day-end')?.checked;
-        const ctoCheck = document.getElementById('vl-cto-credit')?.checked;
-        const detailTypeEl = document.querySelector('input[name="ldetail"]:checked');
-        const detailType = detailTypeEl ? detailTypeEl.value : "";
-        
-        let remarksArr = [];
-        if (detailType) remarksArr.push(detailType);
-        if (details) remarksArr.push(details);
-        if (comm !== "Not Requested") remarksArr.push(`Commutation: ${comm}`);
-        if (ctoCheck && type === "Vacation Leave") remarksArr.push("Credited to CTO");
-        if (halfStartCheck) remarksArr.push("Half Day Start");
-        if (halfEndCheck) remarksArr.push("Half Day End");
-        
-        const finalRemarks = remarksArr.join(" | ");
-
-        // 3. INSERT APPLICATION TO LEDGER (Immediate DB Reflection)
-        const { error: insertError } = await supabase.from('leave_ledger').insert({
-            transaction_id: crypto.randomUUID(),
-            emp_id: currentUser.emp_id,
-            start_date: start,
-            end_date: end,
-            type: type,
-            debit: days,
-            credit: 0,
-            transaction_type: 'APPLICATION',
-            remarks: finalRemarks,
-            created_at: new Date().toISOString()
-        });
-
-        if (insertError) throw insertError;
-
-        alert("Leave application successfully posted to database.");
-        
-          
-                                const isHoliday = dynamicHolidays.some(h => {
-                                    if (h.date !== dateStr) return false;
-                                    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-                                    const station = String(currentUser.station || "").toUpperCase().trim();
-                                    if (coverage.includes("NATIONWIDE")) return true;
-                                    const hasNaga = coverage.includes("NAGA CITY");
-                                    const hasCamSur = coverage.includes("CAMARINES SUR");
-                                    if (hasNaga && hasCamSur) return true;
-                                    if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
-                                    if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
-                                    return false;
-                                });
-
-                                let isCWWFriday = false;
-                                let isCWW = false;
-                                
-                                if (schedOverrides && schedOverrides.length > 0) {
-                                    const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
-                                    if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                                        isCWW = true;
-                                        if (day === 5) isCWWFriday = true;
-                                    }
-                                }
-
-                                if (!isHoliday && !isWeekend && !isCWWFriday) {
-                                    let dayDeduction = 1.0;
-                                    if (isCWW && (lType.includes('VL') || lType.includes('VACATION') || lType.includes('SL') || lType.includes('SICK'))) {
-                                        dayDeduction = 1.25;
-                                    }
-                                    
-                                    if ((cur.getTime() === sDate.getTime() && hasStartHalfDay) || (cur.getTime() === eDate.getTime() && hasEndHalfDay)) {
-                                        dayDeduction = dayDeduction / 2;
-                                    }
-                                    
-                                    dynamicDebit += dayDeduction;
-                                }
-                                cur.setDate(cur.getDate() + 1);
-                            }
-                            
-                            if (dynamicDebit > 0 || (dVal > 0 && dynamicDebit === 0)) {
-                                dVal = Math.max(0, dynamicDebit);
-                            }
-                        }
-                    }
-
+            if (ledgers) {
+                ledgers.forEach(l => {
+                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
+                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
+                    let lType = (l.type || '').toUpperCase();
                     if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
                     else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
                     else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) currentVL = currentVL + cVal - dVal;
                     else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
                 });
             }
-  
+
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
                 if (days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
             } else if (type === "Special Privilege Leave") {
