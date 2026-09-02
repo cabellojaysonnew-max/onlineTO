@@ -3634,69 +3634,108 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
         };
             
 
+
+
 window.submitLeave = async function() {
-            if (isSubmitting) return;
-            const type = document.querySelector('input[name="ltype"]:checked').value;
-            const start = document.getElementById('leave-from').value;
-            const end = document.getElementById('leave-to').value;
-            const days = parseFloat(document.getElementById('leave-days-count').innerText);
-            const comm = document.getElementById('leave-commutation').value;
+    if (isSubmitting) return;
+    const typeElement = document.querySelector('input[name="ltype"]:checked');
+    if (!typeElement) return alert("Please select a leave type.");
+    const type = typeElement.value;
+    
+    const start = document.getElementById('leave-from').value;
+    const end = document.getElementById('leave-to').value;
+    const daysText = document.getElementById('leave-days-count').innerText;
+    const days = parseFloat(daysText);
+    const comm = document.getElementById('leave-commutation').value;
+    const detailsEl = document.getElementById('leave-specify');
+    const details = detailsEl ? detailsEl.value.trim() : "";
 
-            if (!start || !end || days <= 0) return alert("Select valid working dates.");
-            if (type === "Vacation Leave") {
-                const filingDate = new Date(todayStr);
-                const leaveStart = new Date(start);
-                const diffTime = leaveStart - filingDate;
-                const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
-            }
+    if (!start || !end || isNaN(days) || days <= 0) return alert("Select valid working dates.");
 
-// --- LEAVE BALANCE CHECK LOGIC ---          
-            const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
-            let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
-            let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
-            let currentSPL = empData && empData.spl_balance ? parseFloat(empData.spl_balance) : 0;
-            let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
+    if (type === "Vacation Leave") {
+        const filingDate = new Date(todayStr);
+        const leaveStart = new Date(start);
+        const diffTime = leaveStart - filingDate;
+        const diffDaysRule = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
+    }
 
-            const { data: schedOverrides } = await supabase.from('schedule_override')
-                .select('start_date, end_date, start_time, end_time, schedule_type, created_at')
-                .in('emp_id', [currentUser.emp_id, 'ALL'])
-                .order('created_at', { ascending: false });
-                
-            const { data: hols } = await supabase.from('holidays').select('date, description, coverage');
-            const dynamicHolidays = hols || [];
+    isSubmitting = true;
+    const submitBtn = document.getElementById('btn-submit-leave');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
-            const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('start_date, end_date, type, credit, debit, transaction_type, remarks')
-                .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
+    try {
+        // 1. STRICT OVERLAP PREVENTION (Stops Double Posting at Database Level)
+        const { data: overlappingLeaves, error: overlapError } = await supabase.from('leave_ledger')
+            .select('id')
+            .eq('emp_id', currentUser.emp_id)
+            .in('transaction_type', ['APPLICATION', 'APPROVED'])
+            .lte('start_date', end)
+            .gte('end_date', start);
 
-            if (ledgers) {
-                ledgers.forEach(l => {
-                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-                    let lType = (l.type || '').toUpperCase();
-                    
-                    // === DYNAMIC DEDUCTION RECALCULATION based on schedule_overrides ===
-                    if (dVal > 0 && l.start_date && l.end_date && ['APPROVED', 'DEDUCTION', 'APPLICATION'].includes(l.transaction_type)) {
-                        let sDate = new Date(l.start_date);
-                        let eDate = new Date(l.end_date);
-                        if (sDate <= eDate && !isNaN(sDate) && !isNaN(eDate)) {
-                            let dynamicDebit = 0;
-                            let cur = new Date(sDate);
-                            
-                            let hasStartHalfDay = (l.remarks && l.remarks.includes("Half Day Start")) || false;
-                            let hasEndHalfDay = (l.remarks && l.remarks.includes("Half Day End")) || false;
-                            
-                            if (!hasStartHalfDay && !hasEndHalfDay && (dVal % 1 !== 0)) {
-                                hasEndHalfDay = true;
-                            }
-                            
-                            while (cur <= eDate) {
-                                const dateStr = cur.toISOString().split('T')[0];
-                                const day = cur.getDay();
-                                const isWeekend = (day === 0 || day === 6);
-                                
+        if (overlapError) throw overlapError;
+        
+        if (overlappingLeaves && overlappingLeaves.length > 0) {
+            alert("Conflict: You already have an existing or pending leave application during these dates. Double posting is prevented.");
+            return;
+        }
+
+        // 2. CONSTRUCT REMARKS & DETAILS
+        const halfStartCheck = document.getElementById('leave-half-day-start')?.checked;
+        const halfEndCheck = document.getElementById('leave-half-day-end')?.checked;
+        const ctoCheck = document.getElementById('vl-cto-credit')?.checked;
+        const detailTypeEl = document.querySelector('input[name="ldetail"]:checked');
+        const detailType = detailTypeEl ? detailTypeEl.value : "";
+        
+        let remarksArr = [];
+        if (detailType) remarksArr.push(detailType);
+        if (details) remarksArr.push(details);
+        if (comm !== "Not Requested") remarksArr.push(`Commutation: ${comm}`);
+        if (ctoCheck && type === "Vacation Leave") remarksArr.push("Credited to CTO");
+        if (halfStartCheck) remarksArr.push("Half Day Start");
+        if (halfEndCheck) remarksArr.push("Half Day End");
+        
+        const finalRemarks = remarksArr.join(" | ");
+
+        // 3. INSERT APPLICATION TO LEDGER (Immediate DB Reflection)
+        const { error: insertError } = await supabase.from('leave_ledger').insert({
+            transaction_id: crypto.randomUUID(),
+            emp_id: currentUser.emp_id,
+            start_date: start,
+            end_date: end,
+            type: type,
+            debit: days,
+            credit: 0,
+            transaction_type: 'APPLICATION',
+            remarks: finalRemarks,
+            created_at: new Date().toISOString()
+        });
+
+        if (insertError) throw insertError;
+
+        alert("Leave application successfully posted to database.");
+        
+        // 4. RESET UI AND RE-RENDER
+        document.getElementById('leave-from').value = '';
+        document.getElementById('leave-to').value = '';
+        document.getElementById('leave-days-count').innerText = '0';
+        if (document.getElementById('leave-breakdown')) document.getElementById('leave-breakdown').innerHTML = 'Select dates to see working days calculation.';
+        if (detailsEl) detailsEl.value = '';
+        if (halfStartCheck) document.getElementById('leave-half-day-start').checked = false;
+        if (halfEndCheck) document.getElementById('leave-half-day-end').checked = false;
+        
+        window.loadStatus();
+        window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
+
+    } catch (e) {
+        alert("Database Posting Error: " + e.message);
+    } finally {
+        isSubmitting = false;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "📄 SUBMIT LEAVE APPLICATION"; }
+    }
+};
+
+          
                                 const isHoliday = dynamicHolidays.some(h => {
                                     if (h.date !== dateStr) return false;
                                     const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
