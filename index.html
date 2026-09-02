@@ -3715,26 +3715,6 @@ window.submitLeave = async function() {
 
         alert("Leave application successfully posted to database.");
         
-        // 4. RESET UI AND RE-RENDER
-        document.getElementById('leave-from').value = '';
-        document.getElementById('leave-to').value = '';
-        document.getElementById('leave-days-count').innerText = '0';
-        if (document.getElementById('leave-breakdown')) document.getElementById('leave-breakdown').innerHTML = 'Select dates to see working days calculation.';
-        if (detailsEl) detailsEl.value = '';
-        if (halfStartCheck) document.getElementById('leave-half-day-start').checked = false;
-        if (halfEndCheck) document.getElementById('leave-half-day-end').checked = false;
-        
-        window.loadStatus();
-        window.switchTab('status-view', document.querySelectorAll('.nav-item')[3]);
-
-    } catch (e) {
-        alert("Database Posting Error: " + e.message);
-    } finally {
-        isSubmitting = false;
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = "📄 SUBMIT LEAVE APPLICATION"; }
-    }
-};
-
           
                                 const isHoliday = dynamicHolidays.some(h => {
                                     if (h.date !== dateStr) return false;
