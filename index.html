@@ -1784,16 +1784,18 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
 
-            // UPDATED: NA explicitly outputs a blank value ("") so the system knows to skip Unit Head
-            let pbddOptions = '';
-            if (userUnit && userUnit !== 'NA') {
-                pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
+
+// UPDATED: NA explicitly outputs a blank value ("") so the system knows to skip Unit Head
+        let pbddOptions = '';
+        if (userUnit) {
+            pbddOptions += `<option value="${userUnit === 'NA' ? '' : userUnit}">${userUnit === 'NA' ? 'NA (Direct to Chief)' : userUnit + ' (Original Unit)'}</option>`;
+        }
+        ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
+            if (u !== userUnit) {
+                pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
             }
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
-                if (u !== userUnit) {
-                    pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
-                }
-            });
+        });
+        
 
             let currentDt = new Date(start);
             for (let i = 0; i < diffDays; i++) {
@@ -1863,24 +1865,35 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             
         const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set(); const fundSources = new Set();
             for (let it of itineraryDraft) {
-                const dest = document.getElementById(it.destId).value.trim();
-                const purp = document.getElementById(it.purpId).value.trim();
-                const rep = document.getElementById(it.repId).value.trim();
-                const fund = document.getElementById(it.fundId).value.trim();
-                
-                if (!dest || !purp || !rep) return alert(`Fill all fields (except Fund Source) for ${it.date}.`);
-                
-                batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
-                reportTos.add(rep);
-                if (fund) fundSources.add(fund); // Only add to array if not blank
-                
-                // Safely capture selected units
-                if (it.unitId) {
-                    let uVal = document.getElementById(it.unitId).value.trim();
-                    if (uVal) pbddUnits.add(uVal);
-                }
-            }
+            const destEl = document.getElementById(it.destId);
+            const purpEl = document.getElementById(it.purpId);
+            const repEl = document.getElementById(it.repId);
+            const fundEl = document.getElementById(it.fundId);
+            const unitEl = it.unitId ? document.getElementById(it.unitId) : null;
+            
+            // Prevent crash if DOM elements are missing or out of sync
+            if (!destEl || !purpEl || !repEl) continue;
 
+            const dest = destEl.value.trim();
+            const purp = purpEl.value.trim();
+            const rep = repEl.value.trim();
+            const fund = fundEl ? fundEl.value.trim() : '';
+            
+            if (!dest || !purp || !rep) return alert(`Fill all fields (except Fund Source) for ${it.date}.`);
+            
+            batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
+            reportTos.add(rep);
+            if (fund) fundSources.add(fund); // Only add to array if not blank
+            
+            // Safely capture selected units
+            if (unitEl) {
+                let uVal = unitEl.value.trim();
+                if (uVal) pbddUnits.add(uVal);
+            }
+        }
+
+
+          
             isSubmitting = true;
             const submitBtn = document.getElementById('btn-submit-to');
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
@@ -2269,17 +2282,21 @@ window.modifyPendingTO = async function(toNo) {
             
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+
+
+        let pbddOptions = '';
+        if (userUnit) pbddOptions += `<option value="${userUnit === 'NA' ? '' : userUnit}">${userUnit === 'NA' ? 'NA (Direct to Chief)' : userUnit + ' (Original Unit)'}</option>`;
+        ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { 
+            if (u !== userUnit) pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; 
+        });
+        
+        itin.forEach((i, idx) => {
+            const cardId = `itin-card-${idx}`;
             
-            let pbddOptions = '';
-            if (userUnit) pbddOptions += `<option value="${userUnit}">${userUnit} (Original Unit)</option>`;
-            ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => { 
-                if (u !== userUnit) pbddOptions += `<option value="${u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`; 
-            });
-            
-            itin.forEach((i, idx) => {
-                const cardId = `itin-card-${idx}`;
-                const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions}</select>` : '';
-                container.innerHTML += `
+            // Fix: properly select the previously saved unit for PBDD modifications
+            const savedUnitVal = (myTo.unit && myTo.unit !== 'NA') ? myTo.unit : '';
+            const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions.replace(`value="${savedUnitVal}"`, `value="${savedUnitVal}" selected`)}</select>` : '';
+                  container.innerHTML += `
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                              <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${i.travel_date}</h5>
