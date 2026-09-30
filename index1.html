@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.7"; 
+        const APP_VERSION = "v1.8"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -292,7 +292,10 @@ async function hardReloadSystem() {
             <div class="card" style="width: 92%; max-width: 430px; background:white; padding:20px; border-radius:12px; position:relative; box-shadow:0 10px 25px rgba(0,0,0,0.2); margin:auto;">
                 <button type="button" onclick="window.closeCtoCreditRequest()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
                 <h3 style="margin-top:0; color:var(--dar-green);">Submit CTO Credit to HR</h3>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-bottom:15px;">This submits the activity for HR validation. The hours will not be added to your CTO balance until HR processes the record.</p>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-bottom:10px;">This only sends your CTO credit request to the HR Office for processing. <strong>The hours are NOT yet credited to your CTO balance after submission.</strong></p>
+                <div style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px; border-radius:8px; font-size:11px; line-height:1.45; margin-bottom:15px;">
+                    <strong>HARD COPY REQUIRED:</strong> Submit the supporting documents for this CTO credit request to the HR Office. HR will validate the documents and process the CTO before the hours are added to your balance.
+                </div>
                 <label>PSO / RSO Number</label>
                 <input type="text" id="cto-credit-pso" placeholder="Enter PSO / RSO Number">
                 <label>Date of Activity</label>
@@ -1675,17 +1678,17 @@ window.loadCredits = async function() {
                 ctoUsed += hrs;
             }
 
-            if ((ttype === 'EARNED' && (rmk === 'PROCESSED' || rmk === 'ENCODED')) || ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
+            const isPendingHr = ttype === 'EARNED' && (rmk === 'ENCODED' || rmk === 'FOR HR PROCESSING');
+            if ((ttype === 'EARNED' && (rmk === 'PROCESSED' || isPendingHr)) || ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
                 hasCto = true;
-                const isPendingHr = ttype === 'EARNED' && rmk === 'ENCODED';
                 const isUsed = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION');
                 let color = isPendingHr ? '#854d0e' : (isUsed ? 'var(--danger)' : 'var(--success)');
                 let hourDisplay = isPendingHr ? 'PENDING' : `${isUsed ? '-' : '+'}${hrs.toFixed(3)}`;
                 ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 5px;">${c.date}</td>
-                    <td style="padding: 5px;">${isPendingHr ? 'EARNED - FOR HR' : (ttype || rmk)}</td>
+                    <td style="padding: 5px;">${isPendingHr ? 'CTO CREDIT REQUEST' : (ttype || rmk)}</td>
                     <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${hourDisplay}</td>
-                    <td style="padding: 5px; color: gray;">${isPendingHr ? 'Submitted to HR - not yet included in balance' : (c.remarks || c.purpose || '')}</td>
+                    <td style="padding: 5px; color: gray;">${isPendingHr ? 'FOR HR PROCESSING — NOT YET CREDITED. Submit hard copy supporting documents to HR.' : (c.remarks || c.purpose || '')}</td>
                 </tr>`;
             }
         });
@@ -3569,8 +3572,9 @@ for(let app of leaves || []) {
             return Math.max(0, availableHours);
         };
 
-   // Employee submission uses the same cto_records pattern used by the HR CTO
-   // encoder: EARNED + ENCODED first; HR verifies and changes it to PROCESSED.
+   // Employee CTO credit requests are NOT credited upon submission.
+   // They are saved as EARNED + FOR HR PROCESSING with zero calculated hours.
+   // HR validates the required hard-copy documents and changes the record to PROCESSED.
    window.openCtoCreditRequest = function() {
             const modal = document.getElementById('ctoCreditModal');
             if (!modal) return;
@@ -3633,11 +3637,11 @@ for(let app of leaves || []) {
                     multiplier: multiplier,
                     calculated_hours: '0',
                     PSO_Number: pso,
-                    remarks: 'ENCODED'
+                    remarks: 'FOR HR PROCESSING'
                 });
                 if (error) throw error;
 
-                alert('CTO credit submitted to HR for validation. It will be added to your balance only after HR processes it.');
+                alert('CTO credit request submitted to HR. This is NOT yet credited to your CTO balance. Please submit the HARD COPY supporting documents to the HR Office. The CTO hours will be credited only after HR processes the request.');
                 window.closeCtoCreditRequest();
                 if (document.getElementById('credits-view')?.classList.contains('active')) await window.loadCredits();
             } catch (e) {
