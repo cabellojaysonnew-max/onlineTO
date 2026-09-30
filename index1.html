@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.8"; 
+        const APP_VERSION = "v1.9"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -3439,6 +3439,35 @@ for(let app of leaves || []) {
             return [];
         };
 
+   // CTO SCHEDULE HELPERS
+   // schedule_override is the source of truth for the employee's current work schedule.
+   // CTO is ALWAYS computed in HOURS. A FIXED 07:00-18:00 schedule is the current
+   // compressed work week (10 working hours after the 12:00-13:00 lunch break).
+   window.getCtoScheduleHours = function(override) {
+            if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED' || !override.start_time || !override.end_time) return 8;
+            const toMins = (t) => {
+                const p = String(t).split(':');
+                return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+            };
+            const startMins = toMins(override.start_time);
+            const endMins = toMins(override.end_time);
+            if (endMins <= startMins) return 8;
+
+            let workMins = endMins - startMins;
+            const lunchStart = 12 * 60;
+            const lunchEnd = 13 * 60;
+            const lunchOverlap = Math.max(0, Math.min(endMins, lunchEnd) - Math.max(startMins, lunchStart));
+            workMins -= lunchOverlap;
+            return workMins > 0 ? workMins / 60 : 8;
+        };
+
+   window.isCtoCompressedWorkWeek = function(override) {
+            if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED') return false;
+            const startTime = String(override.start_time || '').substring(0, 5);
+            const endTime = String(override.end_time || '').substring(0, 5);
+            return startTime === '07:00' && endTime === '18:00';
+        };
+
    window.getCtoRequiredHours = async function(start, end) {
             if (!start || !end) return { totalHours: 0, dates: [] };
 
@@ -3464,24 +3493,6 @@ for(let app of leaves || []) {
                 return false;
             });
 
-            const fixedScheduleHours = (override) => {
-                if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED' || !override.start_time || !override.end_time) return 8;
-                const toMins = (t) => {
-                    const p = String(t).split(':');
-                    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
-                };
-                const startMins = toMins(override.start_time);
-                const endMins = toMins(override.end_time);
-                if (endMins <= startMins) return 8;
-
-                let workMins = endMins - startMins;
-                const lunchStart = 12 * 60;
-                const lunchEnd = 13 * 60;
-                const lunchOverlap = Math.max(0, Math.min(endMins, lunchEnd) - Math.max(startMins, lunchStart));
-                workMins -= lunchOverlap;
-                return Math.max(0, workMins / 60);
-            };
-
             const chargeable = [];
             let cur = new Date(start + 'T00:00:00');
             const eDate = new Date(end + 'T00:00:00');
@@ -3490,21 +3501,19 @@ for(let app of leaves || []) {
                 const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
                 const day = cur.getDay();
                 const override = getActiveOverride(dateStr);
-                const startTime = String(override?.start_time || '').substring(0, 5);
-                const endTime = String(override?.end_time || '').substring(0, 5);
-                const isCWW = override && String(override.schedule_type || '').toUpperCase() === 'FIXED'
-                    && startTime === '07:00' && endTime === '18:00';
-                const isWeekend = day === 0 || day === 6 || (isCWW && day === 5);
+                const isCWW = window.isCtoCompressedWorkWeek(override);
+                const isRestDay = day === 0 || day === 6 || (isCWW && day === 5);
                 const isHoliday = isHolidayForCurrentEmployee(dateStr);
 
-                if (!isWeekend && !isHoliday) {
-                    const scheduleType = String(override?.schedule_type || '').toUpperCase();
-                    const hours = scheduleType === 'FIXED' ? fixedScheduleHours(override) : 8;
+                if (!isRestDay && !isHoliday) {
+                    const hours = window.getCtoScheduleHours(override);
                     chargeable.push({ date: dateStr, hours: hours > 0 ? hours : 8 });
                 }
                 cur.setDate(cur.getDate() + 1);
             }
 
+            // CTO half-day is hourly, not "0.5 CTO day".
+            // Regular 8-hour schedule = 4 CTO hours; CWW 10-hour schedule = 5 CTO hours.
             const halfStart = document.getElementById('leave-half-day-start')?.checked;
             const halfEnd = document.getElementById('leave-half-day-end')?.checked;
             if (chargeable.length > 0 && halfStart) chargeable[0].hours /= 2;
@@ -3626,7 +3635,15 @@ for(let app of leaves || []) {
                     if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
                     return false;
                 });
-                const multiplier = (day === 0 || day === 6 || isCoveredHoliday) ? '1.5' : '1.0';
+                // schedule_override controls the current work schedule. Under the
+                // current compressed work week (FIXED 07:00-18:00), Friday is the rest day.
+                const requestSchedules = await window.fetchLeaveScheduleOverrides(activityDate, activityDate);
+                const matchingSchedules = (requestSchedules || []).filter(s => activityDate >= s.start_date && activityDate <= s.end_date);
+                const activeSchedule = matchingSchedules.find(s => String(s.emp_id) === String(currentUser.emp_id))
+                    || matchingSchedules.find(s => String(s.emp_id || '').toUpperCase() === 'ALL')
+                    || null;
+                const isCwwFriday = window.isCtoCompressedWorkWeek(activeSchedule) && day === 5;
+                const multiplier = (day === 0 || day === 6 || isCwwFriday || isCoveredHoliday) ? '1.5' : '1.0';
 
                 const { error } = await supabase.from('cto_records').insert({
                     emp_id: currentUser.emp_id,
@@ -3782,6 +3799,8 @@ window.calculateLeaveDays = async function() {
 
             const lTypeElement = document.querySelector('input[name="ltype"]:checked');
             const lType = lTypeElement ? lTypeElement.value : '';
+            const ctoHalfDayCheck = document.getElementById('vl-cto-credit');
+            const isHourlyCtoLeave = lType === 'Vacation Leave' && !!(ctoHalfDayCheck && ctoHalfDayCheck.checked);
             let halfDayValue = 0.5;
             let minAllowed = 1.5;
             if (isCWWActive && (lType === 'Vacation Leave' || lType === 'Sick Leave')) {
@@ -3794,7 +3813,9 @@ window.calculateLeaveDays = async function() {
             if (halfEndCheck && halfEndCheck.checked) deduction += halfDayValue;
 
             if (deduction > 0) {
-                if ((count - deduction) < minAllowed) {
+                // Ordinary leave keeps the existing minimum rule. CTO-funded Vacation Leave
+                // is hourly, so a single half-day is allowed and uses schedule_override hours.
+                if (!isHourlyCtoLeave && (count - deduction) < minAllowed) {
                     alert('No half day leave is allowed unless the total leave is at least 1.5 days.');
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
