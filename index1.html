@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.3-pbdd-20260928"; 
+        const APP_VERSION = "v1.6"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -1522,7 +1522,7 @@ window.loadCredits = async function() {
     let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
     let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
-    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0) * 8;
+    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0);
 
     // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
@@ -1541,6 +1541,8 @@ window.loadCredits = async function() {
             let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
+            let ledgerRemarks = String(l.remarks || '').toUpperCase();
+            let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
             
             let transDateStr = l.start_date || l.created_at || '';
             let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
@@ -1556,7 +1558,7 @@ window.loadCredits = async function() {
                 }
             }
             else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) {
-                currentVL = currentVL + cVal - dVal;
+                if (!isCtoBacked) currentVL = currentVL + cVal - dVal;
             }
             else if (lType.includes('SL') || lType.includes('SICK')) {
                 currentSL = currentSL + cVal - dVal;
@@ -1638,13 +1640,13 @@ window.loadCredits = async function() {
             const ttype = (c.transaction_type || '').toUpperCase();
             const rmk = (c.remarks || '').toUpperCase();
             const hrs = parseFloat(c.calculated_hours || "0") || 0;
-            if (ttype === 'POSTED' || ttype === 'EARNED' || rmk === 'PROCESSED') {
+            if (ttype === 'EARNED' && rmk === 'PROCESSED') {
                 ctoEarned += hrs;
             } else if (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
                 ctoUsed += hrs;
             }
 
-            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED' || rmk === 'CTO DEDUCTION' || rmk === 'PROCESSED') {
+            if ((ttype === 'EARNED' && rmk === 'PROCESSED') || ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
                 hasCto = true;
                 let color = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? 'var(--danger)' : 'var(--success)';
                 let sign = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? '-' : '+';
@@ -1881,13 +1883,7 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             
             if (!dest || !purp || !rep) return alert(`Fill all fields (except Fund Source) for ${it.date}.`);
             
-            const itineraryRow = { travel_date: it.date, destination: dest, purpose: purp };
-            if (unitEl) {
-                const selectedUnit = unitEl.value.trim().toUpperCase();
-                if (!['', 'SIB/SMEDSS', 'EDES', 'CRFPS'].includes(selectedUnit)) return alert(`Select one unit or Direct to Chief for ${it.date}.`);
-                itineraryRow.pbdd_unit = selectedUnit;
-            }
-            batchItin.push(itineraryRow);
+            batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
             reportTos.add(rep);
             if (fund) fundSources.add(fund); // Only add to array if not blank
             
@@ -1905,10 +1901,6 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             if(submitBtn) { submitBtn.disabled = true; submitBtn.innerText = "Processing Logic..."; }
 
             try {
-                if (String(currentUser.division || '').toUpperCase().includes('PBDD')) {
-                    const { error: schemaError } = await supabase.from('itinerary').select('pbdd_unit').limit(0);
-                    if (schemaError) throw new Error('PBDD daily-unit storage is unavailable. Apply the supplied SQL migration first. ' + schemaError.message);
-                }
                 // Fetch full details of all personnel draft to route correctly per their distinct unit and division
                 const empIds = personnelDraft.map(p => p.emp_id);
                 const { data: empDetails } = await supabase.from('employees').select('emp_id, division, unit, position').in('emp_id', empIds);
@@ -1921,8 +1913,25 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                 let toNoDiv = currentUser.division ? currentUser.division.split(',')[0].trim() : "GEN";
 
                 if (isPBDD) {
-                    // Only the units actually selected for the travel dates must sign.
-                    finalUnit = Array.from(pbddUnits).map(u => u.trim().toUpperCase()).join(', ');
+                    let units = new Set();
+                    let hasValidUnitSelected = false;
+
+                    // Step 1: Add whatever cross-unit they selected in the dropdowns
+                    pbddUnits.forEach(u => {
+                        if (u !== '') {
+                            units.add(u);
+                            hasValidUnitSelected = true;
+                        }
+                    });
+
+                    // Step 2: If they selected a cross-unit (like EDES), force their ORIGINAL unit (like SIB/SMEDSS) 
+                    // to join the string so BOTH Unit Heads must approve.
+                    if (hasValidUnitSelected && currentUser.unit && currentUser.unit !== 'NA') {
+                        units.add(currentUser.unit);
+                    }
+
+                    // This will output something like "SIB/SMEDSS, EDES" or "" (Blank) if NA was chosen.
+                    finalUnit = Array.from(units).join(', ');
                 }
 
                 if (String(currentUser.s_assignment).toUpperCase() === 'TRUE') {
@@ -2019,8 +2028,6 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
                         pDiv = finalDiv ? String(finalDiv) : "";
                     }
 
-                    // The shared daily itinerary applies to PBDD personnel in this request.
-                    if (isPBDD && /PBDD|ARBDSP/i.test(pDiv)) pUnit = finalUnit || "";
                     if (pUnit === "NA") pUnit = "";
 
                     let pRouteStatus = "PENDING_CHIEF";
@@ -2289,9 +2296,8 @@ window.modifyPendingTO = async function(toNo) {
             const cardId = `itin-card-${idx}`;
             
             // Fix: properly select the previously saved unit for PBDD modifications
-            const legacyUnits = (myTo.unit || '').split(',').map(u => u.trim()).filter(u => u && u !== 'NA');
-            const savedUnitVal = i.pbdd_unit != null ? i.pbdd_unit : (legacyUnits.length <= 1 ? (legacyUnits[0] || '') : '__SELECT_UNIT__');
-            const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${savedUnitVal === '__SELECT_UNIT__' ? '<option value="__SELECT_UNIT__" selected disabled>Select unit for this date (old record)</option>' : ''}${pbddOptions.replace(`value="${savedUnitVal}"`, `value="${savedUnitVal}" selected`)}</select>` : '';
+            const savedUnitVal = (myTo.unit && myTo.unit !== 'NA') ? myTo.unit : '';
+            const pbddSelect = isPBDD ? `<select id="unit-${idx}" style="padding:8px; font-size:13px; margin-bottom:8px;">${pbddOptions.replace(`value="${savedUnitVal}"`, `value="${savedUnitVal}" selected`)}</select>` : '';
                   container.innerHTML += `
                     <div class="card" id="${cardId}" style="padding:10px; margin-bottom: 10px; box-shadow: none; border: 1px solid #e5e7eb; border-left: 4px solid var(--dar-green);">
                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -2407,7 +2413,7 @@ window.generateOfficialPDF = async function(toNo) {
         }
 
         // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
-        const isARBDSP = /PBDD|ARBDSP/i.test(od.division || '') || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
+        const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
         if (isARBDSP && !dc_list.some(dc => dc.custom_role === "PARPO I")) {
         
             const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
@@ -2807,7 +2813,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         }
 
         // ADDED: For ARBDSP orders, include PARPO I under Recommending Approval
-        const isARBDSP = /PBDD|ARBDSP/i.test(od.division || '') || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
+        const isARBDSP = od.division?.toUpperCase().includes("ARBDSP") || od.unit?.toUpperCase().includes("ARBDSP") || od.fund_source?.toUpperCase().includes("ARBDSP");
         if (isARBDSP && !dc_list.some(dc => dc.custom_role === "PARPO I")) {
             const { data: p1Data } = await supabase.from('users').select('full_name, username').in('role', ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1']).limit(1);
             if (p1Data && p1Data.length > 0) {
@@ -3234,7 +3240,7 @@ window.cancelLeaveApp = async function(leaveId) {
             try {
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date, remarks, type, transaction_type')
+                    .select('start_date, remarks, type, transaction_type, debit')
                     .eq('id', leaveId)
                     .single();
 
@@ -3245,12 +3251,25 @@ window.cancelLeaveApp = async function(leaveId) {
                     return;
                 }
 
+                const isCtoLeave = String(leaveApp.remarks || '').toUpperCase().includes('CREDIT TO CTO') ||
+                                   String(leaveApp.remarks || '').toUpperCase().includes('CREDITED TO CTO');
+
+                if (leaveApp.transaction_type === 'APPROVED' && isCtoLeave) {
+                    const ctoPurpose = `CREDIT TO CTO | LEAVE_ID:${leaveId}`;
+                    const { error: ctoDeleteErr } = await supabase
+                        .from('cto_records')
+                        .delete()
+                        .eq('emp_id', currentUser.emp_id)
+                        .eq('purpose', ctoPurpose);
+                    if (ctoDeleteErr) throw ctoDeleteErr;
+                }
+
                 const updatedRemarks = leaveApp.remarks ? "CANCELLED - " + leaveApp.remarks : "CANCELLED";
                 const { error } = await supabase.from('leave_ledger')
                     .update({ transaction_type: 'CANCELLED', remarks: updatedRemarks })
                     .eq('id', leaveId);
                 if (error) throw error;
-                
+
                 alert("Leave application successfully cancelled.");
                 window.loadStatus();
             } catch(e) {
@@ -3339,6 +3358,150 @@ for(let app of leaves || []) {
             }
         };
 
+   // CTO LEAVE HOURS HELPER
+   // CTO is consumed in HOURS. Fixed schedule overrides use the actual net work hours
+   // (scheduled span less the 12:00-1:00 lunch overlap). Flexi/default setup remains 8 hours/day.
+   window.extractCtoHoursFromRemarks = function(remarks, fallbackDays = 0) {
+            const match = String(remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (match) return Math.abs(parseFloat(match[1]) || 0);
+            return (Math.abs(parseFloat(fallbackDays || 0)) || 0) * 8;
+        };
+
+   window.getCtoRequiredHours = async function(start, end) {
+            if (!start || !end) return { totalHours: 0, dates: [] };
+
+            const { data: schedOverrides, error: schedErr } = await supabase
+                .from('schedule_override')
+                .select('emp_id, start_date, end_date, start_time, end_time, schedule_type, created_at')
+                .in('emp_id', [currentUser.emp_id, 'ALL'])
+                .gte('end_date', start)
+                .lte('start_date', end)
+                .order('created_at', { ascending: false });
+
+            if (schedErr) throw schedErr;
+
+            const getActiveOverride = (dateStr) => {
+                const matching = (schedOverrides || []).filter(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                return matching.find(s => String(s.emp_id) === String(currentUser.emp_id))
+                    || matching.find(s => String(s.emp_id).toUpperCase() === 'ALL')
+                    || null;
+            };
+
+            const isHolidayForCurrentEmployee = (dateStr) => cachedHolidays.some(h => {
+                if (h.date !== dateStr) return false;
+                const coverage = String(h.coverage || 'NATIONWIDE').toUpperCase();
+                const station = String(currentUser.station || '').toUpperCase().trim();
+                if (coverage.includes('NATIONWIDE')) return true;
+                const hasNaga = coverage.includes('NAGA CITY');
+                const hasCamSur = coverage.includes('CAMARINES SUR');
+                if (hasNaga && hasCamSur) return true;
+                if (hasNaga && !hasCamSur) return station.includes('DARPO') || station === 'DARPO-CS1';
+                if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
+                return false;
+            });
+
+            const fixedScheduleHours = (override) => {
+                if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED' || !override.start_time || !override.end_time) return 8;
+                const toMins = (t) => {
+                    const p = String(t).split(':');
+                    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+                };
+                const startMins = toMins(override.start_time);
+                const endMins = toMins(override.end_time);
+                if (endMins <= startMins) return 8;
+
+                let workMins = endMins - startMins;
+                const lunchStart = 12 * 60;
+                const lunchEnd = 13 * 60;
+                const lunchOverlap = Math.max(0, Math.min(endMins, lunchEnd) - Math.max(startMins, lunchStart));
+                workMins -= lunchOverlap;
+                return Math.max(0, workMins / 60);
+            };
+
+            const chargeable = [];
+            let cur = new Date(start + 'T00:00:00');
+            const eDate = new Date(end + 'T00:00:00');
+
+            while (cur <= eDate) {
+                const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+                const day = cur.getDay();
+                const override = getActiveOverride(dateStr);
+                const isCWW = override && String(override.schedule_type || '').toUpperCase() === 'FIXED'
+                    && String(override.start_time) === '07:00:00' && String(override.end_time) === '18:00:00';
+                const isWeekend = day === 0 || day === 6 || (isCWW && day === 5);
+                const isHoliday = isHolidayForCurrentEmployee(dateStr);
+
+                if (!isWeekend && !isHoliday) {
+                    const scheduleType = String(override?.schedule_type || '').toUpperCase();
+                    const hours = scheduleType === 'FIXED' ? fixedScheduleHours(override) : 8;
+                    chargeable.push({ date: dateStr, hours: hours > 0 ? hours : 8 });
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            const halfStart = document.getElementById('leave-half-day-start')?.checked;
+            const halfEnd = document.getElementById('leave-half-day-end')?.checked;
+            if (chargeable.length > 0 && halfStart) chargeable[0].hours /= 2;
+            if (chargeable.length > 0 && halfEnd) chargeable[chargeable.length - 1].hours /= 2;
+
+            const totalHours = chargeable.reduce((sum, d) => sum + d.hours, 0);
+            return { totalHours, dates: chargeable };
+        };
+
+   // CTO BALANCE HELPER
+   // employees.cto_balance is the baseline balance in HOURS.
+   // cto_records.calculated_hours adds only EARNED + PROCESSED credits
+   // and deducts CTO usage records.
+   window.getAvailableCtoHours = async function(empId, excludeLeaveId = null) {
+            const { data: empRow, error: empErr } = await supabase
+                .from('employees')
+                .select('cto_balance')
+                .eq('emp_id', empId)
+                .maybeSingle();
+
+            if (empErr) throw empErr;
+
+            let availableHours = (parseFloat(empRow?.cto_balance || 0) || 0);
+
+            const { data: ctoRows, error: ctoErr } = await supabase
+                .from('cto_records')
+                .select('transaction_type, remarks, calculated_hours')
+                .eq('emp_id', empId);
+
+            if (ctoErr) throw ctoErr;
+
+            (ctoRows || []).forEach(r => {
+                const ttype = String(r.transaction_type || '').toUpperCase().trim();
+                const rmk = String(r.remarks || '').toUpperCase().trim();
+                const hrs = Math.abs(parseFloat(String(r.calculated_hours || '0').trim()) || 0);
+
+                if (ttype === 'EARNED' && rmk === 'PROCESSED') {
+                    availableHours += hrs;
+                } else if (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
+                    availableHours -= hrs;
+                }
+            });
+
+            // Reserve pending CREDIT TO CTO applications to avoid using the same credits twice.
+            const { data: pendingRows, error: pendingErr } = await supabase
+                .from('leave_ledger')
+                .select('id, debit, remarks')
+                .eq('emp_id', empId)
+                .eq('transaction_type', 'APPLICATION');
+
+            if (pendingErr) throw pendingErr;
+
+            (pendingRows || []).forEach(l => {
+                if (excludeLeaveId !== null && String(l.id) === String(excludeLeaveId)) return;
+                const lr = String(l.remarks || '').toUpperCase();
+                if (lr.includes('CREDIT TO CTO') || lr.includes('CREDITED TO CTO')) {
+                    availableHours -= window.extractCtoHoursFromRemarks(l.remarks, l.debit);
+                }
+            });
+
+            return Math.max(0, availableHours);
+        };
+
    window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
@@ -3347,13 +3510,10 @@ for(let app of leaves || []) {
 if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 let ctoOption = "";
                 if (type === "Vacation Leave") {
-                    const ctoBal = currentUser.cto_balance ? parseFloat(currentUser.cto_balance) : 0;
-                    if (ctoBal > 0) {
-                        ctoOption = `
+                    ctoOption = `
                     <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
                         <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
                     </label>`;
-                    }
                 }
 
                 container.innerHTML = `
@@ -3537,32 +3697,33 @@ const halfStartCheck = document.getElementById('leave-half-day-start');
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
-                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
+                try {
+                    const availableCtoHours = await window.getAvailableCtoHours(currentUser.emp_id);
+                    const ctoSchedule = await window.getCtoRequiredHours(start, end);
+                    const requiredCtoHours = ctoSchedule.totalHours;
 
-                let earned = 0, used = 0;
-                (ctoData || []).forEach(r => {
-                    const rmk = String(r.remarks || "").toUpperCase().trim();
-                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                });
-                
-                let ledgerUsed = 0;
-                (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
+                    if (requiredCtoHours <= 0) {
+                        if(submitBtn) submitBtn.disabled = true;
+                        return alert('No chargeable CTO work hours were found for the selected dates.');
                     }
-                });
-                
 
-                let availableCtoDays = (earned - used - ledgerUsed) / 8;
-                if (availableCtoDays < count) {
-                    alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
+                    if (availableCtoHours + 0.0001 < requiredCtoHours) {
+                        alert(`Insufficient CTO Credits. Available: ${availableCtoHours.toFixed(2)} hour(s); required for the selected work schedule: ${requiredCtoHours.toFixed(2)} hour(s).`);
+                        if(submitBtn) submitBtn.disabled = true;
+                        countEl.innerText = count;
+                    } else {
+                        if(submitBtn) submitBtn.disabled = false;
+                        countEl.innerText = `${count} (CTO: ${requiredCtoHours.toFixed(2)} HRS)`;
+                        if (breakdownEl) {
+                            const existing = breakdownEl.innerHTML;
+                            breakdownEl.innerHTML = `${existing}<br><b>CTO charge:</b> ${requiredCtoHours.toFixed(2)} hour(s), based on the applicable work schedule.`;
+                        }
+                    }
+                } catch (e) {
+                    console.error("CTO balance/schedule check failed:", e);
                     if(submitBtn) submitBtn.disabled = true;
+                    alert("Unable to verify CTO balance or work schedule. Please try again.");
                     countEl.innerText = count;
-                } else {
-                    if(submitBtn) submitBtn.disabled = false;
-                    countEl.innerText = `${count} (CTO CREDIT)`;
                 }
             } else {
                 if(submitBtn) submitBtn.disabled = false;
@@ -3578,6 +3739,8 @@ window.submitLeave = async function() {
             const end = document.getElementById('leave-to').value;
             const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
+            const ctoCheck = document.getElementById('vl-cto-credit');
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
             if (type === "Vacation Leave") {
@@ -3596,7 +3759,7 @@ window.submitLeave = async function() {
             let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
 
             const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('type, credit, debit, transaction_type')
+                .select('type, credit, debit, transaction_type, remarks')
                 .eq('emp_id', currentUser.emp_id)
                 .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
 
@@ -3605,15 +3768,19 @@ window.submitLeave = async function() {
                     let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
                     let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
                     let lType = (l.type || '').toUpperCase();
+                    let ledgerRemarks = String(l.remarks || '').toUpperCase();
+                    let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
                     if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
                     else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
-                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) {
+                        if (!isCtoBacked) currentVL = currentVL + cVal - dVal;
+                    }
                     else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
                 });
             }
 
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
-                if (days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
+                if (!(type === "Vacation Leave" && isCtoCredited) && days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
             } else if (type === "Special Privilege Leave") {
                 if (days > currentSPL) return alert(`Insufficient SPL balance. You only have ${currentSPL.toFixed(3)} days available.`);
             } else if (type === "Wellness Leave") {
@@ -3630,37 +3797,27 @@ window.submitLeave = async function() {
                 }
             }
 
-            // CTO CHECK LOGIC
-            const ctoCheck = document.getElementById('vl-cto-credit');
-            const isCtoCredited = ctoCheck && ctoCheck.checked;
-
+            // CTO CHECK LOGIC - deduct the actual HOURS required by the applicable schedule_override setup.
+            let requiredCtoHours = 0;
             if (isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
-                let earned = 0, used = 0;
-                (ctoData || []).forEach(r => {
-                    const rmk = String(r.remarks || "").toUpperCase().trim();
-                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                });
-                
-                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
-                let ledgerUsed = 0;
-                (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
+                try {
+                    const availableCtoHours = await window.getAvailableCtoHours(currentUser.emp_id);
+                    const ctoSchedule = await window.getCtoRequiredHours(start, end);
+                    requiredCtoHours = ctoSchedule.totalHours;
+                    if (requiredCtoHours <= 0) return alert('No chargeable CTO work hours were found for the selected dates.');
+                    if (availableCtoHours + 0.0001 < requiredCtoHours) {
+                        return alert(`Insufficient CTO Credits. Available: ${availableCtoHours.toFixed(2)} hour(s); required: ${requiredCtoHours.toFixed(2)} hour(s).`);
                     }
-                });
-                
-                let availableCtoDays = (earned - used - ledgerUsed) / 8;
-                if (availableCtoDays < days) {
-                    return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                } catch (e) {
+                    console.error("CTO balance/schedule check failed:", e);
+                    return alert("Unable to verify CTO balance or work schedule. Please try again.");
                 }
             }
 
             const rDetail = document.querySelector('input[name="ldetail"]:checked');
             const specify = document.getElementById('leave-specify');
             let detailStr = rDetail ? rDetail.value : "See Remarks";
-            if (isCtoCredited) detailStr += " (Credited to CTO)";
+            if (isCtoCredited) detailStr += ` | CREDIT TO CTO | CTO HOURS: ${requiredCtoHours.toFixed(2)}`;
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
             // LEAVE APPROVAL ROUTING (Initial Assignment)
@@ -3802,15 +3959,17 @@ window.submitLeave = async function() {
 
             let app_date_str = app.created_at ? app.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
 
-            const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
+            const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
             let vl_deduct = 0.0, sl_deduct = 0.0;
             (res_ledger || []).forEach(ledg => {
                 if (ledg.id === app.id) return;
                 const ttype = String(ledg.transaction_type || "").toUpperCase();
                 if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
+                    const ledgerRemarks = String(ledg.remarks || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
-                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
+                    const isCtoBacked = ledgerRemarks.includes("CREDIT TO CTO") || ledgerRemarks.includes("CREDITED TO CTO");
+                    if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x)) && !isCtoBacked) {
                         vl_deduct += debit_val;
                     } else if (l_type.includes("SICK")) {
                         sl_deduct += debit_val;
@@ -3825,7 +3984,9 @@ window.submitLeave = async function() {
             const app_type = String(app.type || "").toUpperCase();
             const app_days = parseFloat(app.debit || 0);
 
-            if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) vl_less = app_days;
+            const appRemarksUpper = String(app.remarks || "").toUpperCase();
+            const isCtoBackedApp = appRemarksUpper.includes("CREDIT TO CTO") || appRemarksUpper.includes("CREDITED TO CTO");
+            if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x)) && !isCtoBackedApp) vl_less = app_days;
             else if (app_type.includes("SICK")) sl_less = app_days;
 
             let vl_balance = vl_total_earned - vl_less;
@@ -5148,14 +5309,23 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 const toNos = Array.from(selectedPendingOrders).filter(id => id.startsWith('TO:')).map(id => id.split(':')[1]);
                 const leaveIds = Array.from(selectedPendingOrders).filter(id => id.startsWith('LEAVE:')).map(id => id.split(':')[1]);
 
-                // Process each TO independently, and each approval by personnel record ID.
-                for (const to_no of toNos) {
-                    if (action === 'DISAPPROVED') {
-                        const { error } = await supabaseClient.from('travel_orders').update({ status: 'DISAPPROVED', received: denyReason }).eq('to_no', to_no);
-                        if (error) throw error;
-                        await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
-                    } else {
-                        await approveTORecords(to_no);
+                // Batch TOs
+                if (toNos.length > 0) {
+                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed, status').in('to_no', toNos);
+                    if (!error) {
+                        const updatePromises = toNos.map(async (to_no) => {
+                            if (action === 'DISAPPROVED') {
+                                await supabaseClient.from('travel_orders').update({ status: "DISAPPROVED", received: denyReason }).eq('to_no', to_no);
+                                await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
+                            } else {
+                                const toRec = (toDataList || []).find(t => t.to_no === to_no);
+                                const p = getAppPayload(currentUser, toRec);
+                                if (Object.keys(p).length === 0) return; 
+                                await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                                await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                            }
+                        });
+                        await Promise.all(updatePromises);
                     }
                 }
          selectedPendingOrders.clear();
@@ -5289,8 +5459,6 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${selectedDates.join(', ')}) by ${currentUser.fullName}`);
                     }
                 } else {
-                    const approvalGroup = await readTOApprovalGroup(to_no);
-                    if (!approvalGroup.some(row => canApproveTORecord(currentUser, row, approvalGroup))) throw new Error('This request is no longer awaiting your approval. Refresh the inbox.');
                     if (selectedDates.length < totalDates) {
                         const unselectedDates = Array.from(document.querySelectorAll('.pending-date-cb')).filter(cb => !cb.checked).map(cb => cb.value);
                         for (let d of unselectedDates) {
@@ -5299,8 +5467,19 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${unselectedDates.join(', ')}) by ${currentUser.fullName}. Reason: ${partialDenyReason}`);
                     }
                     
-                    await approveTORecords(to_no, approveReason);
+                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no).limit(1);
+                    if (error) throw error;
+                    const p = getAppPayload(currentUser, toData[0]);
+                    
+                    if (approveReason) {
+                        p.remarks = approveReason;
+                    }
 
+                    if (Object.keys(p).length === 0) throw new Error("Approval failed: Role not configured.");
+
+                    await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
+                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                    
                     if (approveReason) {
                         await supabaseClient.from('notifications').insert({
                             recipient_role: 'EMPLOYEE',
@@ -5317,74 +5496,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         };
 
 
-        const approvalList = value => (Array.isArray(value) ? value : String(value || '').split(','))
-            .map(x => String(x).trim().toUpperCase()).filter(Boolean);
-        const isPBDDRecord = record => /PBDD|ARBDSP/i.test(record.division || '');
-        function canApproveTORecord(u, record, group = []) {
-            if (!record) return false;
-            const roles = approvalList(u.roles);
-            const status = String(record.status || '').trim().toUpperCase();
-            const divisionMatch = approvalList(record.division).some(d => approvalList(u.divisions).includes(d));
-            const units = approvalList(record.unit).filter(x => x !== 'NA');
-            const signatures = String(record.unithead_signed || '').toUpperCase();
-            if (status === 'PENDING_UNIT_HEAD') return roles.some(r => ['UNIT_HEAD', 'UNIT HEAD', 'MARPO'].includes(r)) && divisionMatch &&
-                units.some(unit => approvalList(u.units).includes(unit) && !signatures.includes(`(${unit})`));
-            if (status === 'PENDING_CHIEF') {
-                if (isPBDDRecord(record) && (units.some(unit => !signatures.includes(`(${unit})`)) ||
-                    group.some(row => isPBDDRecord(row) && ['PENDING_UNIT_HEAD', 'PENDING_VEHICLE_APPROVER'].includes(String(row.status || '').trim().toUpperCase())))) return false;
-                return roles.includes('CHIEF') && divisionMatch;
-            }
-            if (status === 'PENDING_VEHICLE_APPROVER') return roles.some(r => ['VEHICLE_APPROVER', 'VEHICLE APPROVER', 'ADMIN'].includes(r));
-            if (status === 'PENDING_PARPO_I') return roles.some(r => ['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1', 'ADMIN'].includes(r));
-            if (status === 'PENDING_PARPO') return roles.some(r => ['PARPO', 'PARPO_II', 'PARPO II', 'PARPO2', 'ADMIN'].includes(r));
-            return false;
-        }
-
-        async function readTOApprovalGroup(to_no) {
-            const { data, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no);
-            if (error) throw error;
-            return data || [];
-        }
-
-        async function approveTORecords(to_no, reason = '') {
-            const initialGroup = await readTOApprovalGroup(to_no);
-            const targets = initialGroup.filter(row => canApproveTORecord(currentUser, row, initialGroup));
-            if (!targets.length) throw new Error('No pending approval matches your role and assigned unit. Refresh the inbox; another approver may have already processed this request.');
-            for (const target of targets) {
-                let completed = false;
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    const group = await readTOApprovalGroup(to_no);
-                    const row = group.find(item => item.id === target.id);
-                    if (!canApproveTORecord(currentUser, row, group)) { completed = true; break; }
-                    const payload = getAppPayload(currentUser, row);
-                    if (!Object.keys(payload).length) throw new Error('This request is no longer awaiting your approval.');
-                    if (reason) payload.remarks = [row.remarks, reason].filter(Boolean).join(' | ');
-                    let query = supabaseClient.from('travel_orders').update(payload).eq('id', row.id).eq('status', row.status);
-                    // Compare the signature snapshot so concurrent unit heads cannot overwrite each other.
-                    query = row.unithead_signed == null ? query.is('unithead_signed', null) : query.eq('unithead_signed', row.unithead_signed);
-                    const { data, error } = await query.select('id');
-                    if (error) throw error;
-                    if (!data || !data.length) continue;
-                    await window.logActivity(to_no, 'STATUS_UPDATED', `Record ${row.id}: ${payload.status} by ${currentUser.fullName}`);
-                    completed = true;
-                    break;
-                }
-                if (!completed) throw new Error('Approval could not be confirmed. Refresh and retry; check your database permissions if this continues.');
-            }
-        }
-
         function getAppPayload(u, toRecord = null) {
             const nowISO = new Date().toISOString(); 
-            const roles = approvalList(u.roles);
-            if (!canApproveTORecord(u, toRecord)) return {};
-            const currentStatus = (toRecord.status || '').trim().toUpperCase();
+            const roles = u.roles || [];
+            const currentStatus = toRecord ? toRecord.status : "";
             
             if (currentStatus === "PENDING_VEHICLE_APPROVER" && roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r))) {
                 let nextStatus = "PENDING_CHIEF";
                 if (toRecord && toRecord.unit) {
                     const unt = toRecord.unit.trim().toUpperCase();
                     if (unt === "PARPO") nextStatus = "PENDING_PARPO";
-                    else if (unt !== "" && unt !== "NA") nextStatus = "PENDING_UNIT_HEAD";
+                    else if (unt !== "") nextStatus = "PENDING_UNIT_HEAD";
                 }
                 return { status: nextStatus };
             }
@@ -5393,7 +5515,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 if (!toRecord) return {};
                 
                 const requiredUnits = toRecord.unit ? toRecord.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
-                const matchingUnitsToSign = requiredUnits.filter(reqU => approvalList(u.units).includes(reqU));
+                const matchingUnitsToSign = requiredUnits.filter(reqU => u.units.includes(reqU));
                 
                 let currentSigs = toRecord.unithead_signed ? toRecord.unithead_signed : "";
                 
@@ -5418,7 +5540,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
         // MODIFIED: Intercept Division Chief approval to route ARBDSP orders to PARPO I
             if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
                 const isARBDSP = toRecord && (
-                    /PBDD|ARBDSP/i.test(toRecord.division || '') ||
+                    String(toRecord.division || "").toUpperCase().includes("ARBDSP") ||
                     String(toRecord.unit || "").toUpperCase().includes("ARBDSP") ||
                     String(toRecord.fund_source || "").toUpperCase().includes("ARBDSP")
                 );
@@ -5471,8 +5593,29 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             for (const [to_no, list] of Object.entries(grp)) {
                 let show = false;
                 
-                show = list.some(o => canApproveTORecord(currentUser, o, list));
+                for (let o of list) {
+                    const s = (o.status || "").trim().toUpperCase();
+                    const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
+                    const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
+                    const roles = currentUser.roles || [];
 
+                    const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
+                    const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
+                    const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
+                    const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
+
+                    if (roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r)) && s === "PENDING_VEHICLE_APPROVER") show = true;
+                    else if (roles.some(r => ["PARPO", "PARPO_II", "PARPO II", "PARPO2"].includes(r)) && s === "PENDING_PARPO") show = true;
+                    // ADDED: PARPO I queue visibility
+                    else if (roles.some(r => ["PARPO_I", "PARPO I", "PARPO1", "PARPO_1"].includes(r)) && s === "PENDING_PARPO_I") show = true;
+                    else if (roles.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
+                    else if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD" && dMatch) {
+                        if (unitsCanSign.length > 0 && hasUnsignedUnit) {
+                            show = true;
+                        }
+                    }             
+                }
+                
                 if (show) {
                     let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                     
@@ -6495,6 +6638,128 @@ function getLeaveAppPayload(u, leaveRec) {
 
         
 
+    async function postCtoDeductionIfFinalApproval(leaveRec, payload) {
+        if (!leaveRec || !payload || payload.transaction_type !== 'APPROVED') return;
+
+        const remarksUpper = String(leaveRec.remarks || '').toUpperCase();
+        const isCtoLeave = remarksUpper.includes('CREDIT TO CTO') || remarksUpper.includes('CREDITED TO CTO');
+        if (!isCtoLeave) return;
+
+        const ctoHoursMatch = String(leaveRec.remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+        const hoursToUse = ctoHoursMatch
+            ? (Math.abs(parseFloat(ctoHoursMatch[1])) || 0)
+            : ((Math.abs(parseFloat(leaveRec.debit || 0)) || 0) * 8); // backward compatibility for older applications
+        if (hoursToUse <= 0) throw new Error("Invalid CTO hours for this leave.");
+
+        const purposeKey = `CREDIT TO CTO | LEAVE_ID:${leaveRec.id}`;
+
+        const { data: existing, error: existingErr } = await supabaseClient
+            .from('cto_records')
+            .select('id')
+            .eq('emp_id', leaveRec.emp_id)
+            .eq('purpose', purposeKey)
+            .limit(1);
+
+        if (existingErr) throw existingErr;
+        if (existing && existing.length > 0) return;
+
+        const { data: empRow, error: empErr } = await supabaseClient
+            .from('employees')
+            .select('cto_balance')
+            .eq('emp_id', leaveRec.emp_id)
+            .maybeSingle();
+
+        if (empErr) throw empErr;
+
+        let availableHours = (parseFloat(empRow?.cto_balance || 0) || 0);
+
+        const { data: ctoRows, error: ctoErr } = await supabaseClient
+            .from('cto_records')
+            .select('transaction_type, remarks, calculated_hours')
+            .eq('emp_id', leaveRec.emp_id);
+
+        if (ctoErr) throw ctoErr;
+
+        (ctoRows || []).forEach(r => {
+            const ttype = String(r.transaction_type || '').toUpperCase().trim();
+            const rmk = String(r.remarks || '').toUpperCase().trim();
+            const hrs = Math.abs(parseFloat(String(r.calculated_hours || '0').trim()) || 0);
+
+            if (ttype === 'EARNED' && rmk === 'PROCESSED') {
+                availableHours += hrs;
+            } else if (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
+                availableHours -= hrs;
+            }
+        });
+
+        const { data: pendingRows, error: pendingErr } = await supabaseClient
+            .from('leave_ledger')
+            .select('id, debit, remarks')
+            .eq('emp_id', leaveRec.emp_id)
+            .eq('transaction_type', 'APPLICATION');
+
+        if (pendingErr) throw pendingErr;
+
+        (pendingRows || []).forEach(l => {
+            if (String(l.id) === String(leaveRec.id)) return;
+            const lr = String(l.remarks || '').toUpperCase();
+            if (lr.includes('CREDIT TO CTO') || lr.includes('CREDITED TO CTO')) {
+                const pendingHoursMatch = String(l.remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+                const pendingHours = pendingHoursMatch
+                    ? (Math.abs(parseFloat(pendingHoursMatch[1])) || 0)
+                    : ((Math.abs(parseFloat(l.debit || 0)) || 0) * 8);
+                availableHours -= pendingHours;
+            }
+        });
+
+        if (availableHours + 0.0001 < hoursToUse) {
+            throw new Error(`Insufficient CTO balance. Available: ${availableHours.toFixed(2)} hour(s); required: ${hoursToUse.toFixed(2)} hour(s).`);
+        }
+
+        const todayPST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+        const { error: insertErr } = await supabaseClient
+            .from('cto_records')
+            .insert({
+                emp_id: leaveRec.emp_id,
+                date: todayPST,
+                transaction_type: 'USED',
+                base_type: 'CREDIT TO CTO',
+                base_hours: hoursToUse.toFixed(2),
+                multiplier: '1.0',
+                calculated_hours: hoursToUse.toFixed(2),
+                remarks: 'CTO DEDUCTION',
+                purpose: purposeKey,
+                leave_date: leaveRec.start_date
+            });
+
+        if (insertErr) throw insertErr;
+    }
+
+    async function applyLeaveApprovalUpdate(leaveData, payload) {
+        const original = {
+            transaction_type: leaveData.transaction_type,
+            remarks: leaveData.remarks
+        };
+
+        const { error: updateErr } = await supabaseClient
+            .from('leave_ledger')
+            .update(payload)
+            .eq('id', leaveData.id);
+
+        if (updateErr) throw updateErr;
+
+        try {
+            await postCtoDeductionIfFinalApproval(leaveData, payload);
+        } catch (e) {
+            await supabaseClient
+                .from('leave_ledger')
+                .update(original)
+                .eq('id', leaveData.id);
+            throw e;
+        }
+    }
+
     function getStatusBadge(type, subStatus) {
         if (type === 'APPLICATION') return `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>${subStatus || 'PENDING'}</span>`;
         if (type === 'APPROVED') return `<span class="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">APPROVED</span>`;
@@ -6889,17 +7154,55 @@ window.loadAdminCalendar = async function() {
         try {
             const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-            // 1. Insert CREDIT to refund the specifically retracted days back to the employee's balance ledger
-            await supabaseClient.from('leave_ledger').insert({
-                transaction_id: crypto.randomUUID(), 
-                emp_id: leaveData.emp_id,
-                start_date: todayStr, 
-                end_date: todayStr, 
-                type: leaveData.type, 
-                credit: daysToRetract,
-                transaction_type: "CREDIT", 
-                remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
-            });
+            // 1. Refund the same credit source that funded the leave.
+            const leaveRemarksUpper = String(leaveData.remarks || '').toUpperCase();
+            const isCtoLeave = leaveRemarksUpper.includes('CREDIT TO CTO') || leaveRemarksUpper.includes('CREDITED TO CTO');
+
+            if (isCtoLeave) {
+                const purposeKey = `CREDIT TO CTO | LEAVE_ID:${leaveData.id}`;
+                const { data: ctoDeduction, error: ctoFetchErr } = await supabaseClient
+                    .from('cto_records')
+                    .select('id, calculated_hours, base_hours')
+                    .eq('emp_id', leaveData.emp_id)
+                    .eq('purpose', purposeKey)
+                    .maybeSingle();
+
+                if (ctoFetchErr) throw ctoFetchErr;
+
+                if (ctoDeduction) {
+                    const refundHours = daysToRetract * 8;
+                    const currentHours = Math.abs(parseFloat(ctoDeduction.calculated_hours || 0)) || 0;
+                    const remainingHours = Math.max(0, currentHours - refundHours);
+
+                    if (remainingHours <= 0.0001) {
+                        const { error: delErr } = await supabaseClient
+                            .from('cto_records')
+                            .delete()
+                            .eq('id', ctoDeduction.id);
+                        if (delErr) throw delErr;
+                    } else {
+                        const { error: updErr } = await supabaseClient
+                            .from('cto_records')
+                            .update({
+                                calculated_hours: remainingHours.toFixed(2),
+                                base_hours: remainingHours.toFixed(2)
+                            })
+                            .eq('id', ctoDeduction.id);
+                        if (updErr) throw updErr;
+                    }
+                }
+            } else {
+                await supabaseClient.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), 
+                    emp_id: leaveData.emp_id,
+                    start_date: todayStr, 
+                    end_date: todayStr, 
+                    type: leaveData.type, 
+                    credit: daysToRetract,
+                    transaction_type: "CREDIT", 
+                    remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
+                });
+            }
 
             // 2. Update the existing transaction record specifically mapped to RETRACTED or reduced partial days
             if (daysToRetract >= leaveData.debit) {
@@ -6974,7 +7277,7 @@ window.loadAdminCalendar = async function() {
             if (leaveData) {
                 const p = getLeaveAppPayload(currentUser, leaveData);
                 if (p && Object.keys(p).length > 0) {
-                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                    await applyLeaveApprovalUpdate(leaveData, p);
                 }
             }
         });
@@ -6996,7 +7299,11 @@ window.loadAdminCalendar = async function() {
         if (!p || Object.keys(p).length === 0) return alert("Approval failed: Your role is not configured to approve this record.");
         
         document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Advancing Leave Approval...</p></div>`;
-        await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+        try {
+            await applyLeaveApprovalUpdate(leaveData, p);
+        } catch (e) {
+            alert("Approval Error: " + e.message);
+        }
         
         loadLeavesTab();
     };
