@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.3"; 
+        const APP_VERSION = "v1.10"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -285,6 +285,25 @@ async function hardReloadSystem() {
                 <p style="font-size:12px; color:var(--text-muted);">You have unapproved Travel Orders with remarks:</p>
                 <div id="remarks-content" style="max-height: 300px; overflow-y: auto; font-size: 12px;"></div>
                 <button class="btn btn-primary" style="margin-top: 15px;" onclick="document.getElementById('remarksModal').style.display='none'">OK</button>
+            </div>
+        </div>
+
+        <div id="ctoCreditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2100; justify-content:center; align-items:center; padding:20px;">
+            <div class="card" style="width: 92%; max-width: 430px; background:white; padding:20px; border-radius:12px; position:relative; box-shadow:0 10px 25px rgba(0,0,0,0.2); margin:auto;">
+                <button type="button" onclick="window.closeCtoCreditRequest()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
+                <h3 style="margin-top:0; color:var(--dar-green);">Submit CTO Credit to HR</h3>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-bottom:10px;">This only sends your CTO credit request to the HR Office for processing. <strong>The hours are NOT yet credited to your CTO balance after submission.</strong></p>
+                <div style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px; border-radius:8px; font-size:11px; line-height:1.45; margin-bottom:15px;">
+                    <strong>HARD COPY REQUIRED:</strong> Submit the supporting documents for this CTO credit request to the HR Office. HR will validate the documents and process the CTO before the hours are added to your balance.
+                </div>
+                <label>PSO / RSO Number</label>
+                <input type="text" id="cto-credit-pso" placeholder="Enter PSO / RSO Number">
+                <label>Date of Activity</label>
+                <input type="date" id="cto-credit-date" onkeydown="return false">
+                <label>CTO Description / Activity</label>
+                <textarea id="cto-credit-desc" rows="3" placeholder="Describe the activity that earned CTO credits"></textarea>
+                <button type="button" class="btn btn-primary" id="btn-submit-cto-credit" onclick="window.submitCtoCreditRequest()">SUBMIT CTO CREDIT TO HR</button>
+                <button type="button" class="btn" style="background:#6b7280;" onclick="window.closeCtoCreditRequest()">CANCEL</button>
             </div>
         </div>
 
@@ -1522,7 +1541,7 @@ window.loadCredits = async function() {
     let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
     let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
-    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0) * 8;
+    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0);
 
     // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
     const { data: ledgers } = await supabase.from('leave_ledger')
@@ -1541,6 +1560,8 @@ window.loadCredits = async function() {
             let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
             let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
             let lType = (l.type || '').toUpperCase();
+            let ledgerRemarks = String(l.remarks || '').toUpperCase();
+            let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
             
             let transDateStr = l.start_date || l.created_at || '';
             let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
@@ -1556,7 +1577,12 @@ window.loadCredits = async function() {
                 }
             }
             else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) {
-                currentVL = currentVL + cVal - dVal;
+                if (isCtoBacked) {
+                    const vlCharge = window.extractVlChargeFromRemarks(l.remarks, 0);
+                    currentVL = currentVL + cVal - vlCharge;
+                } else {
+                    currentVL = currentVL + cVal - dVal;
+                }
             }
             else if (lType.includes('SL') || lType.includes('SICK')) {
                 currentSL = currentSL + cVal - dVal;
@@ -1589,9 +1615,17 @@ window.loadCredits = async function() {
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
                                       (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
+                let displayDebit = dVal;
+                const historyRemarksUpper = String(l.remarks || '').toUpperCase();
+                if (historyRemarksUpper.includes('CREDIT TO CTO') || historyRemarksUpper.includes('CREDITED TO CTO')) {
+                    const partialVl = window.extractVlChargeFromRemarks(l.remarks, 0);
+                    if (partialVl > 0) displayDebit = partialVl;
+                    else displayDebit = 0;
+                }
+
                 let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
-                let debStr = (dVal > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${dVal.toFixed(3)}</span>` : 
-                             (l.transaction_type === 'CANCELLED' && dVal > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${dVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
+                let debStr = (displayDebit > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${displayDebit.toFixed(3)}</span>` : 
+                             (l.transaction_type === 'CANCELLED' && displayDebit > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${displayDebit.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
                 deductionsHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 8px 5px; vertical-align: top; white-space: nowrap;">${l.start_date || l.created_at.split('T')[0]}</td>
@@ -1638,34 +1672,52 @@ window.loadCredits = async function() {
             const ttype = (c.transaction_type || '').toUpperCase();
             const rmk = (c.remarks || '').toUpperCase();
             const hrs = parseFloat(c.calculated_hours || "0") || 0;
-            if (ttype === 'POSTED' || ttype === 'EARNED' || rmk === 'PROCESSED') {
+            const isCreditedEarned = window.isCtoCreditedEarnedRecord(c);
+            const isUsed = window.isCtoUsedRecord(c);
+
+            if (isCreditedEarned) {
                 ctoEarned += hrs;
-            } else if (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') {
+            } else if (isUsed) {
                 ctoUsed += hrs;
             }
 
-            if (ttype === 'POSTED' || ttype === 'EARNED' || ttype === 'USED' || rmk === 'CTO DEDUCTION' || rmk === 'PROCESSED') {
+            const isPendingHr = window.isCtoPendingCreditRecord(c);
+            if (isCreditedEarned || isPendingHr || isUsed) {
                 hasCto = true;
-                let color = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? 'var(--danger)' : 'var(--success)';
-                let sign = (ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION') ? '-' : '+';
+                let color = isPendingHr ? '#854d0e' : (isUsed ? 'var(--danger)' : 'var(--success)');
+                let hourDisplay = isPendingHr ? 'PENDING' : `${isUsed ? '-' : '+'}${hrs.toFixed(3)}`;
+
+                let rowType = ttype || rmk;
+                let rowRemarks = c.remarks || c.purpose || '';
+                if (isPendingHr) {
+                    rowType = 'CTO CREDIT REQUEST';
+                    rowRemarks = 'FOR HR PROCESSING — NOT YET CREDITED. Submit hard copy supporting documents to HR.';
+                } else if (isCreditedEarned) {
+                    rowType = 'CTO CREDIT';
+                    rowRemarks = rmk === 'POSTED'
+                        ? 'CREDITED / AVAILABLE — legacy posted CTO record'
+                        : 'PROCESSED BY HR — CREDITED AND AVAILABLE';
+                }
+
                 ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 5px;">${c.date}</td>
-                    <td style="padding: 5px;">${ttype || rmk}</td>
-                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${sign}${hrs.toFixed(3)}</td>
-                    <td style="padding: 5px; color: gray;">${c.remarks || c.purpose || ''}</td>
+                    <td style="padding: 5px;">${rowType}</td>
+                    <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${hourDisplay}</td>
+                    <td style="padding: 5px; color: gray;">${rowRemarks}</td>
                 </tr>`;
             }
         });
     }
     ctoHtml += `</table>`;
 
-    if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No posted CTO records found.</span>';
+    if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No CTO credit records found.</span>';
     
     const totalCtoHours = baseCtoHours + ctoEarned - ctoUsed;
 
     ctoContainer.innerHTML = `
         <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
             <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${totalCtoHours.toFixed(2)} hrs</span>
+            <div style="font-size:9px; color:#78716c; margin-top:3px;">Opening HR balance ${baseCtoHours.toFixed(2)} + HR processed/credited CTO ${ctoEarned.toFixed(2)} - used CTO ${ctoUsed.toFixed(2)}</div>
         </div>
         ${ctoHtml}
     `;
@@ -3238,7 +3290,7 @@ window.cancelLeaveApp = async function(leaveId) {
             try {
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date, remarks, type, transaction_type')
+                    .select('start_date, remarks, type, transaction_type, debit')
                     .eq('id', leaveId)
                     .single();
 
@@ -3249,12 +3301,25 @@ window.cancelLeaveApp = async function(leaveId) {
                     return;
                 }
 
+                const isCtoLeave = String(leaveApp.remarks || '').toUpperCase().includes('CREDIT TO CTO') ||
+                                   String(leaveApp.remarks || '').toUpperCase().includes('CREDITED TO CTO');
+
+                if (leaveApp.transaction_type === 'APPROVED' && isCtoLeave) {
+                    const ctoPurpose = `CREDIT TO CTO | LEAVE_ID:${leaveId}`;
+                    const { error: ctoDeleteErr } = await supabase
+                        .from('cto_records')
+                        .delete()
+                        .eq('emp_id', currentUser.emp_id)
+                        .eq('purpose', ctoPurpose);
+                    if (ctoDeleteErr) throw ctoDeleteErr;
+                }
+
                 const updatedRemarks = leaveApp.remarks ? "CANCELLED - " + leaveApp.remarks : "CANCELLED";
                 const { error } = await supabase.from('leave_ledger')
                     .update({ transaction_type: 'CANCELLED', remarks: updatedRemarks })
                     .eq('id', leaveId);
                 if (error) throw error;
-                
+
                 alert("Leave application successfully cancelled.");
                 window.loadStatus();
             } catch(e) {
@@ -3343,6 +3408,304 @@ for(let app of leaves || []) {
             }
         };
 
+   // CTO CREDIT STATUS HELPERS
+   // HR processing is the final crediting action:
+   // EARNED + PROCESSED = credited and immediately available to the employee.
+   // Legacy EARNED + POSTED rows are also honored so older credited CTO is not lost.
+   window.isCtoCreditedEarnedRecord = function(row) {
+            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
+            const rmk = String(row?.remarks || '').toUpperCase().trim();
+            return ttype === 'EARNED' && (rmk === 'PROCESSED' || rmk === 'POSTED');
+        };
+
+   window.isCtoPendingCreditRecord = function(row) {
+            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
+            const rmk = String(row?.remarks || '').toUpperCase().trim();
+            return ttype === 'EARNED' && (rmk === 'ENCODED' || rmk === 'FOR HR PROCESSING');
+        };
+
+   window.isCtoUsedRecord = function(row) {
+            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
+            const rmk = String(row?.remarks || '').toUpperCase().trim();
+            return ttype === 'USED' || ttype === 'CTO DEDUCTION' || rmk === 'CTO DEDUCTION';
+        };
+
+   // CTO LEAVE HOURS HELPER
+   // CTO is consumed in HOURS. employees.cto_balance is the opening/baseline
+   // balance already carried over by HR before transition to this system.
+   window.extractCtoHoursFromRemarks = function(remarks, fallbackDays = 0) {
+            const match = String(remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (match) return Math.abs(parseFloat(match[1]) || 0);
+            return (Math.abs(parseFloat(fallbackDays || 0)) || 0) * 8;
+        };
+
+   // For mixed CTO + Vacation Leave applications, only this VL portion is
+   // charged against the employee's Vacation Leave balance.
+   window.extractVlChargeFromRemarks = function(remarks, fallbackDays = 0) {
+            const match = String(remarks || '').match(/VL CHARGE:\s*([0-9]+(?:\.[0-9]+)?)/i);
+            if (match) return Math.abs(parseFloat(match[1]) || 0);
+            const upper = String(remarks || '').toUpperCase();
+            if (upper.includes('CREDIT TO CTO') || upper.includes('CREDITED TO CTO')) return 0;
+            return Math.abs(parseFloat(fallbackDays || 0)) || 0;
+        };
+
+   // Existing installations have used both schedule_override and schedule_overrides.
+   // Read the current table first and fall back to the plural name. Do not require
+   // created_at because older schedule tables may not have that column.
+   window.fetchLeaveScheduleOverrides = async function(start = null, end = null) {
+            const columns = 'emp_id, start_date, end_date, start_time, end_time, schedule_type';
+            const runQuery = async (tableName) => {
+                let q = supabase.from(tableName)
+                    .select(columns)
+                    .in('emp_id', [currentUser.emp_id, 'ALL']);
+                if (start && end) q = q.gte('end_date', start).lte('start_date', end);
+                q = q.order('start_date', { ascending: false });
+                return await q;
+            };
+
+            let result = await runQuery('schedule_override');
+            if (!result.error) return result.data || [];
+
+            console.warn('schedule_override lookup failed; trying schedule_overrides:', result.error.message);
+            result = await runQuery('schedule_overrides');
+            if (!result.error) return result.data || [];
+
+            // CTO must remain usable even when there is no override table/row.
+            // No override means the regular 8-hour schedule applies.
+            console.warn('No readable schedule override table. Using standard schedule fallback:', result.error.message);
+            return [];
+        };
+
+   // CTO SCHEDULE HELPERS
+   // schedule_override is the source of truth for the employee's current work schedule.
+   // CTO is ALWAYS computed in HOURS. A FIXED 07:00-18:00 schedule is the current
+   // compressed work week (10 working hours after the 12:00-13:00 lunch break).
+   window.getCtoScheduleHours = function(override) {
+            if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED' || !override.start_time || !override.end_time) return 8;
+            const toMins = (t) => {
+                const p = String(t).split(':');
+                return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+            };
+            const startMins = toMins(override.start_time);
+            const endMins = toMins(override.end_time);
+            if (endMins <= startMins) return 8;
+
+            let workMins = endMins - startMins;
+            const lunchStart = 12 * 60;
+            const lunchEnd = 13 * 60;
+            const lunchOverlap = Math.max(0, Math.min(endMins, lunchEnd) - Math.max(startMins, lunchStart));
+            workMins -= lunchOverlap;
+            return workMins > 0 ? workMins / 60 : 8;
+        };
+
+   window.isCtoCompressedWorkWeek = function(override) {
+            if (!override || String(override.schedule_type || '').toUpperCase() !== 'FIXED') return false;
+            const startTime = String(override.start_time || '').substring(0, 5);
+            const endTime = String(override.end_time || '').substring(0, 5);
+            return startTime === '07:00' && endTime === '18:00';
+        };
+
+   window.getCtoRequiredHours = async function(start, end) {
+            if (!start || !end) return { totalHours: 0, dates: [] };
+
+            const schedOverrides = await window.fetchLeaveScheduleOverrides(start, end);
+
+            const getActiveOverride = (dateStr) => {
+                const matching = (schedOverrides || []).filter(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                return matching.find(s => String(s.emp_id) === String(currentUser.emp_id))
+                    || matching.find(s => String(s.emp_id || '').toUpperCase() === 'ALL')
+                    || null;
+            };
+
+            const isHolidayForCurrentEmployee = (dateStr) => cachedHolidays.some(h => {
+                if (h.date !== dateStr) return false;
+                const coverage = String(h.coverage || 'NATIONWIDE').toUpperCase();
+                const station = String(currentUser.station || '').toUpperCase().trim();
+                if (coverage.includes('NATIONWIDE')) return true;
+                const hasNaga = coverage.includes('NAGA CITY');
+                const hasCamSur = coverage.includes('CAMARINES SUR');
+                if (hasNaga && hasCamSur) return true;
+                if (hasNaga && !hasCamSur) return station.includes('DARPO') || station === 'DARPO-CS1';
+                if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
+                return false;
+            });
+
+            const chargeable = [];
+            let cur = new Date(start + 'T00:00:00');
+            const eDate = new Date(end + 'T00:00:00');
+
+            while (cur <= eDate) {
+                const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+                const day = cur.getDay();
+                const override = getActiveOverride(dateStr);
+                const isCWW = window.isCtoCompressedWorkWeek(override);
+                const isRestDay = day === 0 || day === 6 || (isCWW && day === 5);
+                const isHoliday = isHolidayForCurrentEmployee(dateStr);
+
+                if (!isRestDay && !isHoliday) {
+                    const hours = window.getCtoScheduleHours(override);
+                    chargeable.push({ date: dateStr, hours: hours > 0 ? hours : 8 });
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            // CTO half-day is hourly, not "0.5 CTO day".
+            // Regular 8-hour schedule = 4 CTO hours; CWW 10-hour schedule = 5 CTO hours.
+            const halfStart = document.getElementById('leave-half-day-start')?.checked;
+            const halfEnd = document.getElementById('leave-half-day-end')?.checked;
+            if (chargeable.length > 0 && halfStart) chargeable[0].hours /= 2;
+            if (chargeable.length > 0 && halfEnd) chargeable[chargeable.length - 1].hours /= 2;
+
+            const totalHours = chargeable.reduce((sum, d) => sum + d.hours, 0);
+            return { totalHours, dates: chargeable };
+        };
+
+   // EXACT CURRENT CTO BALANCE:
+   // employees.cto_balance (opening balance, already in HOURS)
+   // + all credited cto_records EARNED (PROCESSED; legacy POSTED also honored)
+   // - cto_records USED / CTO DEDUCTION.
+   window.getCurrentCtoHours = async function(empId) {
+            const { data: empRow, error: empErr } = await supabase
+                .from('employees')
+                .select('cto_balance')
+                .eq('emp_id', empId)
+                .maybeSingle();
+            if (empErr) throw empErr;
+
+            let currentHours = parseFloat(empRow?.cto_balance || 0) || 0;
+
+            const { data: ctoRows, error: ctoErr } = await supabase
+                .from('cto_records')
+                .select('transaction_type, remarks, calculated_hours')
+                .eq('emp_id', empId);
+            if (ctoErr) throw ctoErr;
+
+            (ctoRows || []).forEach(r => {
+                const ttype = String(r.transaction_type || '').toUpperCase().trim();
+                const rmk = String(r.remarks || '').toUpperCase().trim();
+                const hrs = Math.abs(parseFloat(String(r.calculated_hours || '0').trim()) || 0);
+
+                if (window.isCtoCreditedEarnedRecord(r)) {
+                    currentHours += hrs;
+                } else if (window.isCtoUsedRecord(r)) {
+                    currentHours -= hrs;
+                }
+            });
+
+            return Math.max(0, currentHours);
+        };
+
+   // Available-for-new-application CTO also reserves already-pending CTO leave
+   // applications, so the same hours cannot be committed twice.
+   window.getAvailableCtoHours = async function(empId, excludeLeaveId = null) {
+            let availableHours = await window.getCurrentCtoHours(empId);
+
+            const { data: pendingRows, error: pendingErr } = await supabase
+                .from('leave_ledger')
+                .select('id, debit, remarks')
+                .eq('emp_id', empId)
+                .eq('transaction_type', 'APPLICATION');
+            if (pendingErr) throw pendingErr;
+
+            (pendingRows || []).forEach(l => {
+                if (excludeLeaveId !== null && String(l.id) === String(excludeLeaveId)) return;
+                const lr = String(l.remarks || '').toUpperCase();
+                if (lr.includes('CREDIT TO CTO') || lr.includes('CREDITED TO CTO')) {
+                    availableHours -= window.extractCtoHoursFromRemarks(l.remarks, l.debit);
+                }
+            });
+
+            return Math.max(0, availableHours);
+        };
+
+   // Employee CTO credit requests are NOT credited upon submission.
+   // They are saved as EARNED + FOR HR PROCESSING with zero calculated hours.
+   // HR validates the required hard-copy documents and changes the record to PROCESSED.
+   // Once PROCESSED, calculated_hours is immediately part of the employee's available CTO.
+   window.openCtoCreditRequest = function() {
+            const modal = document.getElementById('ctoCreditModal');
+            if (!modal) return;
+            document.getElementById('cto-credit-pso').value = '';
+            document.getElementById('cto-credit-date').value = '';
+            document.getElementById('cto-credit-desc').value = '';
+            modal.style.display = 'flex';
+        };
+
+   window.closeCtoCreditRequest = function() {
+            const modal = document.getElementById('ctoCreditModal');
+            if (modal) modal.style.display = 'none';
+        };
+
+   window.submitCtoCreditRequest = async function() {
+            const pso = document.getElementById('cto-credit-pso').value.trim();
+            const activityDate = document.getElementById('cto-credit-date').value;
+            const desc = document.getElementById('cto-credit-desc').value.trim();
+            const btn = document.getElementById('btn-submit-cto-credit');
+
+            if (!pso || !activityDate || !desc) return alert('Please complete the PSO/RSO number, activity date, and description.');
+
+            try {
+                if (btn) { btn.disabled = true; btn.innerText = 'SUBMITTING...'; }
+
+                const { data: duplicate, error: dupErr } = await supabase
+                    .from('cto_records')
+                    .select('id, remarks')
+                    .eq('emp_id', currentUser.emp_id)
+                    .eq('PSO_Number', pso)
+                    .eq('date', activityDate)
+                    .limit(1);
+                if (dupErr) throw dupErr;
+                if (duplicate && duplicate.length > 0) {
+                    return alert(`A CTO record for this PSO/RSO and date already exists (${duplicate[0].remarks || 'recorded'}).`);
+                }
+
+                const activityObj = new Date(activityDate + 'T00:00:00');
+                const day = activityObj.getDay();
+                const station = String(currentUser.station || '').toUpperCase().trim();
+                const isCoveredHoliday = cachedHolidays.some(h => {
+                    if (h.date !== activityDate) return false;
+                    const coverage = String(h.coverage || 'NATIONWIDE').toUpperCase();
+                    if (coverage.includes('NATIONWIDE')) return true;
+                    const hasNaga = coverage.includes('NAGA CITY');
+                    const hasCamSur = coverage.includes('CAMARINES SUR');
+                    if (hasNaga && hasCamSur) return true;
+                    if (hasNaga && !hasCamSur) return station.includes('DARPO') || station === 'DARPO-CS1';
+                    if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
+                    return false;
+                });
+                // schedule_override controls the current work schedule. Under the
+                // current compressed work week (FIXED 07:00-18:00), Friday is the rest day.
+                const requestSchedules = await window.fetchLeaveScheduleOverrides(activityDate, activityDate);
+                const matchingSchedules = (requestSchedules || []).filter(s => activityDate >= s.start_date && activityDate <= s.end_date);
+                const activeSchedule = matchingSchedules.find(s => String(s.emp_id) === String(currentUser.emp_id))
+                    || matchingSchedules.find(s => String(s.emp_id || '').toUpperCase() === 'ALL')
+                    || null;
+                const isCwwFriday = window.isCtoCompressedWorkWeek(activeSchedule) && day === 5;
+                const multiplier = (day === 0 || day === 6 || isCwwFriday || isCoveredHoliday) ? '1.5' : '1.0';
+
+                const { error } = await supabase.from('cto_records').insert({
+                    emp_id: currentUser.emp_id,
+                    date: activityDate,
+                    transaction_type: 'EARNED',
+                    base_type: desc,
+                    base_hours: '0',
+                    multiplier: multiplier,
+                    calculated_hours: '0',
+                    PSO_Number: pso,
+                    remarks: 'FOR HR PROCESSING'
+                });
+                if (error) throw error;
+
+                alert('CTO credit request submitted to HR. This is NOT yet credited to your CTO balance. Please submit the HARD COPY supporting documents to the HR Office. The CTO hours will be credited only after HR processes the request.');
+                window.closeCtoCreditRequest();
+                if (document.getElementById('credits-view')?.classList.contains('active')) await window.loadCredits();
+            } catch (e) {
+                alert('Unable to submit CTO credit to HR: ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = 'SUBMIT CTO CREDIT TO HR'; }
+            }
+        };
+
    window.updateLeaveInputs = function() {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
@@ -3351,13 +3714,11 @@ for(let app of leaves || []) {
 if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 let ctoOption = "";
                 if (type === "Vacation Leave") {
-                    const ctoBal = currentUser.cto_balance ? parseFloat(currentUser.cto_balance) : 0;
-                    if (ctoBal > 0) {
-                        ctoOption = `
-                    <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 10px;">
+                    ctoOption = `
+                    <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 8px;">
                         <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
-                    </label>`;
-                    }
+                    </label>
+                    <button type="button" class="btn btn-gold btn-small" style="width:auto; padding:8px 12px; margin:0 0 10px 0;" onclick="window.openCtoCreditRequest()">+ Submit CTO Credit to HR</button>`;
                 }
 
                 container.innerHTML = `
@@ -3398,23 +3759,23 @@ window.calculateLeaveDays = async function() {
             const end = document.getElementById('leave-to').value;
             const countEl = document.getElementById('leave-days-count');
             const breakdownEl = document.getElementById('leave-breakdown');
-            
+
             if (!start || !end) return;
 
-            const sDate = new Date(start);
-            const eDate = new Date(end);
+            const sDate = new Date(start + 'T00:00:00');
+            const eDate = new Date(end + 'T00:00:00');
             if (sDate > eDate) {
                 document.getElementById('leave-to').value = start;
-                countEl.innerText = "1";
-                if(breakdownEl) breakdownEl.innerHTML = "";
-                return;
+                return window.calculateLeaveDays();
             }
 
-            // Pull the latest setup by ordering via created_at descending
-            const { data: schedOverrides } = await supabase.from('schedule_override')
-                .select('start_date, end_date, start_time, end_time, schedule_type, created_at')
-                .in('emp_id', [currentUser.emp_id, 'ALL'])
-                .order('created_at', { ascending: false });
+            const schedOverrides = await window.fetchLeaveScheduleOverrides(start, end);
+            const getActiveOverride = (dateStr) => {
+                const matching = (schedOverrides || []).filter(s => dateStr >= s.start_date && dateStr <= s.end_date);
+                return matching.find(s => String(s.emp_id) === String(currentUser.emp_id))
+                    || matching.find(s => String(s.emp_id || '').toUpperCase() === 'ALL')
+                    || null;
+            };
 
             let count = 0;
             let excludedWeekends = 0;
@@ -3423,153 +3784,147 @@ window.calculateLeaveDays = async function() {
             let cur = new Date(sDate);
 
             while (cur <= eDate) {
-                const dateStr = cur.toISOString().split('T')[0];
+                const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
                 const day = cur.getDay();
-                
                 const isWeekend = (day === 0 || day === 6);
 
                 const isHoliday = cachedHolidays.some(h => {
                     if (h.date !== dateStr) return false;
-                    const coverage = String(h.coverage || "NATIONWIDE").toUpperCase();
-                    const station = String(currentUser.station || "").toUpperCase().trim();
-                    
-                    if (coverage.includes("NATIONWIDE")) return true;
-                    const hasNaga = coverage.includes("NAGA CITY");
-                    const hasCamSur = coverage.includes("CAMARINES SUR");
-                    
+                    const coverage = String(h.coverage || 'NATIONWIDE').toUpperCase();
+                    const station = String(currentUser.station || '').toUpperCase().trim();
+                    if (coverage.includes('NATIONWIDE')) return true;
+                    const hasNaga = coverage.includes('NAGA CITY');
+                    const hasCamSur = coverage.includes('CAMARINES SUR');
                     if (hasNaga && hasCamSur) return true;
-                    if (hasNaga && !hasCamSur) return station.includes("DARPO") || station === "DARPO-CS1";
-                    if (hasCamSur && !hasNaga) return station.includes("DARMO") || station !== "DARPO-CS1";
+                    if (hasNaga && !hasCamSur) return station.includes('DARPO') || station === 'DARPO-CS1';
+                    if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
                     return false;
                 });
 
-                    let isCWWFriday = false;
-                    let isCWW = false;
-                    if (schedOverrides && schedOverrides.length > 0) {
-                        // Takes the latest date-specific override, or falls back to the absolute latest active setup
-                        const activeOverride = schedOverrides.find(s => dateStr >= s.start_date && dateStr <= s.end_date) || schedOverrides[0];
-                        if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                            isCWW = true;
-                            if (day === 5) {
-                                isCWWFriday = true;
-                            }
-                        }
-                    }
+                const activeOverride = getActiveOverride(dateStr);
+                const startTime = String(activeOverride?.start_time || '').substring(0, 5);
+                const endTime = String(activeOverride?.end_time || '').substring(0, 5);
+                const isCWW = activeOverride && String(activeOverride.schedule_type || '').toUpperCase() === 'FIXED'
+                    && startTime === '07:00' && endTime === '18:00';
+                const isCWWFriday = isCWW && day === 5;
 
-                    if (isHoliday && !isWeekend) {
-                        excludedHolidays++;
-                    } else if (isWeekend) {
-                        excludedWeekends++;
-                    } else if (isCWWFriday) {
-                        excludedFridays++;
-                    } else {
-                        let dayDeduction = 1.0;
-                        if (isCWW) {
-                            const lTypeElement = document.querySelector('input[name="ltype"]:checked');
-                            const lType = lTypeElement ? lTypeElement.value : '';
-                            // 1.25 deduction exclusively for VL and SL during CWW
-                            if (lType === "Vacation Leave" || lType === "Sick Leave") {
-                                dayDeduction = 1.25;
-                            }
-                        }
-                        count += dayDeduction; 
+                if (isHoliday && !isWeekend) {
+                    excludedHolidays++;
+                } else if (isWeekend) {
+                    excludedWeekends++;
+                } else if (isCWWFriday) {
+                    excludedFridays++;
+                } else {
+                    let dayDeduction = 1.0;
+                    if (isCWW) {
+                        const lTypeElement = document.querySelector('input[name="ltype"]:checked');
+                        const lType = lTypeElement ? lTypeElement.value : '';
+                        if (lType === 'Vacation Leave' || lType === 'Sick Leave') dayDeduction = 1.25;
                     }
+                    count += dayDeduction;
+                }
 
-                
                 cur.setDate(cur.getDate() + 1);
             }
 
-const halfStartCheck = document.getElementById('leave-half-day-start');
+            const halfStartCheck = document.getElementById('leave-half-day-start');
             const halfEndCheck = document.getElementById('leave-half-day-end');
-            
-            // Determine active schedule to adjust half-day values properly
-            let isCWWActive = false;
-            if (schedOverrides && schedOverrides.length > 0) {
-                const activeOverride = schedOverrides.find(s => start >= s.start_date && start <= s.end_date) || schedOverrides[0];
-                if (activeOverride && activeOverride.schedule_type === "Fixed" && activeOverride.start_time === "07:00:00" && activeOverride.end_time === "18:00:00") {
-                    isCWWActive = true;
-                }
-            }
-            
+            const startOverride = getActiveOverride(start);
+            const startOverrideTime = String(startOverride?.start_time || '').substring(0, 5);
+            const endOverrideTime = String(startOverride?.end_time || '').substring(0, 5);
+            const isCWWActive = startOverride && String(startOverride.schedule_type || '').toUpperCase() === 'FIXED'
+                && startOverrideTime === '07:00' && endOverrideTime === '18:00';
+
             const lTypeElement = document.querySelector('input[name="ltype"]:checked');
             const lType = lTypeElement ? lTypeElement.value : '';
-            
+            const ctoHalfDayCheck = document.getElementById('vl-cto-credit');
+            const isHourlyCtoLeave = lType === 'Vacation Leave' && !!(ctoHalfDayCheck && ctoHalfDayCheck.checked);
             let halfDayValue = 0.5;
             let minAllowed = 1.5;
-            if (isCWWActive && (lType === "Vacation Leave" || lType === "Sick Leave")) {
-                halfDayValue = 0.625; // Half of 1.25 day deduction
-                minAllowed = 1.875; // Equivalent minimum to 1.5 days under CWW
+            if (isCWWActive && (lType === 'Vacation Leave' || lType === 'Sick Leave')) {
+                halfDayValue = 0.625;
+                minAllowed = 1.875;
             }
 
             let deduction = 0;
             if (halfStartCheck && halfStartCheck.checked) deduction += halfDayValue;
             if (halfEndCheck && halfEndCheck.checked) deduction += halfDayValue;
-            
+
             if (deduction > 0) {
-                if ((count - deduction) < minAllowed) {
-                    alert("No half day leave is allowed unless the total leave is at least 1.5 days.");
+                // Ordinary leave keeps the existing minimum rule. CTO-funded Vacation Leave
+                // is hourly, so a single half-day is allowed and uses schedule_override hours.
+                if (!isHourlyCtoLeave && (count - deduction) < minAllowed) {
+                    alert('No half day leave is allowed unless the total leave is at least 1.5 days.');
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
-                } else if ((count - deduction) <= 0) {    
-                    alert("Invalid selection. Total leave days cannot be 0.");
+                    deduction = 0;
+                } else if ((count - deduction) <= 0) {
+                    alert('Invalid selection. Total leave days cannot be 0.');
                     if (halfStartCheck) halfStartCheck.checked = false;
                     if (halfEndCheck) halfEndCheck.checked = false;
+                    deduction = 0;
                 } else {
                     count -= deduction;
                 }
             }
-    
+
             countEl.innerText = count;
 
-            // Render details so admin knows exactly why a day wasn't counted
-            if(breakdownEl) {
+            if (breakdownEl) {
                 let infoArr = [];
-                if(excludedWeekends > 0) infoArr.push(`<b>${excludedWeekends}</b> Weekend(s)`);
-                if(excludedHolidays > 0) infoArr.push(`<b>${excludedHolidays}</b> Holiday(s)`);
-                if(excludedFridays > 0) infoArr.push(`<b>${excludedFridays}</b> CWW Friday(s)`);
-                if(deduction > 0 && count > 0) infoArr.push(`<b>${deduction}</b> Half-day deduction(s)`);
-                
-                if (infoArr.length > 0) {
-                    breakdownEl.innerHTML = `Automatically excluded: ${infoArr.join(', ')}`;
-                } else {
-                    breakdownEl.innerHTML = `All selected dates are standard working days.`;
-                }
+                if (excludedWeekends > 0) infoArr.push(`<b>${excludedWeekends}</b> Weekend(s)`);
+                if (excludedHolidays > 0) infoArr.push(`<b>${excludedHolidays}</b> Holiday(s)`);
+                if (excludedFridays > 0) infoArr.push(`<b>${excludedFridays}</b> CWW Friday(s)`);
+                if (deduction > 0 && count > 0) infoArr.push(`<b>${deduction}</b> Half-day deduction(s)`);
+                breakdownEl.innerHTML = infoArr.length > 0
+                    ? `Automatically excluded: ${infoArr.join(', ')}`
+                    : 'All selected dates are standard working days.';
             }
 
-            const ctoCheck = document.getElementById('vl-cto-credit');         
+            const ctoCheck = document.getElementById('vl-cto-credit');
             const isCtoCredited = ctoCheck && ctoCheck.checked;
             const submitBtn = document.getElementById('btn-submit-leave');
 
             if (count > 0 && isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
-                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
+                try {
+                    const availableCtoHours = await window.getAvailableCtoHours(currentUser.emp_id);
+                    const ctoSchedule = await window.getCtoRequiredHours(start, end);
+                    const requiredCtoHours = ctoSchedule.totalHours;
 
-                let earned = 0, used = 0;
-                (ctoData || []).forEach(r => {
-                    const rmk = String(r.remarks || "").toUpperCase().trim();
-                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                });
-                
-                let ledgerUsed = 0;
-                (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
+                    if (requiredCtoHours <= 0) {
+                        if (submitBtn) submitBtn.disabled = true;
+                        if (breakdownEl) breakdownEl.innerHTML += '<br><b style="color:var(--danger);">No chargeable CTO work hours were found for the selected dates.</b>';
+                        return;
                     }
-                });
-                
 
-                let availableCtoDays = (earned - used - ledgerUsed) / 8;
-                if (availableCtoDays < count) {
-                    alert(`Insufficient CTO Credits available. You only have ${availableCtoDays.toFixed(2)} days, but applied for ${count} days. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.`);
-                    if(submitBtn) submitBtn.disabled = true;
+                    const ctoHoursToUse = Math.min(Math.max(availableCtoHours, 0), requiredCtoHours);
+                    const remainingHours = Math.max(0, requiredCtoHours - ctoHoursToUse);
+                    const vlFallbackDays = remainingHours / 8;
+
+                    if (submitBtn) submitBtn.disabled = false;
+
+                    if (remainingHours > 0.0001) {
+                        countEl.innerText = `${count} (CTO: ${ctoHoursToUse.toFixed(2)} HRS + VL: ${vlFallbackDays.toFixed(3)} DAY/S)`;
+                        if (breakdownEl) {
+                            breakdownEl.innerHTML += `<br><b>CTO available for this application:</b> ${availableCtoHours.toFixed(2)} hour(s).`
+                                + `<br><b>Required:</b> ${requiredCtoHours.toFixed(2)} hour(s).`
+                                + `<br><b>Proposed fallback:</b> ${ctoHoursToUse.toFixed(2)} CTO hour(s) + ${vlFallbackDays.toFixed(3)} Vacation Leave day(s). You will be asked to confirm before submission.`
+                                + `<br><button type="button" onclick="window.openCtoCreditRequest()" style="margin-top:6px; border:1px solid var(--dar-gold); background:#fefce8; color:#854d0e; border-radius:6px; padding:6px 9px; font-size:10px; font-weight:bold; cursor:pointer;">SUBMIT CTO CREDIT TO HR INSTEAD</button>`;
+                        }
+                    } else {
+                        countEl.innerText = `${count} (CTO: ${requiredCtoHours.toFixed(2)} HRS)`;
+                        if (breakdownEl) {
+                            breakdownEl.innerHTML += `<br><b>CTO charge:</b> ${requiredCtoHours.toFixed(2)} hour(s), based on the applicable work schedule.`;
+                        }
+                    }
+                } catch (e) {
+                    console.error('CTO balance/schedule check failed:', e);
+                    if (submitBtn) submitBtn.disabled = true;
                     countEl.innerText = count;
-                } else {
-                    if(submitBtn) submitBtn.disabled = false;
-                    countEl.innerText = `${count} (CTO CREDIT)`;
+                    if (breakdownEl) breakdownEl.innerHTML += `<br><b style="color:var(--danger);">Unable to verify CTO balance: ${String(e.message || e)}</b>`;
                 }
             } else {
-                if(submitBtn) submitBtn.disabled = false;
+                if (submitBtn) submitBtn.disabled = false;
                 countEl.innerText = count;
             }
         };
@@ -3582,6 +3937,8 @@ window.submitLeave = async function() {
             const end = document.getElementById('leave-to').value;
             const days = parseFloat(document.getElementById('leave-days-count').innerText);
             const comm = document.getElementById('leave-commutation').value;
+            const ctoCheck = document.getElementById('vl-cto-credit');
+            const isCtoCredited = ctoCheck && ctoCheck.checked;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
             if (type === "Vacation Leave") {
@@ -3600,7 +3957,7 @@ window.submitLeave = async function() {
             let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
 
             const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('type, credit, debit, transaction_type')
+                .select('type, credit, debit, transaction_type, remarks')
                 .eq('emp_id', currentUser.emp_id)
                 .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
 
@@ -3609,15 +3966,24 @@ window.submitLeave = async function() {
                     let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
                     let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
                     let lType = (l.type || '').toUpperCase();
+                    let ledgerRemarks = String(l.remarks || '').toUpperCase();
+                    let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
                     if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
                     else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
-                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) currentVL = currentVL + cVal - dVal;
+                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) {
+                        if (isCtoBacked) {
+                            const vlCharge = window.extractVlChargeFromRemarks(l.remarks, 0);
+                            currentVL = currentVL + cVal - vlCharge;
+                        } else {
+                            currentVL = currentVL + cVal - dVal;
+                        }
+                    }
                     else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
                 });
             }
 
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
-                if (days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
+                if (!(type === "Vacation Leave" && isCtoCredited) && days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
             } else if (type === "Special Privilege Leave") {
                 if (days > currentSPL) return alert(`Insufficient SPL balance. You only have ${currentSPL.toFixed(3)} days available.`);
             } else if (type === "Wellness Leave") {
@@ -3634,37 +4000,55 @@ window.submitLeave = async function() {
                 }
             }
 
-            // CTO CHECK LOGIC
-            const ctoCheck = document.getElementById('vl-cto-credit');
-            const isCtoCredited = ctoCheck && ctoCheck.checked;
-
+            // CTO CHECK LOGIC. Use CTO first; if it cannot fully cover the leave,
+            // ask the employee before charging the remainder to Vacation Leave.
+            let requiredCtoHours = 0;
+            let ctoHoursToUse = 0;
+            let vlFallbackDays = 0;
             if (isCtoCredited) {
-                const { data: ctoData } = await supabase.from('cto_records').select('remarks, calculated_hours').eq('emp_id', currentUser.emp_id);
-                let earned = 0, used = 0;
-                (ctoData || []).forEach(r => {
-                    const rmk = String(r.remarks || "").toUpperCase().trim();
-                    if (rmk === 'PROCESSED') earned += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                    if (rmk === 'CTO DEDUCTION') used += parseFloat(String(r.calculated_hours || "0").trim()) || 0;
-                });
-                
-                const { data: ledgerData } = await supabase.from('leave_ledger').select('debit, transaction_type').eq('emp_id', currentUser.emp_id).ilike('remarks', '%Credited to CTO%');
-                let ledgerUsed = 0;
-                (ledgerData || []).forEach(l => {
-                    if(l.transaction_type === 'APPLICATION' || l.transaction_type === 'APPROVED') {
-                        ledgerUsed += (parseFloat(String(l.debit || "0").trim()) || 0) * 8; 
+                try {
+                    const availableCtoHours = await window.getAvailableCtoHours(currentUser.emp_id);
+                    const ctoSchedule = await window.getCtoRequiredHours(start, end);
+                    requiredCtoHours = ctoSchedule.totalHours;
+                    if (requiredCtoHours <= 0) return alert('No chargeable CTO work hours were found for the selected dates.');
+
+                    ctoHoursToUse = Math.min(Math.max(availableCtoHours, 0), requiredCtoHours);
+                    const remainingHours = Math.max(0, requiredCtoHours - ctoHoursToUse);
+                    vlFallbackDays = remainingHours / 8;
+
+                    if (remainingHours > 0.0001) {
+                        if (vlFallbackDays > currentVL + 0.0001) {
+                            alert(`CTO and Vacation Leave are not enough for this application. CTO available: ${availableCtoHours.toFixed(2)} hour(s). Vacation Leave available: ${currentVL.toFixed(3)} day(s). Additional VL needed after CTO: ${vlFallbackDays.toFixed(3)} day(s).`);
+                            if (confirm('Would you like to submit CTO credit to HR first?')) window.openCtoCreditRequest();
+                            return;
+                        }
+
+                        const splitMessage = ctoHoursToUse > 0.0001
+                            ? `Your CTO balance can cover ${ctoHoursToUse.toFixed(2)} of ${requiredCtoHours.toFixed(2)} required hour(s). Charge the remaining ${remainingHours.toFixed(2)} hour(s) (${vlFallbackDays.toFixed(3)} day/s) to Vacation Leave?`
+                            : `You currently have no available CTO credit for this application. Charge the required ${vlFallbackDays.toFixed(3)} day(s) to Vacation Leave instead?`;
+
+                        if (!confirm(splitMessage)) {
+                            if (confirm('Submit CTO credit to HR for validation instead? You can apply for CTO leave after HR processes the credit.')) {
+                                window.openCtoCreditRequest();
+                            }
+                            return;
+                        }
                     }
-                });
-                
-                let availableCtoDays = (earned - used - ledgerUsed) / 8;
-                if (availableCtoDays < days) {
-                    return alert("Insufficient CTO Credits available. Please uncheck 'Credit to CTO' and proceed with normal Vacation Leave.");
+                } catch (e) {
+                    console.error('CTO balance/schedule check failed:', e);
+                    return alert('Unable to verify CTO balance: ' + (e.message || e));
                 }
             }
 
             const rDetail = document.querySelector('input[name="ldetail"]:checked');
             const specify = document.getElementById('leave-specify');
             let detailStr = rDetail ? rDetail.value : "See Remarks";
-            if (isCtoCredited) detailStr += " (Credited to CTO)";
+            if (isCtoCredited && ctoHoursToUse > 0.0001) {
+                detailStr += ` | CREDIT TO CTO | CTO HOURS: ${ctoHoursToUse.toFixed(2)}`;
+                if (vlFallbackDays > 0.0001) detailStr += ` | VL CHARGE: ${vlFallbackDays.toFixed(3)}`;
+            } else if (isCtoCredited && vlFallbackDays > 0.0001) {
+                detailStr += ` | CTO UNAVAILABLE - CHARGED TO VACATION LEAVE`;
+            }
             if (specify && specify.value.trim() !== "") detailStr += ` - ${specify.value.trim()}`;
             
             // LEAVE APPROVAL ROUTING (Initial Assignment)
@@ -3806,16 +4190,19 @@ window.submitLeave = async function() {
 
             let app_date_str = app.created_at ? app.created_at.split('T')[0] : new Date().toISOString().split('T')[0];
 
-            const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
+            const { data: res_ledger } = await supabase.from('leave_ledger').select('id, type, debit, transaction_type, remarks').eq('emp_id', currentUser.emp_id).lte('created_at', app.created_at);
             let vl_deduct = 0.0, sl_deduct = 0.0;
             (res_ledger || []).forEach(ledg => {
                 if (ledg.id === app.id) return;
                 const ttype = String(ledg.transaction_type || "").toUpperCase();
                 if ((ttype.includes("APPROVED") || ttype.includes("PROCESSED") || ttype.includes("DEDUCTION") || ttype.includes("CREDIT") || ttype.includes("POSTED")) && ttype !== "APPLICATION") {
                     const l_type = String(ledg.type || "").toUpperCase();
+                    const ledgerRemarks = String(ledg.remarks || "").toUpperCase();
                     const debit_val = parseFloat(ledg.debit || 0);
+                    const isCtoBacked = ledgerRemarks.includes("CREDIT TO CTO") || ledgerRemarks.includes("CREDITED TO CTO");
                     if (["VACATION", "MANDATORY", "FORCED", "GATE PASS", "TARDINESS", "UNDERTIME"].some(x => l_type.includes(x))) {
-                        vl_deduct += debit_val;
+                        if (isCtoBacked) vl_deduct += window.extractVlChargeFromRemarks(ledg.remarks, 0);
+                        else vl_deduct += debit_val;
                     } else if (l_type.includes("SICK")) {
                         sl_deduct += debit_val;
                     }
@@ -3829,7 +4216,11 @@ window.submitLeave = async function() {
             const app_type = String(app.type || "").toUpperCase();
             const app_days = parseFloat(app.debit || 0);
 
-            if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) vl_less = app_days;
+            const appRemarksUpper = String(app.remarks || "").toUpperCase();
+            const isCtoBackedApp = appRemarksUpper.includes("CREDIT TO CTO") || appRemarksUpper.includes("CREDITED TO CTO");
+            if (["VACATION", "MANDATORY", "FORCED"].some(x => app_type.includes(x))) {
+                vl_less = isCtoBackedApp ? window.extractVlChargeFromRemarks(app.remarks, 0) : app_days;
+            }
             else if (app_type.includes("SICK")) sl_less = app_days;
 
             let vl_balance = vl_total_earned - vl_less;
@@ -6481,6 +6872,128 @@ function getLeaveAppPayload(u, leaveRec) {
 
         
 
+    async function postCtoDeductionIfFinalApproval(leaveRec, payload) {
+        if (!leaveRec || !payload || payload.transaction_type !== 'APPROVED') return;
+
+        const remarksUpper = String(leaveRec.remarks || '').toUpperCase();
+        const isCtoLeave = remarksUpper.includes('CREDIT TO CTO') || remarksUpper.includes('CREDITED TO CTO');
+        if (!isCtoLeave) return;
+
+        const ctoHoursMatch = String(leaveRec.remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+        const hoursToUse = ctoHoursMatch
+            ? (Math.abs(parseFloat(ctoHoursMatch[1])) || 0)
+            : ((Math.abs(parseFloat(leaveRec.debit || 0)) || 0) * 8); // backward compatibility for older applications
+        if (hoursToUse <= 0) throw new Error("Invalid CTO hours for this leave.");
+
+        const purposeKey = `CREDIT TO CTO | LEAVE_ID:${leaveRec.id}`;
+
+        const { data: existing, error: existingErr } = await supabaseClient
+            .from('cto_records')
+            .select('id')
+            .eq('emp_id', leaveRec.emp_id)
+            .eq('purpose', purposeKey)
+            .limit(1);
+
+        if (existingErr) throw existingErr;
+        if (existing && existing.length > 0) return;
+
+        const { data: empRow, error: empErr } = await supabaseClient
+            .from('employees')
+            .select('cto_balance')
+            .eq('emp_id', leaveRec.emp_id)
+            .maybeSingle();
+
+        if (empErr) throw empErr;
+
+        let availableHours = (parseFloat(empRow?.cto_balance || 0) || 0);
+
+        const { data: ctoRows, error: ctoErr } = await supabaseClient
+            .from('cto_records')
+            .select('transaction_type, remarks, calculated_hours')
+            .eq('emp_id', leaveRec.emp_id);
+
+        if (ctoErr) throw ctoErr;
+
+        (ctoRows || []).forEach(r => {
+            const ttype = String(r.transaction_type || '').toUpperCase().trim();
+            const rmk = String(r.remarks || '').toUpperCase().trim();
+            const hrs = Math.abs(parseFloat(String(r.calculated_hours || '0').trim()) || 0);
+
+            if (window.isCtoCreditedEarnedRecord(r)) {
+                availableHours += hrs;
+            } else if (window.isCtoUsedRecord(r)) {
+                availableHours -= hrs;
+            }
+        });
+
+        const { data: pendingRows, error: pendingErr } = await supabaseClient
+            .from('leave_ledger')
+            .select('id, debit, remarks')
+            .eq('emp_id', leaveRec.emp_id)
+            .eq('transaction_type', 'APPLICATION');
+
+        if (pendingErr) throw pendingErr;
+
+        (pendingRows || []).forEach(l => {
+            if (String(l.id) === String(leaveRec.id)) return;
+            const lr = String(l.remarks || '').toUpperCase();
+            if (lr.includes('CREDIT TO CTO') || lr.includes('CREDITED TO CTO')) {
+                const pendingHoursMatch = String(l.remarks || '').match(/CTO HOURS:\s*([0-9]+(?:\.[0-9]+)?)/i);
+                const pendingHours = pendingHoursMatch
+                    ? (Math.abs(parseFloat(pendingHoursMatch[1])) || 0)
+                    : ((Math.abs(parseFloat(l.debit || 0)) || 0) * 8);
+                availableHours -= pendingHours;
+            }
+        });
+
+        if (availableHours + 0.0001 < hoursToUse) {
+            throw new Error(`Insufficient CTO balance. Available: ${availableHours.toFixed(2)} hour(s); required: ${hoursToUse.toFixed(2)} hour(s).`);
+        }
+
+        const todayPST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+        const { error: insertErr } = await supabaseClient
+            .from('cto_records')
+            .insert({
+                emp_id: leaveRec.emp_id,
+                date: todayPST,
+                transaction_type: 'USED',
+                base_type: 'CREDIT TO CTO',
+                base_hours: hoursToUse.toFixed(2),
+                multiplier: '1.0',
+                calculated_hours: hoursToUse.toFixed(2),
+                remarks: 'CTO DEDUCTION',
+                purpose: purposeKey,
+                leave_date: leaveRec.start_date
+            });
+
+        if (insertErr) throw insertErr;
+    }
+
+    async function applyLeaveApprovalUpdate(leaveData, payload) {
+        const original = {
+            transaction_type: leaveData.transaction_type,
+            remarks: leaveData.remarks
+        };
+
+        const { error: updateErr } = await supabaseClient
+            .from('leave_ledger')
+            .update(payload)
+            .eq('id', leaveData.id);
+
+        if (updateErr) throw updateErr;
+
+        try {
+            await postCtoDeductionIfFinalApproval(leaveData, payload);
+        } catch (e) {
+            await supabaseClient
+                .from('leave_ledger')
+                .update(original)
+                .eq('id', leaveData.id);
+            throw e;
+        }
+    }
+
     function getStatusBadge(type, subStatus) {
         if (type === 'APPLICATION') return `<span class="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>${subStatus || 'PENDING'}</span>`;
         if (type === 'APPROVED') return `<span class="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest shadow-sm">APPROVED</span>`;
@@ -6875,17 +7388,55 @@ window.loadAdminCalendar = async function() {
         try {
             const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-            // 1. Insert CREDIT to refund the specifically retracted days back to the employee's balance ledger
-            await supabaseClient.from('leave_ledger').insert({
-                transaction_id: crypto.randomUUID(), 
-                emp_id: leaveData.emp_id,
-                start_date: todayStr, 
-                end_date: todayStr, 
-                type: leaveData.type, 
-                credit: daysToRetract,
-                transaction_type: "CREDIT", 
-                remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
-            });
+            // 1. Refund the same credit source that funded the leave.
+            const leaveRemarksUpper = String(leaveData.remarks || '').toUpperCase();
+            const isCtoLeave = leaveRemarksUpper.includes('CREDIT TO CTO') || leaveRemarksUpper.includes('CREDITED TO CTO');
+
+            if (isCtoLeave) {
+                const purposeKey = `CREDIT TO CTO | LEAVE_ID:${leaveData.id}`;
+                const { data: ctoDeduction, error: ctoFetchErr } = await supabaseClient
+                    .from('cto_records')
+                    .select('id, calculated_hours, base_hours')
+                    .eq('emp_id', leaveData.emp_id)
+                    .eq('purpose', purposeKey)
+                    .maybeSingle();
+
+                if (ctoFetchErr) throw ctoFetchErr;
+
+                if (ctoDeduction) {
+                    const refundHours = daysToRetract * 8;
+                    const currentHours = Math.abs(parseFloat(ctoDeduction.calculated_hours || 0)) || 0;
+                    const remainingHours = Math.max(0, currentHours - refundHours);
+
+                    if (remainingHours <= 0.0001) {
+                        const { error: delErr } = await supabaseClient
+                            .from('cto_records')
+                            .delete()
+                            .eq('id', ctoDeduction.id);
+                        if (delErr) throw delErr;
+                    } else {
+                        const { error: updErr } = await supabaseClient
+                            .from('cto_records')
+                            .update({
+                                calculated_hours: remainingHours.toFixed(2),
+                                base_hours: remainingHours.toFixed(2)
+                            })
+                            .eq('id', ctoDeduction.id);
+                        if (updErr) throw updErr;
+                    }
+                }
+            } else {
+                await supabaseClient.from('leave_ledger').insert({
+                    transaction_id: crypto.randomUUID(), 
+                    emp_id: leaveData.emp_id,
+                    start_date: todayStr, 
+                    end_date: todayStr, 
+                    type: leaveData.type, 
+                    credit: daysToRetract,
+                    transaction_type: "CREDIT", 
+                    remarks: `System Refund: Retracted ${daysToRetract} day(s) on ${retractedDates.join(', ')}. Processed by: ${currentUser.fullName}`
+                });
+            }
 
             // 2. Update the existing transaction record specifically mapped to RETRACTED or reduced partial days
             if (daysToRetract >= leaveData.debit) {
@@ -6960,7 +7511,7 @@ window.loadAdminCalendar = async function() {
             if (leaveData) {
                 const p = getLeaveAppPayload(currentUser, leaveData);
                 if (p && Object.keys(p).length > 0) {
-                    await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+                    await applyLeaveApprovalUpdate(leaveData, p);
                 }
             }
         });
@@ -6982,7 +7533,11 @@ window.loadAdminCalendar = async function() {
         if (!p || Object.keys(p).length === 0) return alert("Approval failed: Your role is not configured to approve this record.");
         
         document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-emerald-700">Advancing Leave Approval...</p></div>`;
-        await supabaseClient.from('leave_ledger').update(p).eq('id', id);
+        try {
+            await applyLeaveApprovalUpdate(leaveData, p);
+        } catch (e) {
+            alert("Approval Error: " + e.message);
+        }
         
         loadLeavesTab();
     };
