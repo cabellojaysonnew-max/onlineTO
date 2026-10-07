@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.11"; 
+        const APP_VERSION = "v1.12"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -291,18 +291,20 @@ async function hardReloadSystem() {
         <div id="ctoCreditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index: 2100; justify-content:center; align-items:center; padding:20px;">
             <div class="card" style="width: 92%; max-width: 430px; background:white; padding:20px; border-radius:12px; position:relative; box-shadow:0 10px 25px rgba(0,0,0,0.2); margin:auto;">
                 <button type="button" onclick="window.closeCtoCreditRequest()" style="position:absolute; right:15px; top:15px; border:none; background:none; font-size:16px; cursor:pointer;">✕</button>
-                <h3 style="margin-top:0; color:var(--dar-green);">Submit CTO Credit to HR</h3>
-                <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-bottom:10px;">This only sends your CTO credit request to the HR Office for processing. <strong>The hours are NOT yet credited to your CTO balance after submission.</strong></p>
+                <h3 id="cto-credit-modal-title" style="margin-top:0; color:var(--dar-green);">Apply for CTO Credits</h3>
+                <p id="cto-credit-modal-help" style="font-size:11px; color:var(--text-muted); line-height:1.45; margin-bottom:10px;">
+                    Submit the CTO activity for HR verification and approval. This application does not add hours to your CTO balance yet.
+                </p>
                 <div style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px; border-radius:8px; font-size:11px; line-height:1.45; margin-bottom:15px;">
-                    <strong>HARD COPY REQUIRED:</strong> Submit the supporting documents for this CTO credit request to the HR Office. HR will validate the documents and process the CTO before the hours are added to your balance.
+                    HR will process this request in the CTO Processing page, verify supporting evidence, check DTR time when available or enter verified hours manually, then finalize the CTO credit.
                 </div>
-                <label>PSO / RSO Number</label>
-                <input type="text" id="cto-credit-pso" placeholder="Enter PSO / RSO Number">
+                <label>PSO Number</label>
+                <input type="text" id="cto-credit-pso" placeholder="Enter PSO Number" autocomplete="off">
+                <label>Description / Activity</label>
+                <textarea id="cto-credit-desc" rows="3" placeholder="Describe the activity that earned CTO credits"></textarea>
                 <label>Date of Activity</label>
                 <input type="date" id="cto-credit-date" onkeydown="return false">
-                <label>CTO Description / Activity</label>
-                <textarea id="cto-credit-desc" rows="3" placeholder="Describe the activity that earned CTO credits"></textarea>
-                <button type="button" class="btn btn-primary" id="btn-submit-cto-credit" onclick="window.submitCtoCreditRequest()">SUBMIT CTO CREDIT TO HR</button>
+                <button type="button" class="btn btn-primary" id="btn-submit-cto-credit" onclick="window.submitCtoCreditRequest()">APPLY</button>
                 <button type="button" class="btn" style="background:#6b7280;" onclick="window.closeCtoCreditRequest()">CANCEL</button>
             </div>
         </div>
@@ -403,6 +405,15 @@ async function hardReloadSystem() {
 
         <div id="leave-view" class="view">
             <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
+
+            <div class="card" style="border-left:4px solid var(--dar-gold);">
+                <h4>Apply for CTO Credits</h4>
+                <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin:0 0 10px 0;">
+                    For CTO earned from an activity: enter the PSO Number, Description, and Date, then submit it for HR approval. This is separate from <strong>Credit to CTO</strong> when filing Vacation Leave.
+                </p>
+                <button type="button" class="btn btn-gold" style="margin:0;" onclick="window.openCtoCreditRequest('leave')">+ APPLY FOR CTO CREDITS</button>
+            </div>
+
             <div class="card">
             <h4>1. Type of Leave</h4>
             <div class="radio-group">
@@ -493,6 +504,7 @@ async function hardReloadSystem() {
             </div>
             <div class="card">
                 <h4>CTO Status</h4>
+                <button type="button" class="btn btn-gold btn-small" style="margin:0 0 10px 0;" onclick="window.openCtoCreditRequest('credits')">+ SUBMIT CTO CREDIT TO HR</button>
                 <div id="cto-posting-container">Loading...</div>
             </div>
         </div>
@@ -1672,7 +1684,9 @@ window.loadCredits = async function() {
             const ttype = (c.transaction_type || '').toUpperCase();
             const rmk = (c.remarks || '').toUpperCase();
             const hrs = parseFloat(c.calculated_hours || "0") || 0;
-            const isCreditedEarned = window.isCtoCreditedEarnedRecord(c);
+            const isFinalizedEarned = window.isCtoFinalizedEarnedRecord(c);
+            const isExpired = isFinalizedEarned && window.isCtoExpiredRecord(c);
+            const isCreditedEarned = isFinalizedEarned && !isExpired;
             const isUsed = window.isCtoUsedRecord(c);
 
             if (isCreditedEarned) {
@@ -1682,25 +1696,29 @@ window.loadCredits = async function() {
             }
 
             const isPendingHr = window.isCtoPendingCreditRecord(c);
-            if (isCreditedEarned || isPendingHr || isUsed) {
+            const isDisapproved = window.isCtoDisapprovedCreditRecord(c);
+
+            if (isFinalizedEarned || isPendingHr || isUsed || isDisapproved) {
                 hasCto = true;
-                let color = isPendingHr ? '#854d0e' : (isUsed ? 'var(--danger)' : 'var(--success)');
-                let hourDisplay = isPendingHr ? 'PENDING' : `${isUsed ? '-' : '+'}${hrs.toFixed(3)}`;
+                let color = isPendingHr ? '#854d0e' : (isUsed ? 'var(--danger)' : (isDisapproved ? '#991b1b' : (isExpired ? '#6b7280' : 'var(--success)')));
+                let hourDisplay = isPendingHr ? 'PENDING' : (isDisapproved ? '0.000' : (isExpired ? 'EXPIRED' : `${isUsed ? '-' : '+'}${hrs.toFixed(3)}`));
 
                 let rowType = ttype || rmk;
                 let rowRemarks = c.remarks || c.purpose || '';
                 if (isPendingHr) {
-                    rowType = 'CTO CREDIT REQUEST';
-                    rowRemarks = 'FOR HR PROCESSING — NOT YET CREDITED. Submit hard copy supporting documents to HR.';
-                } else if (isCreditedEarned) {
-                    rowType = 'CTO CREDIT';
-                    rowRemarks = rmk === 'POSTED'
-                        ? 'CREDITED / AVAILABLE — legacy posted CTO record'
-                        : 'PROCESSED BY HR — CREDITED AND AVAILABLE';
+                    rowType = 'CTO CREDIT APPLICATION';
+                    rowRemarks = `PSO ${c.PSO_Number || '---'} — ${c.base_type || 'CTO ACTIVITY'} — FOR HR APPROVAL / PROCESSING`;
+                } else if (isDisapproved) {
+                    rowType = 'CTO CREDIT APPLICATION';
+                    rowRemarks = `DISAPPROVED — PSO ${c.PSO_Number || '---'} — ${c.base_type || 'CTO ACTIVITY'}`;
+                } else if (isFinalizedEarned) {
+                    rowType = isExpired ? 'CTO CREDIT - EXPIRED' : 'CTO CREDIT';
+                    const expiry = window.getCtoExpiryDate(c.date);
+                    rowRemarks = `${c.remarks || 'FINALIZED'} — ${isExpired ? 'EXPIRED' : 'AVAILABLE'} until ${expiry || '---'}`;
                 }
 
                 ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 5px;">${c.date}</td>
+                    <td style="padding: 5px;">${c.date || '---'}</td>
                     <td style="padding: 5px;">${rowType}</td>
                     <td style="padding: 5px; text-align: center; color: ${color}; font-weight:bold;">${hourDisplay}</td>
                     <td style="padding: 5px; color: gray;">${rowRemarks}</td>
@@ -1717,7 +1735,7 @@ window.loadCredits = async function() {
     ctoContainer.innerHTML = `
         <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
             <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${totalCtoHours.toFixed(2)} hrs</span>
-            <div style="font-size:9px; color:#78716c; margin-top:3px;">Opening HR balance ${baseCtoHours.toFixed(2)} + HR processed/credited CTO ${ctoEarned.toFixed(2)} - used CTO ${ctoUsed.toFixed(2)}</div>
+            <div style="font-size:9px; color:#78716c; margin-top:3px;">Opening HR balance ${baseCtoHours.toFixed(2)} + valid HR-finalized CTO ${ctoEarned.toFixed(2)} - used CTO ${ctoUsed.toFixed(2)}. New CTO records expire one year from the activity date.</div>
         </div>
         ${ctoHtml}
     `;
@@ -1765,155 +1783,302 @@ window.loadCredits = async function() {
         
         window.removePersonnel = function(i) { personnelDraft.splice(i,1); window.renderPersonnel(); };
 
+        // ITINERARY BUILDER — race-safe generation.
+        // Build locally, then commit once. Slower/older requests are discarded.
+        let itinGenCounter = 0;
+
         window.handleStartDateChange = function() {
+            // Immediately invalidate any generator still waiting on the network.
+            itinGenCounter++;
+
             const fromDate = document.getElementById('itin-from').value;
-            if (fromDate) {
-                document.getElementById('itin-to').value = '';
-                document.getElementById('itin-to').min = fromDate;
-                document.getElementById('dynamic-itin-fields').innerHTML = '';
-                itineraryDraft = [];
-            }
+            const toEl = document.getElementById('itin-to');
+            const container = document.getElementById('dynamic-itin-fields');
+
+            toEl.value = '';
+            if (fromDate) toEl.min = fromDate;
+
+            container.innerHTML = '';
+            itineraryDraft = [];
+            conflictsToProcess = [];
         };
 
-
-            // ADDED: Missing delete function for the Itinerary Builder
         window.removeItinCard = function(cardId, dateStr) {
             const cardElement = document.getElementById(cardId);
-            if (cardElement) {
-                cardElement.remove(); // Removes the UI card
+            if (cardElement) cardElement.remove();
+
+            // Delete ONLY the exact UI/draft card.
+            // The old AND condition also removed any other row having the same date.
+            itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId);
+
+            if (!itineraryDraft.some(it => it.date === dateStr)) {
+                conflictsToProcess = conflictsToProcess.filter(c => c.affected_date !== dateStr);
             }
-            // Removes only the deleted day from the submission payload
-            itineraryDraft = itineraryDraft.filter(it => it.cardId !== cardId && it.date !== dateStr);
         };
 
-
-    
-let itinGenCounter = 0; // Tracks execution to prevent race conditions
-        
-      window.generateItinFields = async function() {
+        window.generateItinFields = async function() {
             const currentGenId = ++itinGenCounter;
             const fromDate = document.getElementById('itin-from').value;
             const toDate = document.getElementById('itin-to').value;
             const container = document.getElementById('dynamic-itin-fields');
-            
-            // SAVE EXISTING STATE BEFORE REDRAWING TO PREVENT DATA LOSS
+
             const savedState = {};
             itineraryDraft.forEach(it => {
                 const destEl = document.getElementById(it.destId);
                 const purpEl = document.getElementById(it.purpId);
                 const repEl = document.getElementById(it.repId);
+                const fundEl = document.getElementById(it.fundId);
                 const unitEl = it.unitId ? document.getElementById(it.unitId) : null;
-            savedState[it.date] = {
-                    dest: destEl ? destEl.value : '',
-                    purp: purpEl ? purpEl.value : '',
-                    rep: repEl ? repEl.value : '',
-                    fund: document.getElementById(it.fundId) ? document.getElementById(it.fundId).value : '',
-                    unit: unitEl ? unitEl.value : '' // Will safely capture the blank value for NA
-                };
+                if (!savedState[it.date]) {
+                    savedState[it.date] = {
+                        dest: destEl ? destEl.value : '',
+                        purp: purpEl ? purpEl.value : '',
+                        rep: repEl ? repEl.value : '',
+                        fund: fundEl ? fundEl.value : '',
+                        unit: unitEl ? unitEl.value : ''
+                    };
+                }
             });
 
-            container.innerHTML = ''; itineraryDraft = []; conflictsToProcess = []; 
-            
-            if (!fromDate || !toDate) return;
+            if (!fromDate || !toDate) {
+                if (currentGenId === itinGenCounter) {
+                    container.innerHTML = '';
+                    itineraryDraft = [];
+                    conflictsToProcess = [];
+                }
+                return;
+            }
             if (fromDate < todayStr) return alert("No backdating allowed.");
             if (toDate < fromDate) return alert("End date cannot be before Start date.");
-            
-            const start = new Date(fromDate);
-            const end = new Date(toDate);
-            const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-            const isOutsideBicol = document.getElementById('to-outside-bicol').checked;
-            if (!isOutsideBicol && diffDays > 5) return alert("Maximum of 5 days allowed for local travels");
 
-            const { data: psos } = await supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id);
-            const { data: activeTOs } = await supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%');
-            const { data: activeLeaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED']);
-            
-            // PREVENT RACE CONDITION: Abort if a newer date selection triggered while fetching
-            if (currentGenId !== itinGenCounter) return;
-
-            let hasPSO = false;
-
-            const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
-            const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
-
-
-// UPDATED: NA explicitly outputs a blank value ("") so the system knows to skip Unit Head
-        let pbddOptions = '';
-        if (userUnit) {
-            pbddOptions += `<option value="${userUnit === 'NA' ? '' : userUnit}">${userUnit === 'NA' ? 'NA (Direct to Chief)' : userUnit + ' (Original Unit)'}</option>`;
-        }
-        ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
-            if (u !== userUnit) {
-                pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
+            const start = new Date(fromDate + 'T00:00:00Z');
+            const end = new Date(toDate + 'T00:00:00Z');
+            const dateList = [];
+            for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+                dateList.push(d.toISOString().slice(0, 10));
             }
-        });
-        
 
-            let currentDt = new Date(start);
-            for (let i = 0; i < diffDays; i++) {
-                const dateStr = currentDt.toISOString().split('T')[0];
-                const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', unit: userUnit };
-              
-                if(activeLeaves?.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
-                    container.innerHTML += `
-                        <div class="card" style="border-left: 4px solid var(--danger);">
-                            <h5 style="margin: 0; color: var(--danger); font-size: 13px;">📅 ${dateStr}</h5>
-                            <p style="color: var(--danger); font-size: 11px; margin: 8px 0 0 0; font-weight: bold;">
-                                ⚠️ Leave Conflict: A Pending/Approved Leave exists on this date.
-                            </p>
-                        </div>`;
-                    currentDt.setDate(currentDt.getDate() + 1);
-                    continue; 
-                }
-                if(psos?.some(p => dateStr >= p.start_date && dateStr <= p.end_date)) {
-                    if(!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) { container.innerHTML = ""; return; }
-                    hasPSO = true; 
-                }
-                for (let to of activeTOs || []) {
-                    const { data: itins } = await supabase.from('itinerary').select('*').eq('to_no', to.to_no).eq('travel_date', dateStr);
-                    if (itins && itins.length > 0) {
-                        const isApproved = to.status === 'APPROVED';
-                        const isDisapproved = to.status.includes('DISAPPROVED');
-                        
-                        if (isDisapproved) continue;
+            const isOutsideBicol = document.getElementById('to-outside-bicol').checked;
+            if (!isOutsideBicol && dateList.length > 5) return alert("Maximum of 5 days allowed for local travels");
 
-                        const promptMsg = isApproved ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)` : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
-                        if (confirm(promptMsg)) {
-                            conflictsToProcess.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
-                        } else { container.innerHTML = ""; return; } 
+            container.innerHTML = '<div class="card" style="font-size:11px; color:gray; text-align:center;">Checking itinerary dates...</div>';
+
+            try {
+                // Independent reads in parallel.
+                const [psoRes, toRes, leaveRes] = await Promise.all([
+                    supabase.from('pso_records').select('*').eq('emp_id', currentUser.emp_id),
+                    supabase.from('travel_orders').select('*').eq('emp_id', currentUser.emp_id).not('status', 'ilike', '%CANCELLED%'),
+                    supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED'])
+                ]);
+
+                const stale = () =>
+                    currentGenId !== itinGenCounter
+                    || document.getElementById('itin-from').value !== fromDate
+                    || document.getElementById('itin-to').value !== toDate;
+
+                if (stale()) return;
+                if (psoRes.error) throw psoRes.error;
+                if (toRes.error) throw toRes.error;
+                if (leaveRes.error) throw leaveRes.error;
+
+                const psos = psoRes.data || [];
+                const activeTOs = toRes.data || [];
+                const activeLeaves = leaveRes.data || [];
+
+                // One conflict query for the whole range, rather than one await per day per TO.
+                let existingItins = [];
+                const activeToNos = [...new Set(activeTOs.map(t => t.to_no).filter(Boolean))];
+
+                if (activeToNos.length > 0) {
+                    const itinRes = await supabase
+                        .from('itinerary')
+                        .select('to_no, travel_date')
+                        .in('to_no', activeToNos)
+                        .gte('travel_date', fromDate)
+                        .lte('travel_date', toDate);
+
+                    if (stale()) return;
+                    if (itinRes.error) throw itinRes.error;
+                    existingItins = itinRes.data || [];
+                }
+
+                const toByNo = new Map(activeTOs.map(t => [t.to_no, t]));
+                const conflictsByDate = new Map();
+                existingItins.forEach(row => {
+                    if (!conflictsByDate.has(row.travel_date)) conflictsByDate.set(row.travel_date, []);
+                    conflictsByDate.get(row.travel_date).push(row.to_no);
+                });
+
+                const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
+                const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
+
+                let pbddOptions = '';
+                if (userUnit) {
+                    pbddOptions += `<option value="${userUnit === 'NA' ? '' : userUnit}">${userUnit === 'NA' ? 'NA (Direct to Chief)' : userUnit + ' (Original Unit)'}</option>`;
+                }
+                ['SIB/SMEDSS', 'EDES', 'CRFPS', 'NA'].forEach(u => {
+                    if (u !== userUnit) {
+                        pbddOptions += `<option value="${u === 'NA' ? '' : u}">${u === 'NA' ? 'NA (Direct to Chief)' : u}</option>`;
                     }
+                });
+
+                const localDraft = [];
+                const localConflicts = [];
+                const htmlParts = [];
+                const seenDates = new Set();
+
+                const escAttr = value => String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+
+                const escText = value => String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+
+                for (let i = 0; i < dateList.length; i++) {
+                    if (stale()) return;
+
+                    const dateStr = dateList[i];
+                    if (seenDates.has(dateStr)) continue;
+                    seenDates.add(dateStr);
+
+                    const prev = savedState[dateStr] || { dest:'', purp:'', rep:'', fund:'', unit:userUnit };
+
+                    if (activeLeaves.some(l => dateStr >= l.start_date && dateStr <= l.end_date)) {
+                        htmlParts.push(`
+                            <div class="card" style="border-left:4px solid var(--danger);">
+                                <h5 style="margin:0; color:var(--danger); font-size:13px;">📅 ${dateStr}</h5>
+                                <p style="color:var(--danger); font-size:11px; margin:8px 0 0 0; font-weight:bold;">
+                                    ⚠️ Leave Conflict: A Pending/Approved Leave exists on this date.
+                                </p>
+                            </div>`);
+                        continue;
+                    }
+
+                    const dayHasPSO = psos.some(p => dateStr >= p.start_date && dateStr <= p.end_date);
+                    if (dayHasPSO) {
+                        if (!confirm(`Conflict: Existing PSO on ${dateStr}. Reminding: TO cannot supersede PSO. Continue?`)) {
+                            if (!stale()) {
+                                container.innerHTML = '';
+                                itineraryDraft = [];
+                                conflictsToProcess = [];
+                            }
+                            return;
+                        }
+                    }
+
+                    const conflictNos = [...new Set(conflictsByDate.get(dateStr) || [])];
+                    for (const toNo of conflictNos) {
+                        const to = toByNo.get(toNo);
+                        if (!to) continue;
+                        const status = String(to.status || '').toUpperCase();
+                        if (status.includes('DISAPPROVED')) continue;
+
+                        const promptMsg = status === 'APPROVED'
+                            ? `Conflict: Approved TO ${to.to_no} exists on ${dateStr}. Overwrite? (This will trigger SPLIT logic for multi-day TOs)`
+                            : `Conflict: Pending TO ${to.to_no} exists on ${dateStr}. Overwrite?`;
+
+                        if (confirm(promptMsg)) {
+                            localConflicts.push({ to_no: to.to_no, status: to.status, affected_date: dateStr });
+                        } else {
+                            if (!stale()) {
+                                container.innerHTML = '';
+                                itineraryDraft = [];
+                                conflictsToProcess = [];
+                            }
+                            return;
+                        }
+                    }
+
+                    // Generation-specific IDs prevent a stale request from sharing field IDs.
+                    const suffix = `${currentGenId}-${i}`;
+                    const cardId = `card-${suffix}`;
+                    const destId = `dest-${suffix}`;
+                    const purpId = `purp-${suffix}`;
+                    const fundId = `fund-${suffix}`;
+                    const repId = `rep-${suffix}`;
+                    const unitId = isPBDD ? `unit-${suffix}` : null;
+
+                    let selectedOptions = pbddOptions;
+                    if (isPBDD) {
+                        const targetUnit = prev.unit === 'NA' ? '' : String(prev.unit || '');
+                        if (targetUnit === '') {
+                            selectedOptions = selectedOptions.replace('<option value="">', '<option value="" selected>');
+                        } else {
+                            selectedOptions = selectedOptions.replace(`value="${targetUnit}"`, `value="${targetUnit}" selected`);
+                        }
+                    }
+
+                    const pbddSelect = isPBDD ? `
+                        <select id="${unitId}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                            ${selectedOptions}
+                        </select>` : '';
+
+                    const previousDraft = localDraft.length ? localDraft[localDraft.length - 1] : null;
+                    const copyPrevious = previousDraft
+                        ? `<label style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:normal; margin-bottom:8px; color:var(--text-muted); cursor:pointer; white-space:nowrap;">
+                               <input type="checkbox" style="width:auto; margin:0; padding:0;" onchange="if(this.checked) document.getElementById('${purpId}').value = document.getElementById('${previousDraft.purpId}').value; else document.getElementById('${purpId}').value = '';"> Copy previous purpose
+                           </label>`
+                        : '';
+
+                    htmlParts.push(`
+                        <div class="card" id="${cardId}" style="border-left:4px solid var(--dar-green);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <h5 style="margin:0; color:var(--dar-green); font-size:13px;">📅 ${dateStr} ${dayHasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
+                                <button onclick="window.removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
+                            </div>
+                            <input type="text" id="${destId}" placeholder="Destination" value="${escAttr(prev.dest)}">
+                            ${copyPrevious}
+                            <textarea id="${purpId}" rows="2" placeholder="Purpose">${escText(prev.purp)}</textarea>
+                            <input type="text" id="${fundId}" list="fund-sources-list" placeholder="Fund Source (Select or Type)" value="${escAttr(prev.fund)}" style="padding:8px; font-size:13px; margin-bottom:8px;">
+                            ${pbddSelect}
+                            <input type="text" id="${repId}" placeholder="Report To" value="${escAttr(prev.rep)}">
+                        </div>`);
+
+                    localDraft.push({
+                        date: dateStr,
+                        destId,
+                        purpId,
+                        repId,
+                        fundId,
+                        unitId,
+                        cardId,
+                        hasPSO: dayHasPSO
+                    });
                 }
 
-                const cardId = `card-${i}`;
-                const pbddSelect = isPBDD ? `
-                    <select id="unit-${i}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${pbddOptions.replace(`value="${prev.unit}"`, `value="${prev.unit}" selected`)}
-                    </select>
-                ` : '';
+                if (stale()) return;
 
-                container.innerHTML += `
-                    <div class="card" id="${cardId}" style="border-left: 4px solid var(--dar-green);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h5 style="margin: 0; color: var(--dar-green); font-size: 13px;">📅 ${dateStr} ${hasPSO ? '<span style="color:red; font-size:9px;">(HAS PSO)</span>' : ''}</h5>
-                            <button onclick="window.removeItinCard('${cardId}', '${dateStr}')" style="background:none; border:none; color:red; font-size:11px; font-weight:bold; cursor:pointer;">DELETE</button>
-                        </div>
-                        <input type="text" id="dest-${i}" placeholder="Destination" value="${prev.dest.replace(/"/g, '&quot;')}">
-                        ${i > 0 ? `<label style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: normal; margin-bottom: 8px; color: var(--text-muted); cursor: pointer; white-space:nowrap;"><input type="checkbox" style="width: auto; margin: 0; padding: 0;" onchange="if(this.checked) document.getElementById('purp-${i}').value = document.getElementById('purp-${i-1}').value; else document.getElementById('purp-${i}').value = '';"> Copy previous purpose</label>` : ''}
-                        <textarea id="purp-${i}" rows="2" placeholder="Purpose">${prev.purp}</textarea>
-                        <input type="text" id="fund-${i}" list="fund-sources-list" placeholder="Fund Source (Select or Type)" value="${(prev.fund || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:8px;">
-                        ${pbddSelect}
-                        <input type="text" id="rep-${i}" placeholder="Report To" value="${prev.rep.replace(/"/g, '&quot;')}">
-                    </div>`;
-                itineraryDraft.push({ date: dateStr, destId: `dest-${i}`, purpId: `purp-${i}`, repId: `rep-${i}`, fundId: `fund-${i}`, unitId: isPBDD ? `unit-${i}` : null, cardId, hasPSO });
-                  
-                  currentDt.setDate(currentDt.getDate() + 1);
+                // The ONLY commit for this generation.
+                container.innerHTML = htmlParts.join('');
+                itineraryDraft = localDraft;
+                conflictsToProcess = localConflicts;
+
+            } catch (e) {
+                if (currentGenId !== itinGenCounter) return;
+                container.innerHTML = '';
+                itineraryDraft = [];
+                conflictsToProcess = [];
+                alert('Unable to build itinerary: ' + (e.message || e));
             }
         };
-
 
         window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
+
+            const uniqueItineraryDraft = [];
+            const seenSubmitDates = new Set();
+            itineraryDraft.forEach(it => {
+                if (!seenSubmitDates.has(it.date)) {
+                    seenSubmitDates.add(it.date);
+                    uniqueItineraryDraft.push(it);
+                }
+            });
+            itineraryDraft = uniqueItineraryDraft;
             
         const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set(); const fundSources = new Set();
             for (let it of itineraryDraft) {
@@ -1923,8 +2088,10 @@ let itinGenCounter = 0; // Tracks execution to prevent race conditions
             const fundEl = document.getElementById(it.fundId);
             const unitEl = it.unitId ? document.getElementById(it.unitId) : null;
             
-            // Prevent crash if DOM elements are missing or out of sync
-            if (!destEl || !purpEl || !repEl) continue;
+            // Never silently skip a date: stop instead of submitting an incomplete itinerary.
+            if (!destEl || !purpEl || !repEl) {
+                return alert(`Itinerary for ${it.date} is out of sync. Please regenerate the date range before submitting.`);
+            }
 
             const dest = destEl.value.trim();
             const purp = purpEl.value.trim();
@@ -3408,20 +3575,47 @@ for(let app of leaves || []) {
             }
         };
 
-   // CTO CREDIT STATUS HELPERS
-   // HR processing is the final crediting action:
-   // EARNED + PROCESSED = credited and immediately available to the employee.
-   // Legacy EARNED + POSTED rows are also honored so older credited CTO is not lost.
-   window.isCtoCreditedEarnedRecord = function(row) {
-            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
-            const rmk = String(row?.remarks || '').toUpperCase().trim();
-            return ttype === 'EARNED' && (rmk === 'PROCESSED' || rmk === 'POSTED');
-        };
-
+   // CTO CREDIT STATUS HELPERS — matched to the dedicated CTO Processing page.
    window.isCtoPendingCreditRecord = function(row) {
             const ttype = String(row?.transaction_type || '').toUpperCase().trim();
             const rmk = String(row?.remarks || '').toUpperCase().trim();
-            return ttype === 'EARNED' && (rmk === 'ENCODED' || rmk === 'FOR HR PROCESSING');
+            return ['APPLICATION', 'PENDING', 'REQUESTED', 'SUBMITTED'].includes(ttype)
+                || ['FOR HR PROCESSING', 'ENCODED', 'PENDING', 'APPLICATION', 'FOR PROCESSING'].includes(rmk);
+        };
+
+   window.isCtoDisapprovedCreditRecord = function(row) {
+            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
+            const rmk = String(row?.remarks || '').toUpperCase().trim();
+            return ['DISAPPROVED', 'REJECTED', 'CANCELLED'].includes(ttype)
+                || rmk.startsWith('DISAPPROVED')
+                || rmk.startsWith('REJECTED')
+                || rmk.startsWith('CANCELLED');
+        };
+
+   // The CTO Processing page treats EARNED as FINALIZED.
+   window.isCtoFinalizedEarnedRecord = function(row) {
+            const ttype = String(row?.transaction_type || '').toUpperCase().trim();
+            return ttype === 'EARNED'
+                && !window.isCtoPendingCreditRecord(row)
+                && !window.isCtoDisapprovedCreditRecord(row);
+        };
+
+   window.getCtoExpiryDate = function(dateStr) {
+            const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!m) return '';
+            const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+            d.setUTCFullYear(d.getUTCFullYear() + 1);
+            return d.toISOString().slice(0, 10);
+        };
+
+   window.isCtoExpiredRecord = function(row) {
+            if (!window.isCtoFinalizedEarnedRecord(row)) return false;
+            const expiry = window.getCtoExpiryDate(row?.date);
+            return !!expiry && getPSTDate() >= expiry;
+        };
+
+   window.isCtoCreditedEarnedRecord = function(row) {
+            return window.isCtoFinalizedEarnedRecord(row) && !window.isCtoExpiredRecord(row);
         };
 
    window.isCtoUsedRecord = function(row) {
@@ -3576,7 +3770,7 @@ for(let app of leaves || []) {
 
             const { data: ctoRows, error: ctoErr } = await supabase
                 .from('cto_records')
-                .select('transaction_type, remarks, calculated_hours')
+                .select('transaction_type, remarks, calculated_hours, date')
                 .eq('emp_id', empId);
             if (ctoErr) throw ctoErr;
 
@@ -3618,16 +3812,38 @@ for(let app of leaves || []) {
             return Math.max(0, availableHours);
         };
 
-   // Employee CTO credit requests are NOT credited upon submission.
-   // They are saved as EARNED + FOR HR PROCESSING with zero calculated hours.
-   // HR validates the required hard-copy documents and changes the record to PROCESSED.
-   // Once PROCESSED, calculated_hours is immediately part of the employee's available CTO.
-   window.openCtoCreditRequest = function() {
+   // EMPLOYEE CTO CREDIT APPLICATION
+   // This employee portal creates the request only.
+   // HR approval/finalization happens in the dedicated Gate Pass & CTO Processing page.
+   let ctoRequestSource = 'credits';
+
+   window.openCtoCreditRequest = function(source = 'credits') {
             const modal = document.getElementById('ctoCreditModal');
             if (!modal) return;
+
+            ctoRequestSource = source === 'leave' ? 'leave' : 'credits';
+
             document.getElementById('cto-credit-pso').value = '';
-            document.getElementById('cto-credit-date').value = '';
             document.getElementById('cto-credit-desc').value = '';
+            document.getElementById('cto-credit-date').value = '';
+
+            const dateEl = document.getElementById('cto-credit-date');
+            if (dateEl) dateEl.max = getPSTDate();
+
+            const titleEl = document.getElementById('cto-credit-modal-title');
+            const helpEl = document.getElementById('cto-credit-modal-help');
+            const btn = document.getElementById('btn-submit-cto-credit');
+
+            if (ctoRequestSource === 'leave') {
+                if (titleEl) titleEl.innerText = 'Apply for CTO Credits';
+                if (helpEl) helpEl.innerHTML = 'Enter the <strong>PSO Number, Description, and Date</strong>. The application will be sent to HR and will remain pending until processed in the CTO Processing page.';
+                if (btn) btn.innerText = 'APPLY';
+            } else {
+                if (titleEl) titleEl.innerText = 'Submit CTO Credit to HR';
+                if (helpEl) helpEl.innerHTML = 'Submit the <strong>PSO Number, Description, and Date</strong> for HR verification. This is the same CTO credit application processed in the CTO Processing page.';
+                if (btn) btn.innerText = 'SUBMIT CTO CREDIT TO HR';
+            }
+
             modal.style.display = 'flex';
         };
 
@@ -3638,71 +3854,78 @@ for(let app of leaves || []) {
 
    window.submitCtoCreditRequest = async function() {
             const pso = document.getElementById('cto-credit-pso').value.trim();
-            const activityDate = document.getElementById('cto-credit-date').value;
             const desc = document.getElementById('cto-credit-desc').value.trim();
+            const activityDate = document.getElementById('cto-credit-date').value;
             const btn = document.getElementById('btn-submit-cto-credit');
 
-            if (!pso || !activityDate || !desc) return alert('Please complete the PSO/RSO number, activity date, and description.');
+            if (!pso || !desc || !activityDate) {
+                return alert('Please enter the PSO Number, Description, and Date of Activity.');
+            }
+            if (activityDate > getPSTDate()) {
+                return alert('Date of Activity cannot be a future date.');
+            }
 
             try {
-                if (btn) { btn.disabled = true; btn.innerText = 'SUBMITTING...'; }
-
-                const { data: duplicate, error: dupErr } = await supabase
-                    .from('cto_records')
-                    .select('id, remarks')
-                    .eq('emp_id', currentUser.emp_id)
-                    .eq('PSO_Number', pso)
-                    .eq('date', activityDate)
-                    .limit(1);
-                if (dupErr) throw dupErr;
-                if (duplicate && duplicate.length > 0) {
-                    return alert(`A CTO record for this PSO/RSO and date already exists (${duplicate[0].remarks || 'recorded'}).`);
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerText = 'SUBMITTING...';
                 }
 
-                const activityObj = new Date(activityDate + 'T00:00:00');
-                const day = activityObj.getDay();
-                const station = String(currentUser.station || '').toUpperCase().trim();
-                const isCoveredHoliday = cachedHolidays.some(h => {
-                    if (h.date !== activityDate) return false;
-                    const coverage = String(h.coverage || 'NATIONWIDE').toUpperCase();
-                    if (coverage.includes('NATIONWIDE')) return true;
-                    const hasNaga = coverage.includes('NAGA CITY');
-                    const hasCamSur = coverage.includes('CAMARINES SUR');
-                    if (hasNaga && hasCamSur) return true;
-                    if (hasNaga && !hasCamSur) return station.includes('DARPO') || station === 'DARPO-CS1';
-                    if (hasCamSur && !hasNaga) return station.includes('DARMO') || station !== 'DARPO-CS1';
-                    return false;
-                });
-                // schedule_override controls the current work schedule. Under the
-                // current compressed work week (FIXED 07:00-18:00), Friday is the rest day.
-                const requestSchedules = await window.fetchLeaveScheduleOverrides(activityDate, activityDate);
-                const matchingSchedules = (requestSchedules || []).filter(s => activityDate >= s.start_date && activityDate <= s.end_date);
-                const activeSchedule = matchingSchedules.find(s => String(s.emp_id) === String(currentUser.emp_id))
-                    || matchingSchedules.find(s => String(s.emp_id || '').toUpperCase() === 'ALL')
-                    || null;
-                const isCwwFriday = window.isCtoCompressedWorkWeek(activeSchedule) && day === 5;
-                const multiplier = (day === 0 || day === 6 || isCwwFriday || isCoveredHoliday) ? '1.5' : '1.0';
+                // Prevent active/final duplicates caused by repeat taps or slow connections.
+                // A previously disapproved/cancelled request may be corrected and re-applied.
+                const { data: existingRows, error: dupErr } = await supabase
+                    .from('cto_records')
+                    .select('id, transaction_type, remarks')
+                    .eq('emp_id', currentUser.emp_id)
+                    .eq('PSO_Number', pso)
+                    .eq('date', activityDate);
 
+                if (dupErr) throw dupErr;
+
+                const activeDuplicate = (existingRows || []).find(r => {
+                    const tx = String(r.transaction_type || '').toUpperCase().trim();
+                    const rm = String(r.remarks || '').toUpperCase().trim();
+                    const denied = ['DISAPPROVED', 'REJECTED', 'CANCELLED'].includes(tx)
+                        || rm.startsWith('DISAPPROVED')
+                        || rm.startsWith('REJECTED')
+                        || rm.startsWith('CANCELLED');
+                    return !denied;
+                });
+
+                if (activeDuplicate) {
+                    return alert(`A CTO application for PSO ${pso} on ${activityDate} already exists (${activeDuplicate.remarks || activeDuplicate.transaction_type || 'recorded'}).`);
+                }
+
+                // Match the dedicated CTO Processing page:
+                // APPLICATION + FOR HR PROCESSING = pending employee application.
+                // The employee portal intentionally does NOT compute approved hours or multiplier.
                 const { error } = await supabase.from('cto_records').insert({
                     emp_id: currentUser.emp_id,
                     date: activityDate,
-                    transaction_type: 'EARNED',
+                    transaction_type: 'APPLICATION',
                     base_type: desc,
                     base_hours: '0',
-                    multiplier: multiplier,
+                    multiplier: '1.0',
                     calculated_hours: '0',
                     PSO_Number: pso,
                     remarks: 'FOR HR PROCESSING'
                 });
+
                 if (error) throw error;
 
-                alert('CTO credit request submitted to HR. This is NOT yet credited to your CTO balance. Please submit the HARD COPY supporting documents to the HR Office. The CTO hours will be credited only after HR processes the request.');
+                alert('CTO credit application submitted for HR approval. It is not yet added to your CTO balance. HR will process it in the CTO Processing page.');
                 window.closeCtoCreditRequest();
-                if (document.getElementById('credits-view')?.classList.contains('active')) await window.loadCredits();
+
+                if (document.getElementById('credits-view')?.classList.contains('active')) {
+                    await window.loadCredits();
+                }
             } catch (e) {
-                alert('Unable to submit CTO credit to HR: ' + e.message);
+                alert('Unable to submit CTO credit application: ' + e.message);
             } finally {
-                if (btn) { btn.disabled = false; btn.innerText = 'SUBMIT CTO CREDIT TO HR'; }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = ctoRequestSource === 'leave' ? 'APPLY' : 'SUBMIT CTO CREDIT TO HR';
+                }
             }
         };
 
@@ -3717,8 +3940,7 @@ if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].incl
                     ctoOption = `
                     <label style="display:flex; align-items:center; gap:5px; font-weight:bold; color:var(--dar-green); margin-bottom: 8px;">
                         <input type="checkbox" id="vl-cto-credit" style="width:auto; margin:0;" onchange="window.calculateLeaveDays()"> Credit to CTO (If available)
-                    </label>
-                    <button type="button" class="btn btn-gold btn-small" style="width:auto; padding:8px 12px; margin:0 0 10px 0;" onclick="window.openCtoCreditRequest()">+ Submit CTO Credit to HR</button>`;
+                    </label>`;
                 }
 
                 container.innerHTML = `
@@ -3909,7 +4131,7 @@ window.calculateLeaveDays = async function() {
                             breakdownEl.innerHTML += `<br><b>CTO available for this application:</b> ${availableCtoHours.toFixed(2)} hour(s).`
                                 + `<br><b>Required:</b> ${requiredCtoHours.toFixed(2)} hour(s).`
                                 + `<br><b>Proposed fallback:</b> ${ctoHoursToUse.toFixed(2)} CTO hour(s) + ${vlFallbackDays.toFixed(3)} Vacation Leave day(s). You will be asked to confirm before submission.`
-                                + `<br><button type="button" onclick="window.openCtoCreditRequest()" style="margin-top:6px; border:1px solid var(--dar-gold); background:#fefce8; color:#854d0e; border-radius:6px; padding:6px 9px; font-size:10px; font-weight:bold; cursor:pointer;">SUBMIT CTO CREDIT TO HR INSTEAD</button>`;
+                                + `<br><button type="button" onclick="window.openCtoCreditRequest('leave')" style="margin-top:6px; border:1px solid var(--dar-gold); background:#fefce8; color:#854d0e; border-radius:6px; padding:6px 9px; font-size:10px; font-weight:bold; cursor:pointer;">APPLY FOR CTO CREDITS</button>`;
                         }
                     } else {
                         countEl.innerText = `${count} (CTO: ${requiredCtoHours.toFixed(2)} HRS)`;
@@ -4019,7 +4241,7 @@ window.submitLeave = async function() {
                     if (remainingHours > 0.0001) {
                         if (vlFallbackDays > currentVL + 0.0001) {
                             alert(`CTO and Vacation Leave are not enough for this application. CTO available: ${availableCtoHours.toFixed(2)} hour(s). Vacation Leave available: ${currentVL.toFixed(3)} day(s). Additional VL needed after CTO: ${vlFallbackDays.toFixed(3)} day(s).`);
-                            if (confirm('Would you like to submit CTO credit to HR first?')) window.openCtoCreditRequest();
+                            if (confirm('Would you like to apply for CTO credits first?')) window.openCtoCreditRequest('leave');
                             return;
                         }
 
@@ -4029,7 +4251,7 @@ window.submitLeave = async function() {
 
                         if (!confirm(splitMessage)) {
                             if (confirm('Submit CTO credit to HR for validation instead? You can apply for CTO leave after HR processes the credit.')) {
-                                window.openCtoCreditRequest();
+                                window.openCtoCreditRequest('leave');
                             }
                             return;
                         }
