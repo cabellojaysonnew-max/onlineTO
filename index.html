@@ -5765,23 +5765,17 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                 const toNos = Array.from(selectedPendingOrders).filter(id => id.startsWith('TO:')).map(id => id.split(':')[1]);
                 const leaveIds = Array.from(selectedPendingOrders).filter(id => id.startsWith('LEAVE:')).map(id => id.split(':')[1]);
 
-                // Batch TOs
+                // Each TO has one travel_orders row per traveler. Preserve each person's approval stage.
                 if (toNos.length > 0) {
-                    const { data: toDataList, error } = await supabaseClient.from('travel_orders').select('to_no, unit, division, transport, unithead_signed, status').in('to_no', toNos);
-                    if (!error) {
-                        const updatePromises = toNos.map(async (to_no) => {
-                            if (action === 'DISAPPROVED') {
-                                await supabaseClient.from('travel_orders').update({ status: "DISAPPROVED", received: denyReason }).eq('to_no', to_no);
-                                await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
-                            } else {
-                                const toRec = (toDataList || []).find(t => t.to_no === to_no);
-                                const p = getAppPayload(currentUser, toRec);
-                                if (Object.keys(p).length === 0) return; 
-                                await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                                await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
-                            }
-                        });
-                        await Promise.all(updatePromises);
+                    for (const to_no of toNos) {
+                        if (action === 'DISAPPROVED') {
+                            const { error } = await supabaseClient.from('travel_orders')
+                                .update({ status: "DISAPPROVED", received: denyReason }).eq('to_no', to_no);
+                            if (error) throw error;
+                            await window.logActivity(to_no, 'DISAPPROVED', `Batch disapproved by ${currentUser.fullName}. Reason: ${denyReason}`);
+                        } else {
+                            await approveGroupTOStage(to_no);
+                        }
                     }
                 }
          selectedPendingOrders.clear();
@@ -5923,18 +5917,10 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         await window.logActivity(to_no, 'PARTIAL_DENY', `Dates denied and removed (${unselectedDates.join(', ')}) by ${currentUser.fullName}. Reason: ${partialDenyReason}`);
                     }
                     
-                    const { data: toData, error } = await supabaseClient.from('travel_orders').select('*').eq('to_no', to_no).limit(1);
-                    if (error) throw error;
-                    const p = getAppPayload(currentUser, toData[0]);
-                    
-                    if (approveReason) {
-                        p.remarks = approveReason;
-                    }
-
-                    if (Object.keys(p).length === 0) throw new Error("Approval failed: Role not configured.");
-
-                    await supabaseClient.from('travel_orders').update(p).eq('to_no', to_no);
-                    await window.logActivity(to_no, 'STATUS_UPDATED', `Status advanced to ${p.status} by ${currentUser.fullName}`);
+                    // Approve only the group members currently at this approver's stage.
+                    // This includes a traveling Division Chief at the recommending-approval step;
+                    // the PARPO remains responsible for final approval.
+                    await approveGroupTOStage(to_no, approveReason);
                     
                     if (approveReason) {
                         await supabaseClient.from('notifications').insert({
@@ -6030,6 +6016,112 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             return {};
         }
 
+        // GROUP TO APPROVAL: one TO number, independent approval statuses per employee.
+        // In particular, a Chief who is a traveler may recommend the GROUP TO;
+        // this is not its final authorization (which remains with PARPO).
+        function findGroupTOApproval(actor, groupRows) {
+            const roles = actor.roles || [];
+            const divisions = actor.divisions || [];
+            const units = actor.units || [];
+            const status = row => String(row.status || '').trim().toUpperCase();
+            const inChiefDivision = row => String(row.division || '').split(',')
+                .some(d => divisions.includes(d.trim().toUpperCase()));
+            const pendingForStage = (stage, predicate) => groupRows.filter(
+                row => status(row) === stage && predicate(row)
+            );
+            const hasAnyRole = names => roles.some(role => names.includes(role));
+
+            if (hasAnyRole(['VEHICLE_APPROVER', 'VEHICLE APPROVER', 'ADMIN'])) {
+                const rows = pendingForStage('PENDING_VEHICLE_APPROVER', () => true);
+                if (rows.length) return { stage: 'PENDING_VEHICLE_APPROVER', rows };
+            }
+
+            if (hasAnyRole(['UNIT_HEAD', 'UNIT HEAD', 'MARPO'])) {
+                const rows = pendingForStage('PENDING_UNIT_HEAD', row => {
+                    if (!inChiefDivision(row)) return false;
+                    const requiredUnits = String(row.unit || '').split(',')
+                        .map(unit => unit.trim().toUpperCase()).filter(unit => unit && unit !== 'NA');
+                    const alreadySigned = String(row.unithead_signed || '').toUpperCase();
+                    return requiredUnits.some(unit => units.includes(unit) && !alreadySigned.includes(`(${unit})`));
+                });
+                if (rows.length) return { stage: 'PENDING_UNIT_HEAD', rows };
+            }
+
+            if (roles.includes('CHIEF')) {
+                const chiefRows = groupRows.filter(inChiefDivision);
+                // Do not advance the Chief's own row ahead of staff awaiting Unit Head review.
+                const unitReviewsComplete = chiefRows.every(row =>
+                    !['PENDING_UNIT_HEAD', 'PENDING_VEHICLE_APPROVER'].includes(status(row))
+                );
+                if (unitReviewsComplete) {
+                    const rows = pendingForStage('PENDING_CHIEF', inChiefDivision);
+                    if (rows.length) return { stage: 'PENDING_CHIEF', rows };
+                }
+            }
+
+            if (hasAnyRole(['PARPO_I', 'PARPO I', 'PARPO1', 'PARPO_1', 'ADMIN'])) {
+                const rows = pendingForStage('PENDING_PARPO_I', () => true);
+                if (rows.length) return { stage: 'PENDING_PARPO_I', rows };
+            }
+
+            if (hasAnyRole(['PARPO', 'PARPO_II', 'PARPO II', 'PARPO2', 'ADMIN'])) {
+                // Final approval must not finish a mixed-stage TO prematurely.
+                const allReadyForFinal = groupRows.every(row =>
+                    ['PENDING_PARPO', 'APPROVED'].includes(status(row))
+                );
+                if (allReadyForFinal) {
+                    const rows = pendingForStage('PENDING_PARPO', () => true);
+                    if (rows.length) return { stage: 'PENDING_PARPO', rows };
+                }
+            }
+
+            return null;
+        }
+
+        async function approveGroupTOStage(to_no, approveReason = '') {
+            const { data: groupRows, error: readError } = await supabaseClient
+                .from('travel_orders').select('*').eq('to_no', to_no);
+            if (readError) throw readError;
+            if (!groupRows || !groupRows.length) throw new Error(`Travel Order ${to_no} not found.`);
+
+            const approval = findGroupTOApproval(currentUser, groupRows);
+            if (!approval) throw new Error(
+                `TO ${to_no} has no records ready for your approval stage. ` +
+                'A staff member may still be awaiting Unit Head approval, or this TO was processed by another approver.'
+            );
+
+            const chiefIsTraveler = approval.stage === 'PENDING_CHIEF' && groupRows.some(row =>
+                String(row.emp_name || '').trim().toUpperCase() ===
+                String(currentUser.fullName || '').trim().toUpperCase()
+            );
+
+            for (const row of approval.rows) {
+                const payload = getAppPayload(currentUser, row);
+                if (!payload || !Object.keys(payload).length) {
+                    throw new Error(`Cannot advance ${row.emp_name || row.emp_id} at ${row.status}.`);
+                }
+                if (approveReason) payload.remarks = approveReason;
+
+                // Match TO + employee + current stage, not all employees sharing the TO number.
+                const { data: updated, error: updateError } = await supabaseClient
+                    .from('travel_orders').update(payload)
+                    .eq('to_no', to_no).eq('emp_id', row.emp_id).eq('status', row.status)
+                    .select('emp_id');
+                if (updateError) throw updateError;
+                if (!updated || updated.length !== 1) {
+                    throw new Error(`TO ${to_no}: status changed for ${row.emp_name || row.emp_id}; please refresh and retry.`);
+                }
+            }
+
+            const actionDescription = chiefIsTraveler
+                ? 'Division Chief is a traveler; recommending approval only, subject to final PARPO approval.'
+                : 'Role-based approval step completed.';
+            await window.logActivity(to_no, 'STATUS_UPDATED',
+                `${approval.rows.length} participant(s) processed at ${approval.stage} by ${currentUser.fullName}. ${actionDescription}`
+            );
+            return approval;
+        }
+
         // --- PENDING TAB (TO ONLY) ---
         async function loadPendingTab() {
             selectedPendingOrders.clear();
@@ -6047,32 +6139,10 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
             let grp = {};
             (oRes.data || []).forEach(o => { if (!grp[o.to_no]) grp[o.to_no] = []; grp[o.to_no].push(o); });
             for (const [to_no, list] of Object.entries(grp)) {
-                let show = false;
-                
-                for (let o of list) {
-                    const s = (o.status || "").trim().toUpperCase();
-                    const oDivs = o.division ? o.division.split(',').map(x => x.trim().toUpperCase()) : [];
-                    const dMatch = oDivs.some(d => currentUser.divisions.includes(d));
-                    const roles = currentUser.roles || [];
-
-                    const requiredUnits = o.unit ? o.unit.split(',').map(x => x.trim().toUpperCase()).filter(x => x && x !== 'NA') : [];
-                    const unitsCanSign = requiredUnits.filter(reqU => currentUser.units.includes(reqU));
-                    const currentSigs = o.unithead_signed ? o.unithead_signed.toUpperCase() : "";
-                    const hasUnsignedUnit = unitsCanSign.some(reqU => !currentSigs.includes(`(${reqU})`));
-
-                    if (roles.some(r => ["VEHICLE_APPROVER", "VEHICLE APPROVER", "ADMIN"].includes(r)) && s === "PENDING_VEHICLE_APPROVER") show = true;
-                    else if (roles.some(r => ["PARPO", "PARPO_II", "PARPO II", "PARPO2"].includes(r)) && s === "PENDING_PARPO") show = true;
-                    // ADDED: PARPO I queue visibility
-                    else if (roles.some(r => ["PARPO_I", "PARPO I", "PARPO1", "PARPO_1"].includes(r)) && s === "PENDING_PARPO_I") show = true;
-                    else if (roles.includes("CHIEF") && s === "PENDING_CHIEF" && dMatch) show = true;
-                    else if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD" && dMatch) {
-                        if (unitsCanSign.length > 0 && hasUnsignedUnit) {
-                            show = true;
-                        }
-                    }             
-                }
-                
-                if (show) {
+                // The inbox and the approval handler must agree on which stage is actionable.
+                // A Chief traveling on this same TO may still recommend it after staff/unit review.
+                const groupApproval = findGroupTOApproval(currentUser, list);
+                if (groupApproval) {
                     let fullItinerary = (iRes.data || []).filter(i => i.to_no === to_no).sort((a,b) => new Date(a.travel_date) - new Date(b.travel_date));
                     
                     let dt = "N/A";
@@ -6104,6 +6174,9 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                         report_to: list[0].report_to || 'N/A', 
                         dateStr: dt,
                         itinEncoded: itinEncoded,
+                        approvalStage: groupApproval.stage,
+                        chiefIsTraveler: groupApproval.stage === 'PENDING_CHIEF' && list.some(g =>
+                            String(g.emp_name || '').trim().toUpperCase() === String(currentUser.fullName || '').trim().toUpperCase()),
                         created_at: list[0].created_at
                     });
                 }
@@ -6136,6 +6209,7 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
                                 </span>
                             </div>
                             <p class="font-bold text-gray-800 leading-tight">${o.names.join(', ')}</p>
+                            ${o.chiefIsTraveler ? '<p class="text-[10px] text-amber-800 font-bold mt-1">Division Chief is included: Chief recommendation is required; PARPO gives final approval.</p>' : ''}
                             ${o.itinDetailsHTML}
                             <p class="text-[11px] text-gray-500 truncate mt-1.5 border-t border-blue-100 pt-1">👤 Report To: ${o.report_to}</p>
                             <p class="text-[11px] text-dar-green font-bold mt-0.5">📅 Range: ${o.dateStr}</p>
