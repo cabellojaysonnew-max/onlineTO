@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.12"; 
+        const APP_VERSION = "v1.13-esc"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -424,6 +424,7 @@ async function hardReloadSystem() {
                     <div class="radio-item"><input type="radio" name="ltype" value="Maternity Leave" onchange="window.updateLeaveInputs()"> Maternity</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Paternity Leave" onchange="window.updateLeaveInputs()"> Paternity</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Wellness Leave" onchange="window.updateLeaveInputs()"> Wellness</div>
+                    <div class="radio-item"><input type="radio" name="ltype" value="Election Service Credit Leave" onchange="window.updateLeaveInputs()"> Election Service Credit</div>
                     <div class="radio-item"><input type="radio" name="ltype" value="Others" onchange="window.updateLeaveInputs()"> Others</div>
                 </div>
                 
@@ -1544,7 +1545,7 @@ window.loadCredits = async function() {
 
     // 1. FETCH BASELINE FROM HR (Employees Table)
     const { data: emp } = await supabase.from('employees')
-        .select('vl_balance, sl_balance, spl_balance, wl_balance, cto_balance')
+        .select('vl_balance, sl_balance, spl_balance, wl_balance, election_service_credit_balance, cto_balance')
         .eq('emp_id', currentUser.emp_id)
         .maybeSingle();
 
@@ -1553,6 +1554,7 @@ window.loadCredits = async function() {
     let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
     let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
     let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
+    let currentESC = Number(emp?.election_service_credit_balance || 0);
     let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0);
 
     // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
@@ -1578,7 +1580,11 @@ window.loadCredits = async function() {
             let transDateStr = l.start_date || l.created_at || '';
             let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
 
-            if (lType.includes('SPECIAL PRIVILEGE')) {
+            if (lType.includes('ELECTION SERVICE CREDIT') || lType === 'ESCL' || lType === 'ESC') {
+                // Carry-forward balance: election credits do NOT reset at year end.
+                currentESC += cVal - dVal;
+            }
+            else if (lType.includes('SPECIAL PRIVILEGE')) {
                 if (transYear === currentYear) {
                     currentSPL = currentSPL + cVal - dVal;
                 }
@@ -1661,6 +1667,7 @@ window.loadCredits = async function() {
             <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Sick:</strong> <span style="color: var(--success); font-weight: bold;">${currentSL.toFixed(3)}</span></div>
             <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>SPL:</strong> <span style="color: var(--success); font-weight: bold;">${currentSPL.toFixed(3)}</span></div>
             <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL.toFixed(3)}</span></div>
+            <div style="background:#f0f4f8; padding:10px; border-radius:8px; grid-column:1/-1;"><strong>Election Service Credit Leave:</strong> <span style="color: var(--success); font-weight: bold;">${currentESC.toFixed(3)}</span> day(s) <small style="color:gray;">(Verified / no annual reset)</small></div>
         </div>
         <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Transactions</h5>
         ${deductionsHtml}
@@ -3930,6 +3937,7 @@ for(let app of leaves || []) {
         };
 
    window.updateLeaveInputs = function() {
+            // Every leave type has its own schedule-aware charging rule.
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
@@ -3957,6 +3965,12 @@ if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].incl
                         <div class="radio-item"><input type="radio" name="ldetail" value="Out Patient"> Out Patient</div>
                     </div>
                     <input type="text" id="leave-specify" placeholder="Specify Illness...">`;
+            } else if (type === "Election Service Credit Leave") {
+                container.innerHTML = `
+                    <p style="font-size:11px; line-height:1.5; color:var(--text-muted); margin:0 0 10px;">
+                        R.A. No. 10756 and COMELEC Resolutions Nos. 11212 and 11212-A. Applies to verified, HR-posted election service credits. One credit is used per scheduled working day; credits do not expire automatically. This is separate from VL, SL, SPL, Wellness and CTO.
+                    </p>
+                    <input type="text" id="leave-specify" placeholder="Election / credit reference (if applicable)">`;
             } else if (type === "Paternity Leave") {
                 container.innerHTML = `
                     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
@@ -3972,6 +3986,9 @@ if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].incl
             } else {
                 container.innerHTML = `<input type="text" id="leave-specify" placeholder="Remarks or Specify Details">`;
             }           
+                if (document.getElementById('leave-from').value && document.getElementById('leave-to').value) {
+                    window.calculateLeaveDays();
+                }
             };
 
         
@@ -4172,16 +4189,18 @@ window.submitLeave = async function() {
             }
 
             // --- LEAVE BALANCE CHECK LOGIC ---          
-            const { data: empData } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            const { data: empData, error: escEmployeeError } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, election_service_credit_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
+            if (escEmployeeError) return alert('Could not verify leave balances. Apply the Election Service Credit database migration first. ' + escEmployeeError.message);
             let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
             let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
             let currentSPL = empData && empData.spl_balance ? parseFloat(empData.spl_balance) : 0;
             let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
+            let currentESC = Number(empData?.election_service_credit_balance || 0);
 
             const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('type, credit, debit, transaction_type, remarks')
+                .select('type, credit, debit, transaction_type, remarks, start_date, created_at')
                 .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
+                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
 
             if (ledgers) {
                 ledgers.forEach(l => {
@@ -4190,7 +4209,8 @@ window.submitLeave = async function() {
                     let lType = (l.type || '').toUpperCase();
                     let ledgerRemarks = String(l.remarks || '').toUpperCase();
                     let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
-                    if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
+                    if (lType.includes('ELECTION SERVICE CREDIT') || lType === 'ESCL' || lType === 'ESC') currentESC += cVal - dVal;
+                    else if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
                     else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
                     else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) {
                         if (isCtoBacked) {
@@ -4210,6 +4230,8 @@ window.submitLeave = async function() {
                 if (days > currentSPL) return alert(`Insufficient SPL balance. You only have ${currentSPL.toFixed(3)} days available.`);
             } else if (type === "Wellness Leave") {
                 if (days > currentWL) return alert(`Insufficient Wellness Leave balance. You only have ${currentWL.toFixed(3)} days available.`);
+            } else if (type === "Election Service Credit Leave") {
+                if (days > currentESC + 0.0005) return alert(`Insufficient verified Election Service Credit balance. You only have ${currentESC.toFixed(3)} day(s). Contact HR to post your COMELEC-certified credit. This leave cannot automatically draw from VL.`);
             } else if (type === "Sick Leave") {
                 if (days > currentSL) {
                     let deficit = days - currentSL;
@@ -4521,7 +4543,8 @@ window.submitLeave = async function() {
                 { name: "Special Leave Benefits for Women", detail: "(RA No. 9710 / CSC MC No. 25, s. 2010)" },
                 { name: "Special Emergency (Calamity) Leave", detail: "(CSC MC No. 2, s. 2012, as amended)" },
                 { name: "Adoption Leave", detail: "(R.A. No. 8552)" },
-                { name: "Wellness Leave", detail: "(CSC Memorandum Circular No. 01, s. 2026)" }
+                { name: "Wellness Leave", detail: "(CSC Memorandum Circular No. 01, s. 2026)" },
+                { name: "Election Service Credit Leave", detail: "(R.A. 10756 / COMELEC Resolution 11212-A)" }
             ];
             let s_type = String(app.type || "").toLowerCase();
 
@@ -4535,7 +4558,7 @@ window.submitLeave = async function() {
                 let nameWidth = doc.getTextWidth(t.name);
                 doc.setFontSize(4.5);
                 doc.text(t.detail, 16 + nameWidth + 1, tY_left + 2.5);
-                tY_left += 5;
+                tY_left += 4.5;
             });
 
             doc.rect(12, tY_left, 3, 3);
