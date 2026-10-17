@@ -412,6 +412,10 @@ async function hardReloadSystem() {
 
         <div id="leave-view" class="view">
             <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
+            <div class="card" style="border-left:4px solid #b45309;background:#fffbeb;font-size:12px;line-height:1.5">
+              <strong>REQUIRED APPROVAL PROCEDURE</strong><div>Unit Head → Division Chief → PARPO → <b>Submit signed hard-copy Form 6 to HR</b> → HR confirms receipt and grants final approval.</div>
+              <div style="margin-top:6px">Online approval by PARPO is NOT final leave approval. Print your Form 6, secure the required signatures and submit the hard copy. HR cannot approve without confirming receipt.</div>
+            </div>
 
             <div class="card" style="border-left:4px solid var(--dar-gold);">
                 <h4>Apply for CTO Credits</h4>
@@ -533,6 +537,122 @@ async function hardReloadSystem() {
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
         
+    // CTO FEFO (First-Expiring, First-Out): chronological consumption by expiry,
+    // NOT by credit application/posting date. Old deductions without an allocation
+    // are reconstructed in FEFO order. New deductions pin their source IDs in remarks.
+    const CTOFEFO = (() => {
+        const EPS = 0.000001;
+        const onlyDate = value => {
+            const match = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})/);
+            return match ? match[1] : '';
+        };
+        const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+        const addYear = date => {
+            if (!date) return '';
+            const d = new Date(date + 'T00:00:00Z');
+            if (Number.isNaN(d.getTime())) return '';
+            d.setUTCFullYear(d.getUTCFullYear()+1);
+            return d.toISOString().slice(0,10);
+        };
+        const amount = row => Math.max(0, Math.abs(Number(row.calculated_hours ?? row.base_hours ?? 0) || 0));
+        const orderRef = row => {
+            const value = String(row.PSO_Number ?? row.pso_number ?? '').trim();
+            return value ? (/^(PSO|RSO|SO)\b/i.test(value) ? value : 'PSO ' + value) : 'CTO credit #' + String(row.id ?? '?');
+        };
+        const isEarned = row => {
+            const t=String(row.transaction_type||'').trim().toUpperCase();
+            const r=String(row.remarks||'').trim().toUpperCase();
+            return t==='EARNED' &&
+                !['APPLICATION','PENDING','REQUESTED','SUBMITTED','DISAPPROVED','REJECTED','CANCELLED'].includes(t) &&
+                !['FOR HR PROCESSING','ENCODED','PENDING','APPLICATION','FOR PROCESSING'].includes(r) &&
+                !/^(DISAPPROVED|REJECTED|CANCELLED)/.test(r);
+        };
+        const isUsed = row => {
+            const t=String(row.transaction_type||'').trim().toUpperCase();
+            const r=String(row.remarks||'').trim().toUpperCase();
+            return t==='USED'||t==='CTO DEDUCTION'||r==='CTO DEDUCTION'||r.startsWith('CTO DEDUCTION |');
+        };
+        const expiry = row => onlyDate(row.expires_on) || addYear(onlyDate(row.pso_date||row.date||row.created_at));
+        const earnedDate = row => onlyDate(row.pso_date||row.date||row.created_at||row.posted_at);
+        const useDate = row => onlyDate(row.leave_date||row.date||row.posted_at||row.created_at);
+        const compareBuckets = (a,b) => (a.expiresOn||'9999-12-31').localeCompare(b.expiresOn||'9999-12-31')
+            || a.earnedDate.localeCompare(b.earnedDate) || String(a.record.id??'').localeCompare(String(b.record.id??''),undefined,{numeric:true});
+        // Each stored new USED transaction has an audit tag, e.g. FEFO:72=3.000,76=5.000.
+        // BASE is used only for the pre-system opening balance without an expiry date.
+        const readPinned = remarks => {
+            const m=String(remarks||'').match(/(?:^|\s|\|)FEFO:([A-Za-z0-9_=.\-,]+)/);
+            if(!m) return null;
+            return m[1].split(',').map(part=>{
+                const i=part.lastIndexOf('=');
+                return i<1?null:{id:part.slice(0,i),hours:Math.max(0,Number(part.slice(i+1))||0)};
+            }).filter(Boolean);
+        };
+        const snapshot = (employee, allRecords, asOf=today()) => {
+            const cutoff=onlyDate(asOf)||today();
+            const empId=String(employee?.emp_id ?? '');
+            const records=(allRecords||[]).filter(r=>!empId || String(r.emp_id)===empId);
+            const buckets=records.filter(isEarned).map(record=>({
+                record, id:String(record.id ?? ''), ref:orderRef(record), earnedDate:earnedDate(record),
+                expiresOn:expiry(record), originalHours:amount(record), remainingHours:amount(record)
+            })).filter(b=>b.earnedDate && b.earnedDate<=cutoff).sort(compareBuckets);
+            let openingRemaining=Math.max(0,Number(employee?.cto_balance||0)||0);
+            let unmatchedHours=0;
+            const uses=records.filter(isUsed).filter(r=>{const d=useDate(r);return !!d && d<=cutoff;})
+                .sort((a,b)=>useDate(a).localeCompare(useDate(b)) || Number(a.id||0)-Number(b.id||0));
+            for(const use of uses){
+                const date=useDate(use); let required=amount(use);
+                const pinned=readPinned(use.remarks);
+                if(pinned){
+                    for(const item of pinned){
+                        if(required<=EPS)break;
+                        const qty=Math.min(required,item.hours);
+                        if(item.id==='BASE'){
+                            const take=Math.min(openingRemaining,qty);openingRemaining-=take;unmatchedHours+=qty-take;
+                        }else{
+                            const bucket=buckets.find(b=>b.id===item.id);
+                            const take=bucket?Math.min(bucket.remainingHours,qty):0;
+                            if(bucket)bucket.remainingHours-=take;
+                            unmatchedHours+=qty-take;
+                        }
+                        required-=qty;
+                    }
+                    // Any unexpected unmatched amount is not silently assigned to another PSO.
+                    unmatchedHours+=Math.max(0,required);
+                }else{
+                    for(const bucket of buckets){
+                        if(required<=EPS)break;
+                        if(bucket.earnedDate>date || (bucket.expiresOn && date>=bucket.expiresOn))continue;
+                        const take=Math.min(required,bucket.remainingHours);
+                        bucket.remainingHours-=take;required-=take;
+                    }
+                    if(required>EPS){const take=Math.min(required,openingRemaining);openingRemaining-=take;required-=take;}
+                    unmatchedHours+=Math.max(0,required);
+                }
+            }
+            const active=buckets.filter(b=>b.earnedDate<=cutoff && (!b.expiresOn||cutoff<b.expiresOn) && b.remainingHours>EPS);
+            const availableHours=openingRemaining+active.reduce((sum,b)=>sum+b.remainingHours,0);
+            const expiredHours=buckets.filter(b=>b.expiresOn && cutoff>=b.expiresOn)
+                .reduce((sum,b)=>sum+b.remainingHours,0);
+            const plan=(requested, forDate=cutoff) => {
+                let needed=Math.max(0,Number(requested)||0);
+                const selections=[];
+                for(const b of active){
+                    if(needed<=EPS)break;
+                    if(b.earnedDate>forDate || (b.expiresOn&&forDate>=b.expiresOn))continue;
+                    const hrs=Math.min(needed,b.remainingHours);
+                    if(hrs>EPS){selections.push({id:b.id,ref:b.ref,hours:hrs,expiresOn:b.expiresOn});needed-=hrs;}
+                }
+                if(needed>EPS && openingRemaining>EPS){const hrs=Math.min(needed,openingRemaining);
+                    selections.push({id:'BASE',ref:'Opening CTO balance',hours:hrs,expiresOn:''});needed-=hrs;}
+                return {selections,unfundedHours:Math.max(0,needed),hoursUsed:Math.max(0,Number(requested)||0)-Math.max(0,needed)};
+            };
+            return {availableHours,openingRemaining,expiredHours,unmatchedHours,buckets,active,nextToExpire:active[0]||null,plan};
+        };
+        const tag = plan => 'FEFO:'+plan.selections.map(b=>`${b.id}=${b.hours.toFixed(3)}`).join(',');
+        const label = plan => plan.selections.map(b=>`${b.ref}: ${b.hours.toFixed(3)}h${b.expiresOn?' (expires '+b.expiresOn+')':''}`).join('; ');
+        return {snapshot,today,expiry,earnedDate,orderRef,isEarned,isUsed,tag,label,onlyDate,addYear};
+    })();
+
         // GLOBAL STATE VARIABLES
         let currentUser = null; 
         let itineraryDraft = []; 
@@ -1692,6 +1812,7 @@ window.loadCredits = async function() {
         </tr>`;
     let hasCto = false;
     let ctoEarned = 0, ctoUsed = 0;
+    const ctoState = CTOFEFO.snapshot({emp_id:currentUser.emp_id, cto_balance:baseCtoHours}, cto || []);
     
     if(cto && cto.length > 0) {
         cto.forEach(c => {
@@ -1728,7 +1849,8 @@ window.loadCredits = async function() {
                 } else if (isFinalizedEarned) {
                     rowType = isExpired ? 'CTO CREDIT - EXPIRED' : 'CTO CREDIT';
                     const expiry = window.getCtoExpiryDate(c.date);
-                    rowRemarks = `${c.remarks || 'FINALIZED'} — ${isExpired ? 'EXPIRED' : 'AVAILABLE'} until ${expiry || '---'}`;
+                    const batch = ctoState.buckets.find(b => String(b.id) === String(c.id));
+                    rowRemarks = `${window.formatCtoOrderReference(c.PSO_Number)} — ${c.remarks || 'FINALIZED'} — ${isExpired ? 'EXPIRED' : 'Valid'} until ${expiry || '---'} — Unused: ${(batch?.remainingHours || 0).toFixed(3)} hours`;
                 }
 
                 ctoHtml += `<tr style="border-bottom: 1px solid #eee;">
@@ -1744,12 +1866,14 @@ window.loadCredits = async function() {
 
     if (!hasCto) ctoHtml = '<span style="font-size:11px; color:gray;">No CTO credit records found.</span>';
     
-    const totalCtoHours = baseCtoHours + ctoEarned - ctoUsed;
+    const totalCtoHours = ctoState.availableHours;
+    const nextExpiry = ctoState.nextToExpire;
+    const nextExpiryText = nextExpiry ? `Next credit to expire: ${nextExpiry.ref} (${nextExpiry.remainingHours.toFixed(2)} hrs), expires ${nextExpiry.expiresOn}.` : 'No dated CTO credit currently awaiting expiration.';
 
     ctoContainer.innerHTML = `
         <div style="background:#fefce8; padding:10px; border-radius:8px; border: 1px solid #fef08a; color: #854d0e; font-size:12px; margin-bottom: 10px;">
             <strong>Total CTO Balance:</strong> <span style="color: var(--success); font-weight: bold;">${totalCtoHours.toFixed(2)} hrs</span>
-            <div style="font-size:9px; color:#78716c; margin-top:3px;">Opening HR balance ${baseCtoHours.toFixed(2)} + valid HR-finalized CTO ${ctoEarned.toFixed(2)} - used CTO ${ctoUsed.toFixed(2)}. New CTO records expire one year from the activity date.</div>
+            <div style="font-size:9px; color:#78716c; margin-top:3px;">Expiration-first allocation (FEFO): consume the credit with the earliest expiry, not the earliest application date. ${nextExpiryText} Only the unused remainder expires. ${ctoState.expiredHours.toFixed(2)} hours have expired unused.</div>
         </div>
         ${ctoHtml}
     `;
@@ -3542,6 +3666,10 @@ window.cancelLeaveApp = async function(leaveId) {
 for(let app of leaves || []) {
                     const isApp = app.transaction_type === 'APPROVED';
                     const isCancelled = app.transaction_type.includes('CANCELLED') || app.transaction_type.includes('DISAPPROVED');
+                const routeMatch = String(app.remarks || '').match(/ROUTING_STATUS:\s*([^\s|]+)/i);
+                const route = routeMatch ? routeMatch[1].toUpperCase() : '';
+                const routingLabel = route === 'PENDING_HARDCOPY' ? 'PARPO APPROVED - SUBMIT HARD COPY TO HR' :
+                    route === 'PENDING_HRMO' ? (/HARD_COPY_RECEIVED_BY:/i.test(String(app.remarks || '')) ? 'HARD COPY RECEIVED - PENDING HR APPROVAL' : 'PARPO APPROVED - AWAITING HR HARD-COPY CONFIRMATION') : route.replaceAll('_',' ');
                     const sCls = isApp ? 'bg-approved' : (isCancelled ? 'bg-cancelled' : 'bg-pending');
                 
                 const cannotCancel = app.start_date < todayStr;
@@ -3549,12 +3677,12 @@ for(let app of leaves || []) {
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
-                            <span class="badge ${sCls}">${app.transaction_type}</span>
+                            <span class="badge ${sCls}">${app.transaction_type === "APPLICATION" && routingLabel ? routingLabel : app.transaction_type}</span>
                         </div>
                         <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
-                        ${isApp ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6</button>` : ''}
+                        <button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6${isCancelled ? ' (Disapproved / Cancelled)' : ''}</button>
                             ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
@@ -3773,34 +3901,13 @@ for(let app of leaves || []) {
    // + all credited cto_records EARNED (PROCESSED; legacy POSTED also honored)
    // - cto_records USED / CTO DEDUCTION.
    window.getCurrentCtoHours = async function(empId) {
-            const { data: empRow, error: empErr } = await supabase
-                .from('employees')
-                .select('cto_balance')
-                .eq('emp_id', empId)
-                .maybeSingle();
-            if (empErr) throw empErr;
-
-            let currentHours = parseFloat(empRow?.cto_balance || 0) || 0;
-
-            const { data: ctoRows, error: ctoErr } = await supabase
-                .from('cto_records')
-                .select('transaction_type, remarks, calculated_hours, date')
-                .eq('emp_id', empId);
-            if (ctoErr) throw ctoErr;
-
-            (ctoRows || []).forEach(r => {
-                const ttype = String(r.transaction_type || '').toUpperCase().trim();
-                const rmk = String(r.remarks || '').toUpperCase().trim();
-                const hrs = Math.abs(parseFloat(String(r.calculated_hours || '0').trim()) || 0);
-
-                if (window.isCtoCreditedEarnedRecord(r)) {
-                    currentHours += hrs;
-                } else if (window.isCtoUsedRecord(r)) {
-                    currentHours -= hrs;
-                }
-            });
-
-            return Math.max(0, currentHours);
+            const [{data: empRow, error: empErr}, {data: ctoRows, error: ctoErr}] = await Promise.all([
+                supabase.from('employees').select('emp_id,cto_balance').eq('emp_id',empId).maybeSingle(),
+                supabase.from('cto_records').select('*').eq('emp_id',empId)
+            ]);
+            if(empErr) throw empErr;
+            if(ctoErr) throw ctoErr;
+            return CTOFEFO.snapshot(empRow || {emp_id:empId,cto_balance:0},ctoRows||[]).availableHours;
         };
 
    // Available-for-new-application CTO also reserves already-pending CTO leave
@@ -4421,7 +4528,7 @@ window.submitLeave = async function() {
 
                 if (insertErr) throw new Error("Leave insert failed: " + insertErr.message);
 
-                alert("Leave Application Submitted.");
+                alert("Leave application submitted for routing. IMPORTANT: After PARPO approval, PRINT and SUBMIT your signed hard-copy Form 6 to HR. HR will verify its receipt before final approval.");
                 window.loadStatus();
                 
                 document.getElementById('leave-from').value = '';
@@ -4445,7 +4552,7 @@ window.submitLeave = async function() {
             const doc = new jsPDF('p', 'mm', 'a4');
             const getAssetUrl = (fileName) => `${supabaseUrl}/storage/v1/object/public/e-sign/${fileName}`;
             
-            const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).maybeSingle();
+            const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).eq('emp_id', currentUser.emp_id).maybeSingle();
             if (error || !app) return alert("Application not found");
 
             const { data: emp } = await supabase.from('employees').select('full_name, unit, position, salary, vl_balance, sl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
@@ -4488,6 +4595,9 @@ window.submitLeave = async function() {
                 vl_less = isCtoBackedApp ? window.extractVlChargeFromRemarks(app.remarks, 0) : app_days;
             }
             else if (app_type.includes("SICK")) sl_less = app_days;
+            if (String(app.transaction_type || '').toUpperCase().includes('DISAPPROVED') || String(app.transaction_type || '').toUpperCase().includes('CANCELLED')) {
+                vl_less = 0; sl_less = 0; // Disapproved/cancelled leave has no actual VL/SL debit.
+            }
 
             let vl_balance = vl_total_earned - vl_less;
             let sl_balance = sl_total_earned - sl_less;
@@ -4706,12 +4816,22 @@ window.submitLeave = async function() {
 
             doc.text("7.C APPROVED FOR:", 12, ty + 4);
             let pay = remks.toLowerCase().includes("without pay") || remks.toLowerCase().includes("no pay") ? `____ days with pay\n_${app_days}_ days without pay` : `_${app_days}_ days with pay\n____ days without pay`;
+            if (String(app.transaction_type || '').toUpperCase().includes('DISAPPROVED')) pay = 'Not approved';
             doc.text(pay, 15, ty + 8);
             doc.text("____ others (Specify)", 15, ty + 16); doc.line(40, ty + 17, 95, ty + 17);
 
             doc.text("7.D DISAPPROVED DUE TO:", 107, ty + 4); doc.line(140, ty + 5, 195, ty + 5);
             doc.line(110, ty + 9, 195, ty + 9);
             doc.line(110, ty + 13, 195, ty + 13);
+            if (String(app.transaction_type || '').toUpperCase().includes('DISAPPROVED')) {
+                const reasonMatch = String(app.remarks || '').match(/HR_REVERSAL_REASON:\s*([^|]+)/i)
+                    || String(app.remarks || '').match(/(?:^|\|)\s*(?:Disapproved(?: by HR)?|DENIAL_REASON):\s*([^|]+)/i);
+                const reason = reasonMatch ? reasonMatch[1].trim() : String(app.remarks || '').split('|').filter(x => !/ROUTING_STATUS|Commutation/i.test(x)).pop()?.trim() || 'See recorded HR remarks';
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
+                const reasonLines = doc.splitTextToSize(reason, 82).slice(0, 3);
+                reasonLines.forEach((line, index) => doc.text(line, 110, ty + 8.5 + (index * 3.5)));
+                doc.setFont('helvetica', 'normal');
+            }
 
             doc.setFont("helvetica", "bold"); doc.setFontSize(10);
             doc.text("RICARDO C. GARCIA", 105, ty + 35, {align: 'center'}); doc.line(60, ty + 36, 150, ty + 36);
@@ -7189,7 +7309,123 @@ if(hol) special = (hol.description || "HOLIDAY").toUpperCase();
     }
 
 
-function getLeaveAppPayload(u, leaveRec) {
+    // CTO FEFO (First-Expiring, First-Out): chronological consumption by expiry,
+    // NOT by credit application/posting date. Old deductions without an allocation
+    // are reconstructed in FEFO order. New deductions pin their source IDs in remarks.
+    const CTOFEFO = (() => {
+        const EPS = 0.000001;
+        const onlyDate = value => {
+            const match = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})/);
+            return match ? match[1] : '';
+        };
+        const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+        const addYear = date => {
+            if (!date) return '';
+            const d = new Date(date + 'T00:00:00Z');
+            if (Number.isNaN(d.getTime())) return '';
+            d.setUTCFullYear(d.getUTCFullYear()+1);
+            return d.toISOString().slice(0,10);
+        };
+        const amount = row => Math.max(0, Math.abs(Number(row.calculated_hours ?? row.base_hours ?? 0) || 0));
+        const orderRef = row => {
+            const value = String(row.PSO_Number ?? row.pso_number ?? '').trim();
+            return value ? (/^(PSO|RSO|SO)\b/i.test(value) ? value : 'PSO ' + value) : 'CTO credit #' + String(row.id ?? '?');
+        };
+        const isEarned = row => {
+            const t=String(row.transaction_type||'').trim().toUpperCase();
+            const r=String(row.remarks||'').trim().toUpperCase();
+            return t==='EARNED' &&
+                !['APPLICATION','PENDING','REQUESTED','SUBMITTED','DISAPPROVED','REJECTED','CANCELLED'].includes(t) &&
+                !['FOR HR PROCESSING','ENCODED','PENDING','APPLICATION','FOR PROCESSING'].includes(r) &&
+                !/^(DISAPPROVED|REJECTED|CANCELLED)/.test(r);
+        };
+        const isUsed = row => {
+            const t=String(row.transaction_type||'').trim().toUpperCase();
+            const r=String(row.remarks||'').trim().toUpperCase();
+            return t==='USED'||t==='CTO DEDUCTION'||r==='CTO DEDUCTION'||r.startsWith('CTO DEDUCTION |');
+        };
+        const expiry = row => onlyDate(row.expires_on) || addYear(onlyDate(row.pso_date||row.date||row.created_at));
+        const earnedDate = row => onlyDate(row.pso_date||row.date||row.created_at||row.posted_at);
+        const useDate = row => onlyDate(row.leave_date||row.date||row.posted_at||row.created_at);
+        const compareBuckets = (a,b) => (a.expiresOn||'9999-12-31').localeCompare(b.expiresOn||'9999-12-31')
+            || a.earnedDate.localeCompare(b.earnedDate) || String(a.record.id??'').localeCompare(String(b.record.id??''),undefined,{numeric:true});
+        // Each stored new USED transaction has an audit tag, e.g. FEFO:72=3.000,76=5.000.
+        // BASE is used only for the pre-system opening balance without an expiry date.
+        const readPinned = remarks => {
+            const m=String(remarks||'').match(/(?:^|\s|\|)FEFO:([A-Za-z0-9_=.\-,]+)/);
+            if(!m) return null;
+            return m[1].split(',').map(part=>{
+                const i=part.lastIndexOf('=');
+                return i<1?null:{id:part.slice(0,i),hours:Math.max(0,Number(part.slice(i+1))||0)};
+            }).filter(Boolean);
+        };
+        const snapshot = (employee, allRecords, asOf=today()) => {
+            const cutoff=onlyDate(asOf)||today();
+            const empId=String(employee?.emp_id ?? '');
+            const records=(allRecords||[]).filter(r=>!empId || String(r.emp_id)===empId);
+            const buckets=records.filter(isEarned).map(record=>({
+                record, id:String(record.id ?? ''), ref:orderRef(record), earnedDate:earnedDate(record),
+                expiresOn:expiry(record), originalHours:amount(record), remainingHours:amount(record)
+            })).filter(b=>b.earnedDate && b.earnedDate<=cutoff).sort(compareBuckets);
+            let openingRemaining=Math.max(0,Number(employee?.cto_balance||0)||0);
+            let unmatchedHours=0;
+            const uses=records.filter(isUsed).filter(r=>{const d=useDate(r);return !!d && d<=cutoff;})
+                .sort((a,b)=>useDate(a).localeCompare(useDate(b)) || Number(a.id||0)-Number(b.id||0));
+            for(const use of uses){
+                const date=useDate(use); let required=amount(use);
+                const pinned=readPinned(use.remarks);
+                if(pinned){
+                    for(const item of pinned){
+                        if(required<=EPS)break;
+                        const qty=Math.min(required,item.hours);
+                        if(item.id==='BASE'){
+                            const take=Math.min(openingRemaining,qty);openingRemaining-=take;unmatchedHours+=qty-take;
+                        }else{
+                            const bucket=buckets.find(b=>b.id===item.id);
+                            const take=bucket?Math.min(bucket.remainingHours,qty):0;
+                            if(bucket)bucket.remainingHours-=take;
+                            unmatchedHours+=qty-take;
+                        }
+                        required-=qty;
+                    }
+                    // Any unexpected unmatched amount is not silently assigned to another PSO.
+                    unmatchedHours+=Math.max(0,required);
+                }else{
+                    for(const bucket of buckets){
+                        if(required<=EPS)break;
+                        if(bucket.earnedDate>date || (bucket.expiresOn && date>=bucket.expiresOn))continue;
+                        const take=Math.min(required,bucket.remainingHours);
+                        bucket.remainingHours-=take;required-=take;
+                    }
+                    if(required>EPS){const take=Math.min(required,openingRemaining);openingRemaining-=take;required-=take;}
+                    unmatchedHours+=Math.max(0,required);
+                }
+            }
+            const active=buckets.filter(b=>b.earnedDate<=cutoff && (!b.expiresOn||cutoff<b.expiresOn) && b.remainingHours>EPS);
+            const availableHours=openingRemaining+active.reduce((sum,b)=>sum+b.remainingHours,0);
+            const expiredHours=buckets.filter(b=>b.expiresOn && cutoff>=b.expiresOn)
+                .reduce((sum,b)=>sum+b.remainingHours,0);
+            const plan=(requested, forDate=cutoff) => {
+                let needed=Math.max(0,Number(requested)||0);
+                const selections=[];
+                for(const b of active){
+                    if(needed<=EPS)break;
+                    if(b.earnedDate>forDate || (b.expiresOn&&forDate>=b.expiresOn))continue;
+                    const hrs=Math.min(needed,b.remainingHours);
+                    if(hrs>EPS){selections.push({id:b.id,ref:b.ref,hours:hrs,expiresOn:b.expiresOn});needed-=hrs;}
+                }
+                if(needed>EPS && openingRemaining>EPS){const hrs=Math.min(needed,openingRemaining);
+                    selections.push({id:'BASE',ref:'Opening CTO balance',hours:hrs,expiresOn:''});needed-=hrs;}
+                return {selections,unfundedHours:Math.max(0,needed),hoursUsed:Math.max(0,Number(requested)||0)-Math.max(0,needed)};
+            };
+            return {availableHours,openingRemaining,expiredHours,unmatchedHours,buckets,active,nextToExpire:active[0]||null,plan};
+        };
+        const tag = plan => 'FEFO:'+plan.selections.map(b=>`${b.id}=${b.hours.toFixed(3)}`).join(',');
+        const label = plan => plan.selections.map(b=>`${b.ref}: ${b.hours.toFixed(3)}h${b.expiresOn?' (expires '+b.expiresOn+')':''}`).join('; ');
+        return {snapshot,today,expiry,earnedDate,orderRef,isEarned,isUsed,tag,label,onlyDate,addYear};
+    })();
+
+    function getLeaveAppPayload(u, leaveRec) {
         const roles = u.roles || [];
         const currentStatus = getLeaveStatus(leaveRec.remarks || "");
         let nextStatus = currentStatus;
@@ -7200,12 +7436,12 @@ function getLeaveAppPayload(u, leaveRec) {
         } else if (currentStatus === "PENDING_CHIEF" && roles.includes("CHIEF")) {
             nextStatus = "PENDING_PARPO";
         } else if (currentStatus === "PENDING_PARPO" && roles.includes("PARPO")) {
-            nextStatus = "PENDING_HRMO";
-        } else if (currentStatus === "PENDING_HRMO" && roles.some(r => ["HRMO", "ADMIN"].includes(r))) {
-            nextStatus = "APPROVED"; transType = "APPROVED";
+            nextStatus = "PENDING_HARDCOPY";
+        } else if (currentStatus === "PENDING_HARDCOPY" || currentStatus === "PENDING_HRMO") {
+            // Final approval and hard-copy validation are ONLY available on HR Leave Processing.
+            return null;
         }
-
-        if (nextStatus === currentStatus && roles.includes("ADMIN")) { nextStatus = "APPROVED"; transType = "APPROVED"; }
+        if (nextStatus === currentStatus) return null;
 
         return { transaction_type: transType, remarks: setLeaveStatus(leaveRec.remarks || "", nextStatus) };
     }
@@ -7490,7 +7726,7 @@ window.loadAdminCalendar = async function() {
                 if (currentLeaveSubTab === 'pending' && l.transaction_type === 'APPLICATION') {
                     let canSeePending = false;
                     
-                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && s === "PENDING_HRMO") canSeePending = true;
+                    if (roles.some(r => ["HRMO", "ADMIN"].includes(r)) && ['PENDING_HARDCOPY','PENDING_HRMO'].includes(s)) canSeePending = false; // HR finalizes only in HR Leave Processing
                     if (roles.includes("PARPO") && s === "PENDING_PARPO") canSeePending = true;
                     if (roles.includes("CHIEF") && s === "PENDING_CHIEF") canSeePending = true;
                     if (roles.some(r => ["UNIT_HEAD", "UNIT HEAD", "MARPO"].includes(r)) && s === "PENDING_UNIT_HEAD") canSeePending = true;
@@ -7649,16 +7885,20 @@ window.loadAdminCalendar = async function() {
         const reason = document.getElementById('denyReasonInput').value.trim();
         if (!reason) return alert("A mandatory reason for disapproval is required.");
 
+        // Preserve the target before closing: closeModals clears currentActionContext.
+        // This also fixes failed denials at Unit Head, Division Chief and PARPO stages.
+        const denialContext = currentActionContext;
         closeModals();
 
-        if (currentActionContext === 'BATCH') {
+        if (denialContext === 'BATCH') {
             const leaveIds = Array.from(selectedLeaves);
             document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Processing Batch Denial...</p></div>`;
             const { data: lResData } = await supabaseClient.from('leave_ledger').select('*').in('id', leaveIds);
             const leavePromises = leaveIds.map(async (id) => {
                 const leaveData = (lResData || []).find(l => l.id === id);
                 if (leaveData) {
-                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
+                    const priorApprovalStage = getLeaveStatus(leaveData.remarks || '');
+                    const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | DENIED_AT: ${priorApprovalStage} | Disapproved: ${String(reason).replace(/\|/g,' / ')} | Denied by ${currentUser.fullName}`;
                     await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', id);
                 }
             });
@@ -7667,10 +7907,11 @@ window.loadAdminCalendar = async function() {
             updateBatchActionBar();
         } else {
             document.getElementById('mainContent').innerHTML = `<div class="flex flex-col h-[70vh] justify-center items-center"><span class="text-4xl mb-4 animate-spin block">⏳</span><p class="font-bold text-xs uppercase tracking-widest text-rose-600">Denying Record...</p></div>`;
-            const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', currentActionContext).single();
+            const { data: leaveData } = await supabaseClient.from('leave_ledger').select('*').eq('id', denialContext).single();
             if (leaveData) {
-                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | Denied by ${currentUser.fullName}: ${reason}`;
-                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', currentActionContext);
+                const priorApprovalStage = getLeaveStatus(leaveData.remarks || '');
+                const newRemarks = setLeaveStatus(leaveData.remarks || "", 'DISAPPROVED') + ` | DENIED_AT: ${priorApprovalStage} | Disapproved: ${String(reason).replace(/\|/g,' / ')} | Denied by ${currentUser.fullName}`;
+                await supabaseClient.from('leave_ledger').update({ transaction_type: 'DISAPPROVED', remarks: newRemarks }).eq('id', denialContext);
             }
         }
         loadLeavesTab();
