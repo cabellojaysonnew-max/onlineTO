@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.13-esc"; 
+        const APP_VERSION = "v1.14-cto-order-type"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -298,8 +298,15 @@ async function hardReloadSystem() {
                 <div style="background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; padding:10px; border-radius:8px; font-size:11px; line-height:1.45; margin-bottom:15px;">
                     HR will process this request in the CTO Processing page, verify supporting evidence, check DTR time when available or enter verified hours manually, then finalize the CTO credit.
                 </div>
-                <label>PSO Number</label>
-                <input type="text" id="cto-credit-pso" placeholder="Enter PSO Number" autocomplete="off">
+                <label>Special Order Reference</label>
+                <div style="display:flex; gap:8px; align-items:flex-start;">
+                    <select id="cto-credit-order-type" aria-label="Order type" style="width:105px; flex:none;">
+                        <option value="PSO" selected>PSO</option>
+                        <option value="RSO">RSO</option>
+                        <option value="SO">SO</option>
+                    </select>
+                    <input type="text" id="cto-credit-pso" placeholder="Number (e.g. 123)" autocomplete="off" aria-label="Order number" style="flex:1; min-width:0;">
+                </div>
                 <label>Description / Activity</label>
                 <textarea id="cto-credit-desc" rows="3" placeholder="Describe the activity that earned CTO credits"></textarea>
                 <label>Date of Activity</label>
@@ -409,7 +416,7 @@ async function hardReloadSystem() {
             <div class="card" style="border-left:4px solid var(--dar-gold);">
                 <h4>Apply for CTO Credits</h4>
                 <p style="font-size:11px; color:var(--text-muted); line-height:1.45; margin:0 0 10px 0;">
-                    For CTO earned from an activity: enter the PSO Number, Description, and Date, then submit it for HR approval. This is separate from <strong>Credit to CTO</strong> when filing Vacation Leave.
+                    For CTO earned from an activity: select PSO, RSO, or SO (PSO by default), enter its Number, Description, and Date, then submit it for HR approval. This is separate from <strong>Credit to CTO</strong> when filing Vacation Leave.
                 </p>
                 <button type="button" class="btn btn-gold" style="margin:0;" onclick="window.openCtoCreditRequest('leave')">+ APPLY FOR CTO CREDITS</button>
             </div>
@@ -1714,10 +1721,10 @@ window.loadCredits = async function() {
                 let rowRemarks = c.remarks || c.purpose || '';
                 if (isPendingHr) {
                     rowType = 'CTO CREDIT APPLICATION';
-                    rowRemarks = `PSO ${c.PSO_Number || '---'} — ${c.base_type || 'CTO ACTIVITY'} — FOR HR APPROVAL / PROCESSING`;
+                    rowRemarks = `${window.formatCtoOrderReference(c.PSO_Number)} — ${c.base_type || 'CTO ACTIVITY'} — FOR HR APPROVAL / PROCESSING`;
                 } else if (isDisapproved) {
                     rowType = 'CTO CREDIT APPLICATION';
-                    rowRemarks = `DISAPPROVED — PSO ${c.PSO_Number || '---'} — ${c.base_type || 'CTO ACTIVITY'}`;
+                    rowRemarks = `DISAPPROVED — ${window.formatCtoOrderReference(c.PSO_Number)} — ${c.base_type || 'CTO ACTIVITY'}`;
                 } else if (isFinalizedEarned) {
                     rowType = isExpired ? 'CTO CREDIT - EXPIRED' : 'CTO CREDIT';
                     const expiry = window.getCtoExpiryDate(c.date);
@@ -3819,6 +3826,14 @@ for(let app of leaves || []) {
             return Math.max(0, availableHours);
         };
 
+   // Display both legacy PSO numbers (e.g., "123") and new typed references
+   // (e.g., "RSO 123") without duplicating the order prefix.
+   window.formatCtoOrderReference = function(value) {
+            const ref = String(value ?? '').trim();
+            if (!ref) return 'PSO ---';
+            return /^(?:PSO|RSO|SO)\b/i.test(ref) ? ref : `PSO ${ref}`;
+        };
+
    // EMPLOYEE CTO CREDIT APPLICATION
    // This employee portal creates the request only.
    // HR approval/finalization happens in the dedicated Gate Pass & CTO Processing page.
@@ -3830,6 +3845,7 @@ for(let app of leaves || []) {
 
             ctoRequestSource = source === 'leave' ? 'leave' : 'credits';
 
+            document.getElementById('cto-credit-order-type').value = 'PSO';
             document.getElementById('cto-credit-pso').value = '';
             document.getElementById('cto-credit-desc').value = '';
             document.getElementById('cto-credit-date').value = '';
@@ -3843,11 +3859,11 @@ for(let app of leaves || []) {
 
             if (ctoRequestSource === 'leave') {
                 if (titleEl) titleEl.innerText = 'Apply for CTO Credits';
-                if (helpEl) helpEl.innerHTML = 'Enter the <strong>PSO Number, Description, and Date</strong>. The application will be sent to HR and will remain pending until processed in the CTO Processing page.';
+                if (helpEl) helpEl.innerHTML = 'Select the <strong>Order Type (PSO, RSO, or SO)</strong> and enter its <strong>Number, Description, and Date</strong>. The application will be sent to HR and will remain pending until processed in the CTO Processing page.';
                 if (btn) btn.innerText = 'APPLY';
             } else {
                 if (titleEl) titleEl.innerText = 'Submit CTO Credit to HR';
-                if (helpEl) helpEl.innerHTML = 'Submit the <strong>PSO Number, Description, and Date</strong> for HR verification. This is the same CTO credit application processed in the CTO Processing page.';
+                if (helpEl) helpEl.innerHTML = 'Submit the <strong>Order Type (PSO, RSO, or SO), Number, Description, and Date</strong> for HR verification. This is the same CTO credit application processed in the CTO Processing page.';
                 if (btn) btn.innerText = 'SUBMIT CTO CREDIT TO HR';
             }
 
@@ -3860,13 +3876,18 @@ for(let app of leaves || []) {
         };
 
    window.submitCtoCreditRequest = async function() {
-            const pso = document.getElementById('cto-credit-pso').value.trim();
+            const orderType = document.getElementById('cto-credit-order-type').value;
+            // Keep the database column PSO_Number for compatibility; store the full reference.
+            // Accept either "123" or a manually typed "PSO 123" in the number field.
+            const orderNumber = document.getElementById('cto-credit-pso').value.trim()
+                .replace(/^(?:PSO|RSO|SO)\s*[#:\-]?\s*/i, '').trim();
+            const pso = orderNumber ? `${orderType} ${orderNumber}` : '';
             const desc = document.getElementById('cto-credit-desc').value.trim();
             const activityDate = document.getElementById('cto-credit-date').value;
             const btn = document.getElementById('btn-submit-cto-credit');
 
             if (!pso || !desc || !activityDate) {
-                return alert('Please enter the PSO Number, Description, and Date of Activity.');
+                return alert('Please select an order type and enter the Order Number, Description, and Date of Activity.');
             }
             if (activityDate > getPSTDate()) {
                 return alert('Date of Activity cannot be a future date.');
@@ -3884,7 +3905,8 @@ for(let app of leaves || []) {
                     .from('cto_records')
                     .select('id, transaction_type, remarks')
                     .eq('emp_id', currentUser.emp_id)
-                    .eq('PSO_Number', pso)
+                    // Also recognize old PSO records saved as just "123".
+                    .in('PSO_Number', orderType === 'PSO' ? [pso, orderNumber] : [pso])
                     .eq('date', activityDate);
 
                 if (dupErr) throw dupErr;
@@ -3900,7 +3922,7 @@ for(let app of leaves || []) {
                 });
 
                 if (activeDuplicate) {
-                    return alert(`A CTO application for PSO ${pso} on ${activityDate} already exists (${activeDuplicate.remarks || activeDuplicate.transaction_type || 'recorded'}).`);
+                    return alert(`A CTO application for ${pso} on ${activityDate} already exists (${activeDuplicate.remarks || activeDuplicate.transaction_type || 'recorded'}).`);
                 }
 
                 // Match the dedicated CTO Processing page:
