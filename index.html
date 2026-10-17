@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.14-cto-order-type"; 
+        const APP_VERSION = "v1.15-leave-parity-20261017"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -412,6 +412,7 @@ async function hardReloadSystem() {
 
         <div id="leave-view" class="view">
             <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
+            <div id="mandatory-leave-mini" class="card" style="font-size:12px;border-left:4px solid var(--dar-gold);">Mandatory Leave balance: open Credits to view your annual requirement.</div>
             <div class="card" style="border-left:4px solid #b45309;background:#fffbeb;font-size:12px;line-height:1.5">
               <strong>REQUIRED APPROVAL PROCEDURE</strong><div>Unit Head → Division Chief → PARPO → <b>Submit signed hard-copy Form 6 to HR</b> → HR confirms receipt and grants final approval.</div>
               <div style="margin-top:6px">Online approval by PARPO is NOT final leave approval. Print your Form 6, secure the required signatures and submit the hard copy. HR cannot approve without confirming receipt.</div>
@@ -1357,7 +1358,7 @@ async function hardReloadSystem() {
             if (id === 'attendance-view') window.loadAttendance();
             if (id === 'status-view') window.loadStatus();
             if (id === 'calendar-view') window.renderCalendar();
-            if (id === 'credits-view') window.loadCredits();
+            if (id === 'credits-view' || id === 'leave-view') window.loadCredits();
         };
         
         window.showChangePassword = function() { document.getElementById('pwdModal').style.display = 'flex'; };
@@ -1665,76 +1666,119 @@ window.generateTEVPDF = async function() {
         
 
 
+
+// LEAVE LEDGER PARITY: identical routine used by both HR and employee portals.
+// Opening balances in employees are baselines, never the computed closing balances.
+const LeaveParity = (() => {
+    const up = v => String(v ?? '').trim().toUpperCase();
+    const num = v => Number.isFinite(Number(v)) ? Math.abs(Number(v)) : 0;
+    const todayYear = () => Number(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric'}).format(new Date()));
+    const category = value => {
+        const s=up(value);
+        if (/ELECTION SERVICE CREDIT|^ESCL?$/.test(s)) return 'ESC';
+        if (/COMPENSATORY|^CTO\b|CREDIT TO CTO/.test(s)) return 'CTO';
+        if (/SPECIAL PRIVILEGE|\bSPL\b|PREVELEGE/.test(s)) return 'SPL';
+        if (/WELLNESS|\bWL\b/.test(s)) return 'WL';
+        if (/SICK|\bSL\b/.test(s)) return 'SL';
+        if (/VACATION|MANDATORY|FORCED|FORCE LEAVE|\bVL\b|GATE.?PASS|UNDERTIME|TARDINESS/.test(s)) return 'VL';
+        return '';
+    };
+    const balance = (employee, rows, year=todayYear()) => {
+        const result={
+            VL:Number(employee?.vl_balance||0), SL:Number(employee?.sl_balance||0),
+            SPL:Number(employee?.spl_balance??3), WL:Number(employee?.wl_balance??5),
+            ESC:Number(employee?.election_service_credit_balance||0)
+        };
+        for (const row of rows||[]) {
+            if (String(row.emp_id)!==String(employee?.emp_id)) continue;
+            const tx=up(row.transaction_type), remarks=up(row.remarks);
+            // Applications, reversals, denials and historical tracking do not debit balances.
+            if (!['APPROVED','CREDIT','DEDUCTION','POSTED','MANUAL INPUT','FORFEITURE','GATE_PASS_DEDUCTION'].includes(tx)) continue;
+            if (tx==='MANUAL INPUT' && remarks.includes('HISTORICAL_MANDATORY_TRACKING')) continue;
+            // The original APPROVED debit is already removed or reduced on retraction.
+            if (tx==='CREDIT' && /RETRACT|REFUND|REVERS|RESTOR|CANCEL/.test(remarks)) continue;
+            const cat=category(row.type);
+            if (!cat || cat==='CTO') continue;
+            const rowYear=Number(String(row.start_date||row.created_at||'').slice(0,4));
+            if ((cat==='SPL'||cat==='WL') && rowYear!==Number(year)) continue;
+            let debit=num(row.debit);
+            if (cat==='VL' && /CREDIT(?:ED)? TO CTO/.test(remarks)) {
+                const match=remarks.match(/VL CHARGE:\s*([0-9]+(?:\.[0-9]+)?)/);
+                debit=match?num(match[1]):0;
+            }
+            result[cat]+=num(row.credit)-debit;
+        }
+        return result;
+    };
+    const trackType = row => {
+        const kind=up(row.type),tx=up(row.transaction_type),remarks=up(row.remarks);
+        if (!/VACATION|MANDATORY|FORCED|FORCE LEAVE|\bVL\b/.test(kind)) return '';
+        if (/GATE PASS|UNDERTIME|CHARGED FROM|EARNED|FORFEITURE/.test(kind)) return '';
+        if (/CANCELLED|CANCELED|RETRACTED|WITHDRAWN|FORFEITURE|DEDUCTION|CREDIT/.test(tx)) return '';
+        if (tx==='MANUAL INPUT') return remarks.includes('HISTORICAL_MANDATORY_TRACKING')?'HISTORICAL':'';
+        if (/DISAPPROV|REJECT|DENIED/.test(tx)||/ROUTING_STATUS:\s*(DISAPPROV|REJECT|DENIED)/.test(remarks)) return 'DISAPPROVED';
+        if (tx==='APPROVED') return 'APPROVED';
+        if (/APPLICATION|PENDING|REQUESTED|SUBMITTED/.test(tx))return 'APPLICATION';
+        return '';
+    };
+    const mandatory = (rows, year=todayYear(), employeeId=null) => {
+        const ids=new Set();let hours=0,deniedHours=0;
+        for(const r of rows||[]){
+            if(employeeId!==null && String(r.emp_id)!==String(employeeId)) continue;
+            if(Number(String(r.start_date||'').slice(0,4))!==Number(year))continue;
+            if(ids.has(String(r.id)))continue;
+            ids.add(String(r.id));
+            const kind=trackType(r);if(!kind)continue;
+            const h=kind==='HISTORICAL' ? Number((String(r.remarks||'').match(/HISTORICAL_HOURS:\s*([0-9.]+)/i)||[])[1]||0) : num(r.debit)*8;
+            if(!Number.isFinite(h)||h<=0)continue;
+            hours+=h;
+            if(kind==='DISAPPROVED')deniedHours+=h;
+        }
+        return {requiredHours:40,recordedHours:Math.min(40,hours),totalHours:hours,deniedHours,remainingHours:Math.max(0,40-hours),remainingDays:Math.max(0,40-hours)/8};
+    };
+    const eligibleStatus = row => {
+        const tx=up(row.transaction_type);
+        return /^(APPLICATION|APPROVED|DISAPPROVED|CANCELLED|CANCELED|RETRACTED|REQUESTED|SUBMITTED|PENDING(?:[_ ]|$))/.test(tx);
+    };
+    // Stable pages prevent the default Supabase 1000-record cap from silently losing old entries.
+    const fetchAll = async (client,queryFactory,pageSize=1000) => {
+        const result=[];
+        for(let start=0;start<100000;start+=pageSize){
+            const {data,error}=await queryFactory(client).range(start,start+pageSize-1);
+            if(error)throw error;
+            result.push(...(data||[]));
+            if(!data||data.length<pageSize)break;
+        }
+        return result;
+    };
+    return {balance,mandatory,trackType,eligibleStatus,fetchAll,category,todayYear};
+})();
+
 window.loadCredits = async function() {
     const container = document.getElementById('leave-balances-container');
     const ctoContainer = document.getElementById('cto-posting-container');
     container.innerHTML = 'Loading...'; ctoContainer.innerHTML = 'Loading...';
 
     // 1. FETCH BASELINE FROM HR (Employees Table)
-    const { data: emp } = await supabase.from('employees')
+    const { data: emp, error: empError } = await supabase.from('employees')
         .select('vl_balance, sl_balance, spl_balance, wl_balance, election_service_credit_balance, cto_balance')
         .eq('emp_id', currentUser.emp_id)
         .maybeSingle();
 
-    // Initialize as REAL NUMBERS so we can do math on them
-    let currentVL = emp && emp.vl_balance ? parseFloat(emp.vl_balance) : 0;
-    let currentSL = emp && emp.sl_balance ? parseFloat(emp.sl_balance) : 0;
-    let currentSPL = emp && emp.spl_balance ? parseFloat(emp.spl_balance) : 0;
-    let currentWL = emp && emp.wl_balance ? parseFloat(emp.wl_balance) : 0;
-    let currentESC = Number(emp?.election_service_credit_balance || 0);
-    let baseCtoHours = (emp && emp.cto_balance ? parseFloat(emp.cto_balance) : 0);
+    if(empError||!emp){ container.textContent="Error loading employee leave balances: "+(empError?.message||"Employee record not found");return; }
+    let baseCtoHours=Number(emp?.cto_balance||0);
 
-    // 2. FETCH VISUAL HISTORY & ADJUSTMENTS
-    const { data: ledgers } = await supabase.from('leave_ledger')
-        .select('*')
-        .eq('emp_id', currentUser.emp_id)
-        .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'APPLICATION', 'FORFEITURE', 'GATE_PASS_DEDUCTION', 'CANCELLED'])
-        .order('start_date', { ascending: false });
-
-    // ---> THE FIX: APPLY THE MATH TO THE BALANCES CORRECTLY <---
-    const currentYear = new Date().getFullYear();
-
-    if (ledgers && ledgers.length > 0) {
-        ledgers.forEach(l => {
-            if (l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') return;
-
-            let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-            let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-            let lType = (l.type || '').toUpperCase();
-            let ledgerRemarks = String(l.remarks || '').toUpperCase();
-            let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
-            
-            let transDateStr = l.start_date || l.created_at || '';
-            let transYear = transDateStr ? parseInt(transDateStr.substring(0, 4)) : currentYear;
-
-            if (lType.includes('ELECTION SERVICE CREDIT') || lType === 'ESCL' || lType === 'ESC') {
-                // Carry-forward balance: election credits do NOT reset at year end.
-                currentESC += cVal - dVal;
-            }
-            else if (lType.includes('SPECIAL PRIVILEGE')) {
-                if (transYear === currentYear) {
-                    currentSPL = currentSPL + cVal - dVal;
-                }
-            }
-            else if (lType.includes('WELLNESS')) {
-                if (transYear === currentYear) {
-                    currentWL = currentWL + cVal - dVal;
-                }
-            }
-            else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED') || lType.includes('LATE') || lType.includes('UNDERTIME') || lType.includes('TARDINESS')) {
-                if (isCtoBacked) {
-                    const vlCharge = window.extractVlChargeFromRemarks(l.remarks, 0);
-                    currentVL = currentVL + cVal - vlCharge;
-                } else {
-                    currentVL = currentVL + cVal - dVal;
-                }
-            }
-            else if (lType.includes('SL') || lType.includes('SICK')) {
-                currentSL = currentSL + cVal - dVal;
-            }
-        });
-    }
-
+// Exact same ledger sources and balance calculation as the HR portal.
+// Includes historical display rows but never deducts cancelled/disapproved items.
+const currentYear=LeaveParity.todayYear();
+const ledgers=await LeaveParity.fetchAll(supabase,c=>c.from('leave_ledger')
+    .select('*').eq('emp_id',currentUser.emp_id).order('id',{ascending:false}));
+const balances=LeaveParity.balance({...emp,emp_id:currentUser.emp_id},ledgers,currentYear);
+let currentVL=balances.VL, currentSL=balances.SL, currentSPL=balances.SPL,
+    currentWL=balances.WL,currentESC=balances.ESC;
+const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
+    const mini=document.getElementById('mandatory-leave-mini');
+    if(mini)mini.innerHTML=`<strong>Mandatory Leave ${currentYear}:</strong> ${mandatory.recordedHours.toFixed(2)} / 40.00 hours | <strong>${mandatory.remainingHours.toFixed(2)} hours remaining</strong> (${mandatory.remainingDays.toFixed(3)} days equivalent).`;
     // 3. GENERATE DUAL-COLUMN LEDGER
     let deductionsHtml = `<table style="width:100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
         <tr style="background: var(--dar-green); color: white;">
@@ -1751,16 +1795,18 @@ window.loadCredits = async function() {
             let rawDebit = parseFloat(l.debit);
             
             let cVal = isNaN(rawCredit) ? 0 : Math.abs(rawCredit);
+            if (l.transaction_type === 'CREDIT' && /RETRACT|REFUND|REVERS|RESTOR|CANCEL/i.test(String(l.remarks||''))) cVal=0;
             let dVal = isNaN(rawDebit) ? 0 : Math.abs(rawDebit);
 
-            if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED') {
+            if (cVal > 0 || dVal > 0 || l.transaction_type === 'MANUAL INPUT' || l.transaction_type === 'APPLICATION' || l.transaction_type === 'CANCELLED' || String(l.transaction_type||'').includes('DISAPPROVED') || (l.transaction_type === 'CREDIT' && /RETRACT|REFUND|REVERS|RESTOR|CANCEL/i.test(String(l.remarks||'')))) {
                 hasDeductions = true;
                 
                 let displayType = l.type ? l.type : (l.transaction_type === 'CREDIT' ? 'EARNED CREDIT' : 'TRANSACTION');
+                if(String(l.remarks||'').includes('HISTORICAL_MANDATORY_TRACKING')) displayType += ' — PRE-ONLINE RECORD';
                 let statusBadge = l.transaction_type === 'APPLICATION' ? `<span style="background:#fefce8; color:#854d0e; padding:2px 4px; border-radius:4px; font-size:9px;">PENDING</span>` : 
                                       (l.transaction_type === 'CANCELLED' ? `<span style="background:#fef2f2; color:#991b1b; padding:2px 4px; border-radius:4px; font-size:9px;">CANCELLED</span>` : '');
 
-                let displayDebit = dVal;
+                let displayDebit = ['APPROVED','CREDIT','DEDUCTION','POSTED','MANUAL INPUT','FORFEITURE','GATE_PASS_DEDUCTION'].includes(String(l.transaction_type||'').toUpperCase()) ? dVal : 0;
                 const historyRemarksUpper = String(l.remarks || '').toUpperCase();
                 if (historyRemarksUpper.includes('CREDIT TO CTO') || historyRemarksUpper.includes('CREDITED TO CTO')) {
                     const partialVl = window.extractVlChargeFromRemarks(l.remarks, 0);
@@ -1768,7 +1814,7 @@ window.loadCredits = async function() {
                     else displayDebit = 0;
                 }
 
-                let credStr = cVal > 0 ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
+                let credStr = (cVal > 0 && !['APPLICATION','CANCELLED','DISAPPROVED'].includes(l.transaction_type)) ? `<span style="color: var(--success); font-weight:bold;">+${cVal.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`;
                 let debStr = (displayDebit > 0 && l.transaction_type !== 'CANCELLED') ? `<span style="color: var(--danger); font-weight:bold;">-${displayDebit.toFixed(3)}</span>` : 
                              (l.transaction_type === 'CANCELLED' && displayDebit > 0 ? `<span style="color: #ccc; text-decoration: line-through;">-${displayDebit.toFixed(3)}</span>` : `<span style="color: #ccc;">-</span>`);
 
@@ -1796,7 +1842,13 @@ window.loadCredits = async function() {
             <div style="background:#f0f4f8; padding:10px; border-radius:8px;"><strong>Wellness:</strong> <span style="color: var(--success); font-weight: bold;">${currentWL.toFixed(3)}</span></div>
             <div style="background:#f0f4f8; padding:10px; border-radius:8px; grid-column:1/-1;"><strong>Election Service Credit Leave:</strong> <span style="color: var(--success); font-weight: bold;">${currentESC.toFixed(3)}</span> day(s) <small style="color:gray;">(Verified / no annual reset)</small></div>
         </div>
-        <h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Transactions</h5>
+<div style="padding:12px; border:1px solid #d1d5db; border-radius:8px; margin:12px 0; font-size:12px; background:#f9fafb;">
+  <strong>Mandatory / Forced Leave — ${currentYear}</strong>
+  <div style="margin-top:6px; font-weight:bold; color:var(--dar-green);">${mandatory.recordedHours.toFixed(2)} / 40.00 hours counted</div>
+  <div>Remaining requirement: <strong>${mandatory.remainingHours.toFixed(2)} hours (${mandatory.remainingDays.toFixed(3)} equivalent days)</strong></div>
+  <div style="color:#6b7280;font-size:10px;margin-top:6px;">Includes filed Vacation and Mandatory Leave, including disapprovals at any approval level, plus HR-posted manual-system records. Cancelled/retracted applications do not count. Disapprovals never deduct available VL credits.</div>
+</div>
+<h5 style="margin: 0; color: var(--dar-green); font-size: 12px; border-bottom: 1px solid #eee; padding-bottom: 4px;">Leave History & Transactions</h5>
         ${deductionsHtml}
     `;
 
@@ -3661,10 +3713,14 @@ window.cancelLeaveApp = async function(leaveId) {
                 list.innerHTML = html || "No Travel Orders found.";
         
        } else {
-                const { data: leaves } = await supabase.from('leave_ledger').select('*').eq('emp_id', currentUser.emp_id).in('transaction_type', ['APPLICATION', 'APPROVED', 'CANCELLED', 'DISAPPROVED', 'DISAPPROVED DUE TO EXIGENCY OF THE SERVICE']).order('created_at', {ascending: false});
+
+const leaves=await LeaveParity.fetchAll(supabase,c=>c.from('leave_ledger')
+    .select('*').eq('emp_id',currentUser.emp_id).order('id',{ascending:false}));
+const history=leaves.filter(x=>LeaveParity.eligibleStatus(x)||String(x.remarks||'').includes('HISTORICAL_MANDATORY_TRACKING'));
                 let html = '';
-for(let app of leaves || []) {
+for(let app of history || []) {
                     const isApp = app.transaction_type === 'APPROVED';
+                    const historical=String(app.remarks||'').includes('HISTORICAL_MANDATORY_TRACKING');
                     const isCancelled = app.transaction_type.includes('CANCELLED') || app.transaction_type.includes('DISAPPROVED');
                 const routeMatch = String(app.remarks || '').match(/ROUTING_STATUS:\s*([^\s|]+)/i);
                 const route = routeMatch ? routeMatch[1].toUpperCase() : '';
@@ -3677,13 +3733,13 @@ for(let app of leaves || []) {
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <div style="font-weight:bold; font-size: 13px; color:var(--dar-green);">${app.type}</div>
-                            <span class="badge ${sCls}">${app.transaction_type === "APPLICATION" && routingLabel ? routingLabel : app.transaction_type}</span>
+                            <span class="badge ${sCls}">${historical ? 'PRE-ONLINE RECORDED' : (app.transaction_type === 'APPLICATION' && routingLabel ? routingLabel : app.transaction_type)}</span>
                         </div>
                         <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
-                        <button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6${isCancelled ? ' (Disapproved / Cancelled)' : ''}</button>
-                            ${(!isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
+                        ${historical ? '<span style="font-size:10px;color:gray;">Historical paper record — see original hard copy</span>' : `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6${isCancelled ? ' (Disapproved / Cancelled)' : ''}</button>`}
+                            ${(!historical && !isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
                         </div>
                     </div>`;
                     }
@@ -4317,42 +4373,18 @@ window.submitLeave = async function() {
                 if (diffDaysRule < 5) return alert("VACATION LEAVE must be filed at least 5 days before availment.");
             }
 
-            // --- LEAVE BALANCE CHECK LOGIC ---          
-            const { data: empData, error: escEmployeeError } = await supabase.from('employees').select('vl_balance, sl_balance, spl_balance, wl_balance, election_service_credit_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
-            if (escEmployeeError) return alert('Could not verify leave balances. Apply the Election Service Credit database migration first. ' + escEmployeeError.message);
-            let currentVL = empData && empData.vl_balance ? parseFloat(empData.vl_balance) : 0;
-            let currentSL = empData && empData.sl_balance ? parseFloat(empData.sl_balance) : 0;
-            let currentSPL = empData && empData.spl_balance ? parseFloat(empData.spl_balance) : 0;
-            let currentWL = empData && empData.wl_balance ? parseFloat(empData.wl_balance) : 0;
-            let currentESC = Number(empData?.election_service_credit_balance || 0);
 
-            const { data: ledgers } = await supabase.from('leave_ledger')
-                .select('type, credit, debit, transaction_type, remarks, start_date, created_at')
-                .eq('emp_id', currentUser.emp_id)
-                .in('transaction_type', ['APPROVED', 'DEDUCTION', 'CREDIT', 'POSTED', 'MANUAL INPUT', 'FORFEITURE', 'GATE_PASS_DEDUCTION']);
-
-            if (ledgers) {
-                ledgers.forEach(l => {
-                    let cVal = isNaN(parseFloat(l.credit)) ? 0 : Math.abs(parseFloat(l.credit));
-                    let dVal = isNaN(parseFloat(l.debit)) ? 0 : Math.abs(parseFloat(l.debit));
-                    let lType = (l.type || '').toUpperCase();
-                    let ledgerRemarks = String(l.remarks || '').toUpperCase();
-                    let isCtoBacked = ledgerRemarks.includes('CREDIT TO CTO') || ledgerRemarks.includes('CREDITED TO CTO');
-                    if (lType.includes('ELECTION SERVICE CREDIT') || lType === 'ESCL' || lType === 'ESC') currentESC += cVal - dVal;
-                    else if (lType.includes('SPECIAL PRIVILEGE')) currentSPL = currentSPL + cVal - dVal;
-                    else if (lType.includes('WELLNESS')) currentWL = currentWL + cVal - dVal;
-                    else if (lType.includes('VL') || lType.includes('VACATION') || lType.includes('MANDATORY') || lType.includes('FORCED')) {
-                        if (isCtoBacked) {
-                            const vlCharge = window.extractVlChargeFromRemarks(l.remarks, 0);
-                            currentVL = currentVL + cVal - vlCharge;
-                        } else {
-                            currentVL = currentVL + cVal - dVal;
-                        }
-                    }
-                    else if (lType.includes('SL') || lType.includes('SICK')) currentSL = currentSL + cVal - dVal;
-                });
-            }
-
+// Shared exact ledger/baseline calculation used by both portals.
+const {data:empData,error:escEmployeeError}=await supabase.from('employees')
+    .select('vl_balance,sl_balance,spl_balance,wl_balance,election_service_credit_balance')
+    .eq('emp_id',currentUser.emp_id).maybeSingle();
+if(escEmployeeError || !empData)return alert('Unable to verify leave balances: '+(escEmployeeError?.message||'Employee not found'));
+const allLedger=await LeaveParity.fetchAll(supabase,c=>c.from('leave_ledger')
+    .select('id,emp_id,type,credit,debit,transaction_type,remarks,start_date,created_at')
+    .eq('emp_id',currentUser.emp_id).order('id',{ascending:true}));
+const balanceNow=LeaveParity.balance({...empData,emp_id:currentUser.emp_id},allLedger);
+let currentVL=balanceNow.VL, currentSL=balanceNow.SL,
+    currentSPL=balanceNow.SPL,currentWL=balanceNow.WL,currentESC=balanceNow.ESC;
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
                 if (!(type === "Vacation Leave" && isCtoCredited) && days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
             } else if (type === "Special Privilege Leave") {
@@ -7744,10 +7776,11 @@ window.loadAdminCalendar = async function() {
                 if (show) {
                     let btns = '';
                     if (currentLeaveSubTab === 'pending') {
-                        btns = `
-                            <button onclick="openDenyModal('${l.id}')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">Deny</button>
-                            <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto mt-2 sm:mt-0">Approve</button>
-                        `;
+                        const denyControl = mayDisapproveLeave(l.start_date)
+                            ? `<button onclick="openDenyModal('${l.id}')" class="px-5 py-2.5 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto">Deny</button>`
+                            : `<span class="text-[10px] font-bold text-amber-700">Disapproval closed (deadline: ${leaveDisapprovalCutoff(l.start_date) || 'missing date'})</span>`;
+                        btns = `${denyControl}
+                            <button onclick="processDirectLeave('${l.id}', 'APPROVE')" class="px-5 py-2.5 dar-green hover:bg-emerald-900 text-white rounded-xl text-[10px] font-black tracking-widest shadow-sm transition-colors uppercase w-full sm:w-auto mt-2 sm:mt-0">Approve</button>`;
                     } else if (l.transaction_type === 'APPROVED' || l.transaction_type === 'APPLICATION') {
                         // Pass stringified JSON object securely
                         const safeObj = encodeURIComponent(JSON.stringify(l));
@@ -7762,7 +7795,7 @@ window.loadAdminCalendar = async function() {
                         leaveData: l,
                         html: `
                         <div class="p-5 flex flex-col sm:flex-row items-start gap-4 hover:bg-slate-50 transition-colors relative">
-                            ${isPending ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
+                            ${isPending && mayDisapproveLeave(l.start_date) ? `<div class="shrink-0 mt-1"><input type="checkbox" value="${l.id}" class="batch-checkbox" onchange="toggleBatchSelection('${l.id}', this.checked)"></div>` : ''}
                             <div class="flex-grow w-full">
                                 <div class="flex flex-wrap items-center gap-2 mb-2">
                                     <span class="font-black text-slate-800 text-sm tracking-tight">${emp.full_name}</span>
@@ -7875,19 +7908,73 @@ window.loadAdminCalendar = async function() {
         currentActionContext = null;
     }
 
-    window.openDenyModal = function(id) {
-        currentActionContext = id; // 'BATCH' or specific ID
-        document.getElementById('denyReasonInput').value = '';
-        document.getElementById('denyModal').style.display = 'flex';
+    // Strict leave disapproval cutoff: until 11:59 PM Asia/Manila on the
+    // calendar day BEFORE the first scheduled leave day. No same-day or
+    // retroactive denial, regardless of role or whether HR already approved.
+    function leaveDisapprovalTodayPHT() {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(new Date());
+    }
+    function leaveDisapprovalCutoff(startDate) {
+        const date = String(startDate || '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+        const parsed = new Date(date + 'T00:00:00Z');
+        if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return '';
+        parsed.setUTCDate(parsed.getUTCDate() - 1);
+        return parsed.toISOString().slice(0, 10);
+    }
+    function mayDisapproveLeave(startDate) {
+        const cutoff = leaveDisapprovalCutoff(startDate);
+        return Boolean(cutoff && leaveDisapprovalTodayPHT() <= cutoff);
+    }
+    function requireDisapprovalBeforeLeave(startDate) {
+        const cutoff = leaveDisapprovalCutoff(startDate);
+        if (!cutoff) throw new Error('The leave start date is missing or invalid; disapproval cannot proceed.');
+        if (!mayDisapproveLeave(startDate)) {
+            throw new Error('Disapproval deadline passed. This leave began on ' + String(startDate).slice(0,10)
+                + '. The last permitted disapproval date was ' + cutoff
+                + ' (Philippine time). Same-day and retroactive disapproval are not allowed.');
+        }
+    }
+
+    window.openDenyModal = async function(id) {
+        try {
+            const selectedIds = id === 'BATCH' ? Array.from(selectedLeaves) : [id];
+            if (!selectedIds.length) return;
+            const {data, error} = await supabaseClient.from('leave_ledger')
+                .select('id, start_date, transaction_type').in('id', selectedIds);
+            if (error) throw error;
+            if (!data || data.length !== selectedIds.length) throw new Error('One or more applications could not be found. Refresh the leave list.');
+            for (const item of data) {
+                if (String(item.transaction_type || '').toUpperCase() !== 'APPLICATION') throw new Error('Only pending applications may be disapproved at this approval level.');
+                requireDisapprovalBeforeLeave(item.start_date);
+            }
+            currentActionContext = id;
+            document.getElementById('denyReasonInput').value = '';
+            document.getElementById('denyModal').style.display = 'flex';
+        } catch (e) { alert('Disapproval unavailable: ' + e.message); }
     }
 
     window.confirmDeny = async function() {
         const reason = document.getElementById('denyReasonInput').value.trim();
         if (!reason) return alert("A mandatory reason for disapproval is required.");
 
-        // Preserve the target before closing: closeModals clears currentActionContext.
-        // This also fixes failed denials at Unit Head, Division Chief and PARPO stages.
+        // Revalidate against the latest database record on submission, not just
+        // when the modal opened. This also protects batches containing old cases.
         const denialContext = currentActionContext;
+        const targetIds = denialContext === 'BATCH' ? Array.from(selectedLeaves) : [denialContext];
+        if (!targetIds.length || !targetIds[0]) return alert('Please select an application.');
+        const {data: freshLeaves, error: freshError} = await supabaseClient.from('leave_ledger')
+            .select('id, start_date, transaction_type').in('id', targetIds);
+        if (freshError) return alert('Cannot verify disapproval deadline: ' + freshError.message);
+        if (!freshLeaves || freshLeaves.length !== targetIds.length) return alert('A selected application is missing. Refresh the page.');
+        try {
+            for (const rec of freshLeaves) {
+                if (String(rec.transaction_type || '').toUpperCase() !== 'APPLICATION') throw new Error('A selected application is no longer pending.');
+                requireDisapprovalBeforeLeave(rec.start_date);
+            }
+        } catch (e) { return alert('Disapproval unavailable: ' + e.message); }
         closeModals();
 
         if (denialContext === 'BATCH') {
