@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.15-leave-parity-20261017"; 
+        const APP_VERSION = "v1.16-spl3-wl5-vl-fallback-20261017"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -412,6 +412,7 @@ async function hardReloadSystem() {
 
         <div id="leave-view" class="view">
             <h3 style="color: var(--dar-green);">LEAVE APPLICATION (FORM 6)</h3>
+            <p style="font-size:11px; color:var(--text-muted);line-height:1.5;margin:0 0 8px;">SPL: 3 days/year; Wellness Leave: 5 days/year. Each scheduled workday counts as 1 day even on CWW. Unused days expire December 31; next-year requests are allowed. If SPL/WL runs out, you may choose a VL charge at actual scheduled hours (10-hour CWW day = 1.25 VL credits). You may cancel through the leave start date; afterward request HR cancellation.</p>
             <div id="mandatory-leave-mini" class="card" style="font-size:12px;border-left:4px solid var(--dar-gold);">Mandatory Leave balance: open Credits to view your annual requirement.</div>
             <div class="card" style="border-left:4px solid #b45309;background:#fffbeb;font-size:12px;line-height:1.5">
               <strong>REQUIRED APPROVAL PROCEDURE</strong><div>Unit Head → Division Chief → PARPO → <b>Submit signed hard-copy Form 6 to HR</b> → HR confirms receipt and grants final approval.</div>
@@ -1683,10 +1684,19 @@ const LeaveParity = (() => {
         if (/VACATION|MANDATORY|FORCED|FORCE LEAVE|\bVL\b|GATE.?PASS|UNDERTIME|TARDINESS/.test(s)) return 'VL';
         return '';
     };
+    const annualAllowance = (employee, field, cap, year) => {
+        // Opening balance is only a current-year baseline. Next calendar year
+        // receives its own fresh allowance: never carry over unused days.
+        if (Number(year) !== todayYear()) return cap;
+        const rawOpening=employee?.[field];
+        const opening=(rawOpening===null||rawOpening===undefined||rawOpening==='') ? NaN : Number(rawOpening);
+        return Number.isFinite(opening) ? Math.min(cap, Math.max(0, opening)) : cap;
+    };
     const balance = (employee, rows, year=todayYear()) => {
         const result={
             VL:Number(employee?.vl_balance||0), SL:Number(employee?.sl_balance||0),
-            SPL:Number(employee?.spl_balance??3), WL:Number(employee?.wl_balance??5),
+            SPL:annualAllowance(employee,'spl_balance',3,year),
+            WL:annualAllowance(employee,'wl_balance',5,year),
             ESC:Number(employee?.election_service_credit_balance||0)
         };
         for (const row of rows||[]) {
@@ -1708,6 +1718,10 @@ const LeaveParity = (() => {
             }
             result[cat]+=num(row.credit)-debit;
         }
+        // Annual SPL and WL can never exceed 3 and 5 respectively, even if a
+        // legacy manual credit exists in the ledger. No inter-year carryover.
+        result.SPL=Math.max(0,Math.min(3,result.SPL));
+        result.WL=Math.max(0,Math.min(5,result.WL));
         return result;
     };
     const trackType = row => {
@@ -3647,14 +3661,22 @@ window.cancelLeaveApp = async function(leaveId) {
             try {
                 const { data: leaveApp, error: fetchError } = await supabase
                     .from('leave_ledger')
-                    .select('start_date, remarks, type, transaction_type, debit')
+                    .select('start_date, created_at, remarks, type, transaction_type, debit')
+                    .eq('emp_id',currentUser.emp_id)
                     .eq('id', leaveId)
                     .single();
 
                 if (fetchError) throw fetchError;
 
-                if (leaveApp.start_date < todayStr) {
-                    alert("Leave can only be cancelled on or before the exact date of the leave.");
+                const nowPHT=getPSTDate();
+                // Employee may cancel up to and including the first leave day.
+                // After the start date, only HR may cancel on employee request.
+                if (!leaveApp.start_date || nowPHT > leaveApp.start_date) {
+                    alert('Self-cancellation is allowed through the leave start date (Philippine time). After that, request HR cancellation.');
+                    return;
+                }
+                if (!/^(APPLICATION|PENDING|APPROVED|REQUESTED|SUBMITTED)/i.test(String(leaveApp.transaction_type||''))) {
+                    alert('This application is already cancelled, disapproved, or otherwise closed.');
                     return;
                 }
 
@@ -3671,7 +3693,28 @@ window.cancelLeaveApp = async function(leaveId) {
                     if (ctoDeleteErr) throw ctoDeleteErr;
                 }
 
-                const updatedRemarks = leaveApp.remarks ? "CANCELLED - " + leaveApp.remarks : "CANCELLED";
+                // Some new CTO usages are linked by source_leave_id instead of purpose.
+                if (leaveApp.transaction_type === 'APPROVED' && isCtoLeave) {
+                    const {error:modernCtoErr}=await supabase.from('cto_records').delete()
+                        .eq('source_leave_id',leaveId).eq('transaction_type','USED');
+                    if(modernCtoErr) throw modernCtoErr;
+                    const {data:extraVl,error:extraErr}=await supabase.from('leave_ledger')
+                        .select('id,type').eq('emp_id',currentUser.emp_id)
+                        .eq('transaction_type','APPROVED')
+                        .ilike('remarks',`%CTO leave application #${leaveId}:%`);
+                    if(extraErr)throw extraErr;
+                    for(const rec of extraVl||[]){
+                        if(/CHARGED FROM CTO DEFICIT/i.test(String(rec.type||''))){
+                            const {error:delErr}=await supabase.from('leave_ledger').delete().eq('id',rec.id);
+                            if(delErr)throw delErr;
+                        }
+                    }
+                }
+                const {error:splitVlErr}=await supabase.from('leave_ledger').delete()
+                    .eq('emp_id',currentUser.emp_id).eq('type','Vacation Leave').eq('transaction_type','DEDUCTION')
+                    .ilike('remarks',`%SPL_WL_VL_FALLBACK_FOR_LEAVE_ID:${leaveId}%`);
+                if(splitVlErr)throw new Error('Unable to release linked VL charge: '+splitVlErr.message);
+                const updatedRemarks = (leaveApp.remarks || '') + ' | CANCELLED_BY_EMPLOYEE_AT: ' + new Date().toISOString();
                 const { error } = await supabase.from('leave_ledger')
                     .update({ transaction_type: 'CANCELLED', remarks: updatedRemarks })
                     .eq('id', leaveId);
@@ -3728,7 +3771,10 @@ for(let app of history || []) {
                     route === 'PENDING_HRMO' ? (/HARD_COPY_RECEIVED_BY:/i.test(String(app.remarks || '')) ? 'HARD COPY RECEIVED - PENDING HR APPROVAL' : 'PARPO APPROVED - AWAITING HR HARD-COPY CONFIRMATION') : route.replaceAll('_',' ');
                     const sCls = isApp ? 'bg-approved' : (isCancelled ? 'bg-cancelled' : 'bg-pending');
                 
-                const cannotCancel = app.start_date < todayStr;
+                const cannotCancel=!app.start_date || getPSTDate()>app.start_date;
+                const isDisapproved=/DISAPPROV|REJECT|DENIED/i.test(String(app.transaction_type||''));
+                const isCancelledOnly=/CANCELLED|CANCELED|RETRACTED/i.test(String(app.transaction_type||''));
+                const printable=!historical && !isCancelledOnly && (!isDisapproved || LeaveParity.category(app.type)==='VL');
                     
                     html += `<div class="card" style="padding: 10px; margin-bottom: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -3738,8 +3784,8 @@ for(let app of history || []) {
                         <div style="font-size: 11px; margin-bottom: 4px;"><strong>Dates:</strong> ${app.start_date} to ${app.end_date} (${app.debit} days)</div>
                         <div style="font-size: 10px; color: gray;"><strong>Remarks:</strong> ${app.remarks}</div>
                         <div class="action-group" style="margin-top: 8px;">
-                        ${historical ? '<span style="font-size:10px;color:gray;">Historical paper record — see original hard copy</span>' : `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6${isCancelled ? ' (Disapproved / Cancelled)' : ''}</button>`}
-                            ${(!historical && !isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel</button>` : ''}
+                        ${historical ? '<span style="font-size:10px;color:gray;">Historical paper record — see original hard copy</span>' : (printable ? `<button class="btn btn-success btn-small" onclick="window.printLeaveForm6('${app.id}')">Print Form 6${isDisapproved ? ' (Disapproved VL)' : ''}</button>` : '')}
+                            ${(!historical && !isCancelled && !cannotCancel) ? `<button class="btn btn-danger btn-small" onclick="window.cancelLeaveApp('${app.id}')">Cancel Leave</button>` : ''}
                         </div>
                     </div>`;
                     }
@@ -3751,8 +3797,13 @@ for(let app of history || []) {
             };
 
         window.retractLeaveApp = async function(leaveId) {
-            const { data: app } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).single();
-            if(!app) return;
+            const {data:app,error:err}=await supabase.from('leave_ledger').select('*')
+                .eq('id',leaveId).eq('emp_id',currentUser.emp_id).maybeSingle();
+            if(err || !app)return alert('Application not found.');
+            if(!app.start_date || getPSTDate()>app.start_date)
+                return alert('After the leave start date, request cancellation from HR.');
+            if(String(app.transaction_type).toUpperCase()!=='APPROVED')
+                return alert('Only approved leave can be retracted.');
             const daysToRetract = prompt(`Approved Leave is ${app.debit} days.\nHow many days do you want to retract?`);
             if(!daysToRetract || isNaN(daysToRetract) || parseFloat(daysToRetract) <= 0 || parseFloat(daysToRetract) > app.debit) return alert("Invalid number of days.");
             
@@ -4126,6 +4177,13 @@ for(let app of history || []) {
             const type = document.querySelector('input[name="ltype"]:checked').value;
             const container = document.getElementById('leave-details-container');
             container.innerHTML = '';
+            // SPL/WL have whole-day entitlements. Disable partial-day boxes so
+            // employee submission and HR final debit cannot disagree.
+            const wholeDayLeave=['Special Privilege Leave','Wellness Leave'].includes(type);
+            for(const field of ['leave-half-day-start','leave-half-day-end']){
+                const cb=document.getElementById(field);
+                if(cb){if(wholeDayLeave)cb.checked=false;cb.disabled=wholeDayLeave;}
+            }
 
 if (["Vacation Leave", "Mandatory/Forced Leave", "Special Privilege Leave"].includes(type)) {
                 let ctoOption = "";
@@ -4193,6 +4251,14 @@ window.calculateLeaveDays = async function() {
                 return window.calculateLeaveDays();
             }
 
+            const requestedType=document.querySelector('input[name="ltype"]:checked')?.value||'';
+            if (['Special Privilege Leave','Wellness Leave'].includes(requestedType)
+                && start.slice(0,4)!==end.slice(0,4)) {
+                countEl.innerText='0';
+                if(breakdownEl) breakdownEl.innerHTML='<b style="color:var(--danger);">SPL and Wellness Leave have separate annual allotments. Submit a separate leave for each calendar year.</b>';
+                const btn=document.getElementById('btn-submit-leave'); if(btn)btn.disabled=true;
+                return;
+            }
             const schedOverrides = await window.fetchLeaveScheduleOverrides(start, end);
             const getActiveOverride = (dateStr) => {
                 const matching = (schedOverrides || []).filter(s => dateStr >= s.start_date && dateStr <= s.end_date);
@@ -4243,7 +4309,7 @@ window.calculateLeaveDays = async function() {
                     if (isCWW) {
                         const lTypeElement = document.querySelector('input[name="ltype"]:checked');
                         const lType = lTypeElement ? lTypeElement.value : '';
-                        if (lType === 'Vacation Leave' || lType === 'Sick Leave') dayDeduction = 1.25;
+                        if (['Vacation Leave','Sick Leave','Mandatory/Forced Leave'].includes(lType)) dayDeduction = 1.25;
                     }
                     count += dayDeduction;
                 }
@@ -4265,7 +4331,7 @@ window.calculateLeaveDays = async function() {
             const isHourlyCtoLeave = lType === 'Vacation Leave' && !!(ctoHalfDayCheck && ctoHalfDayCheck.checked);
             let halfDayValue = 0.5;
             let minAllowed = 1.5;
-            if (isCWWActive && (lType === 'Vacation Leave' || lType === 'Sick Leave')) {
+            if (isCWWActive && ['Vacation Leave','Sick Leave','Mandatory/Forced Leave'].includes(lType)) {
                 halfDayValue = 0.625;
                 minAllowed = 1.875;
             }
@@ -4365,6 +4431,8 @@ window.submitLeave = async function() {
             const isCtoCredited = ctoCheck && ctoCheck.checked;
 
             if (!start || !end || days <= 0) return alert("Select valid working dates.");
+            if (['Special Privilege Leave','Wellness Leave'].includes(type) && start.slice(0,4)!==end.slice(0,4))
+                return alert('SPL and Wellness Leave must be filed separately for each calendar year.');
             if (type === "Vacation Leave" && !isCtoCredited) {
                 const filingDate = new Date(todayStr);
                 const leaveStart = new Date(start);
@@ -4382,15 +4450,41 @@ if(escEmployeeError || !empData)return alert('Unable to verify leave balances: '
 const allLedger=await LeaveParity.fetchAll(supabase,c=>c.from('leave_ledger')
     .select('id,emp_id,type,credit,debit,transaction_type,remarks,start_date,created_at')
     .eq('emp_id',currentUser.emp_id).order('id',{ascending:true}));
-const balanceNow=LeaveParity.balance({...empData,emp_id:currentUser.emp_id},allLedger);
+// SPL/WL are charged against the year OF LEAVE, not the year filed.
+let splWlFallbackApproved=false;
+const leaveYear=Number(start.slice(0,4));
+const balanceNow=LeaveParity.balance({...empData,emp_id:currentUser.emp_id},allLedger,leaveYear);
 let currentVL=balanceNow.VL, currentSL=balanceNow.SL,
     currentSPL=balanceNow.SPL,currentWL=balanceNow.WL,currentESC=balanceNow.ESC;
+// Pending SPL/WL requests in the same year reserve days only while still active.
+// An APPROVED transaction is already counted in balanceNow and is not reserved twice.
+const reservedDays=allLedger.reduce((sum,r)=>{
+    if(Number(String(r.start_date||'').slice(0,4))!==leaveYear) return sum;
+    if(LeaveParity.category(r.type)!==(type==='Special Privilege Leave'?'SPL':type==='Wellness Leave'?'WL':'NONE')) return sum;
+    if(!/^(APPLICATION|PENDING|SUBMITTED|REQUESTED)/i.test(String(r.transaction_type||'')))return sum;
+    return sum+Math.max(0,Number(r.debit)||0);
+},0);
+currentSPL=Math.max(0,currentSPL-(type==='Special Privilege Leave'?reservedDays:0));
+currentWL=Math.max(0,currentWL-(type==='Wellness Leave'?reservedDays:0));
             if (type === "Vacation Leave" || type === "Mandatory/Forced Leave") {
                 if (!(type === "Vacation Leave" && isCtoCredited) && days > currentVL) return alert(`Insufficient Vacation Leave balance. You only have ${currentVL.toFixed(3)} days available.`);
-            } else if (type === "Special Privilege Leave") {
-                if (days > currentSPL) return alert(`Insufficient SPL balance. You only have ${currentSPL.toFixed(3)} days available.`);
-            } else if (type === "Wellness Leave") {
-                if (days > currentWL) return alert(`Insufficient Wellness Leave balance. You only have ${currentWL.toFixed(3)} days available.`);
+            } else if (type === "Special Privilege Leave" || type === "Wellness Leave") {
+                // One day is one SPL/WL credit even on CWW. Uncovered scheduled
+                // days may use VL only with express employee confirmation.
+                const creditsAvailable=type==='Special Privilege Leave' ? currentSPL : currentWL;
+                const schedule=await window.getCtoRequiredHours(start,end);
+                const daysInSchedule=schedule.dates||[];
+                if(Math.abs(daysInSchedule.length-days)>0.0005)
+                    return alert('The leave schedule changed. Recalculate the leave dates before submitting.');
+                const coveredDays=Math.min(days,Math.max(0,Math.floor(creditsAvailable+0.00001)));
+                const uncovered=daysInSchedule.slice(coveredDays);
+                const vlEquivalent=uncovered.reduce((n,d)=>n+Number(d.hours||8)/8,0);
+                if(uncovered.length) {
+                    if(vlEquivalent>currentVL+0.0005)
+                        return alert(`Insufficient leave credits. ${coveredDays} ${type==='Special Privilege Leave'?'SPL':'WL'} day(s) available; ${uncovered.length} uncovered day(s) would cost ${vlEquivalent.toFixed(3)} VL credits, but only ${currentVL.toFixed(3)} VL remain.`);
+                    if(!confirm(`${type} available for ${leaveYear}: ${coveredDays} day(s).\nCharge the other ${uncovered.length} workday(s) to Vacation Leave at ACTUAL scheduled hours (${vlEquivalent.toFixed(3)} VL credit(s); 10-hour CWW day = 1.25)?`))return;
+                    splWlFallbackApproved=true;
+                }
             } else if (type === "Election Service Credit Leave") {
                 if (days > currentESC + 0.0005) return alert(`Insufficient verified Election Service Credit balance. You only have ${currentESC.toFixed(3)} day(s). Contact HR to post your COMELEC-certified credit. This leave cannot automatically draw from VL.`);
             } else if (type === "Sick Leave") {
@@ -4471,7 +4565,8 @@ let currentVL=balanceNow.VL, currentSL=balanceNow.SL,
                 routeStatus = "PENDING_CHIEF";
             }
             
-            const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`;
+            const fullRemarks = `${detailStr} | Commutation: ${comm} | ROUTING_STATUS: ${routeStatus}`
+                + (splWlFallbackApproved ? ' | SPL_WL_VL_FALLBACK_CONSENT: YES' : '');
 
             const dates_to_check = [];
             let curr = new Date(start);
@@ -4586,6 +4681,11 @@ let currentVL=balanceNow.VL, currentSL=balanceNow.SL,
             
             const { data: app, error } = await supabase.from('leave_ledger').select('*').eq('id', leaveId).eq('emp_id', currentUser.emp_id).maybeSingle();
             if (error || !app) return alert("Application not found");
+            const tx=String(app.transaction_type||'').toUpperCase();
+            if (/CANCELLED|CANCELED|RETRACTED/.test(tx))
+                return alert('Cancelled leave applications are not printable.');
+            if (/DISAPPROV|REJECT|DENIED/.test(tx) && LeaveParity.category(app.type)!=='VL')
+                return alert('Only disapproved Vacation Leave applications may be printed.');
 
             const { data: emp } = await supabase.from('employees').select('full_name, unit, position, salary, vl_balance, sl_balance').eq('emp_id', currentUser.emp_id).maybeSingle();
             const empData = emp || {};
