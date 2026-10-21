@@ -1,45 +1,86 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>Travel Order Generator — All Employees | DAR Camarines Sur I</title>
-<style>
-:root{--green:#003811;--gold:#d4af37;--ink:#17231c;--muted:#647067;--line:#d7dfd9;--bg:#f2f6f3}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{background:var(--green);border-bottom:4px solid var(--gold);color:white;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-header strong{font-size:19px;letter-spacing:.02em}header small{display:block;font-size:11px;color:#d9e4dc;margin-top:3px}
-.tag{border:1px solid #9bba9e;padding:5px 9px;border-radius:18px;font-weight:700;font-size:11px;white-space:nowrap}
-main{display:grid;grid-template-columns:minmax(330px,440px) minmax(620px,1fr);gap:20px;max-width:1610px;margin:auto;padding:20px}
-.editor,.preview-panel{min-width:0}.editor{display:flex;flex-direction:column;gap:14px}
-.panel{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 8px #15371b0d;padding:18px}
-h1,h2{margin:0}h2{font-size:13px;color:var(--green);letter-spacing:.03em;text-transform:uppercase;display:flex;align-items:center;gap:9px;margin-bottom:13px}h2 .num{border-radius:50%;background:#e9f3e9;color:var(--green);width:24px;height:24px;display:grid;place-items:center}
-.description{font-size:12px;color:var(--muted);margin:2px 0 10px}
-.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:11px;row-gap:8px}
-.full{grid-column:1 / -1}
-label{display:block;font-size:11px;color:#43534a;font-weight:700;margin:0 0 4px}
-input,select,textarea{width:100%;font:inherit;font-size:13px;padding:9px 10px;border-radius:7px;border:1px solid #bbc9bf;background:#fff;color:var(--ink);min-height:39px}
-textarea{min-height:65px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:2px solid #a8c8b0;outline-offset:0;border-color:var(--green)}
-.field-hint{font-size:10px;color:#66736b;margin-top:3px}
-.entry{border:1px solid #dce6dc;padding:11px;border-radius:8px;margin-bottom:9px;background:#fbfdfb}
-.entry-title{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--green);font-weight:800;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.entry-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-button{font:inherit;cursor:pointer;border:0;border-radius:7px;font-weight:750}
-button.primary{background:var(--green);color:white;padding:12px 15px}
-button.print{background:#af8c22;color:white;padding:12px 15px}
-button.secondary{background:#e8f2e9;color:var(--green);padding:8px 12px;font-size:12px}
-button.remove{background:transparent;color:#ac3838;padding:2px 7px;font-size:12px}
-button:disabled{opacity:.45;cursor:not-allowed}
-.controls{display:flex;flex-wrap:wrap;gap:8px}
-.control-row{position:sticky;bottom:0;background:#ffffffee;backdrop-filter:blur(5px);padding:12px;border:1px solid #d7dfd9;border-radius:12px;box-shadow:0 -2px 20px #112d131b;z-index:4}
-.control-row .controls>button{flex:1;min-width:116px}
-.alert{background:#fff7e4;border:1px solid #f0d6a0;border-radius:7px;padding:10px 12px;font-size:11px;color:#69511a}
-.preview-panel{position:relative}.preview-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
-.preview-heading span{font-size:12px;color:#69736d}.preview-heading h2{margin:0}
-.preview-scroll{overflow-x:auto;padding-bottom:14px}
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,user-scalable=no"><title>DAR Camarines Sur I — Travel Order</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><style>
+        :root {
+            --dar-green: #003811;
+            --dar-light: #006400;
+            --dar-gold: #D4AF37;
+            --bg-main: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { margin: 0; background-color: var(--bg-main); color: var(--text-main); -webkit-tap-highlight-color: transparent; }
+
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        .view { display: none; padding: 15px; padding-bottom: 120px; }
+        .view.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .app-header { background: var(--dar-green); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--dar-gold); }
+        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid #e5e7eb; }
+        
+        h4 { margin-top: 0; color: var(--dar-green); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
+        label { display: block; font-size: 11px; font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
+
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; margin-bottom: 8px; }
+        .btn:active { transform: scale(0.98); opacity: 0.8; }
+        .btn-primary { background: var(--dar-green); }
+        .btn-gold { background: var(--dar-gold); color: var(--dar-green); }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
+        .btn-warning { background: var(--warning); }
+        
+        .action-group { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-small { padding: 8px; font-size: 11px; flex: 1; margin-bottom: 0; }
+        .cal-container { background: white; border-radius: 8px; overflow-x: auto; margin-top: 10px; }
+        .cal-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .cal-table th { background: var(--dar-green); color: white; padding: 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
+        .cal-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; white-space: nowrap; }
+        .day-num { font-weight: bold; font-size: 14px; color: var(--dar-green); }
+        .cal-entry { margin-bottom: 4px; padding: 4px; border-radius: 4px; color: white; font-weight: bold; font-size: 10px; display: inline-block;}
+        .entry-to { background: var(--dar-green); }
+        .entry-pso { background: var(--dar-gold); color: #003811; }
+        .entry-holiday { background: var(--danger); }
+        .entry-leave { background: #b45309; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--dar-green); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; padding: 12px 0; text-align: center; color: #9ca3af; font-size: 9px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .nav-item.active { color: var(--dar-gold); border-top: 3px solid var(--dar-gold); background: rgba(255,255,255,0.05); }
+
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; float: right; }
+        .bg-pending { background: #fefce8; color: #854d0e; }
+        .bg-approved { background: #ecfdf5; color: #166534; }
+        .bg-cancelled { background: #fef2f2; color: #991b1b; }
+        
+        .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 150px; overflow-y: auto; margin-top: -10px; margin-bottom: 10px; display: none; }
+        .search-row { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; cursor: pointer; }
+
+        .qr-maximized {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 85vw !important;
+            height: 85vw !important;
+            max-width: 400px !important;
+            max-height: 400px !important;
+            z-index: 9999 !important;
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.85) !important;
+            background: white !important;
+            border: 4px solid var(--dar-gold) !important;
+            cursor: pointer;
+        }
+
+        .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .radio-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+        .radio-item input { width: auto; margin: 0; }
+    
 .paper{background:white;margin:auto;width:210mm;min-height:297mm;padding:10mm 10mm 12mm;box-shadow:0 6px 30px #1a281522;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:9pt;line-height:1.28}
 .letterhead{text-align:center;height:28mm;padding-top:0}
 .letterhead .rep{font-size:8pt;letter-spacing:.07em}
@@ -80,340 +121,393 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .empty{color:#a2a2a2}
 @media(max-width:1150px){main{display:block;max-width:800px}.editor{margin-bottom:22px}.preview-panel{overflow-x:auto}.paper{width:210mm}}
 @media(max-width:510px){header{padding:13px}header strong{font-size:15px}.tag{font-size:9px}main{padding:10px}.panel{padding:13px}.fields,.entry-fields{grid-template-columns:1fr}.control-row .controls>button{min-width:100px;font-size:12px}}
-@page{size:A4 portrait;margin:0}
-@media print{
-  body{background:white!important;margin:0!important;font-size:9pt}
-  header,.editor,.preview-heading,.alert,.no-print{display:none!important}
-  main{display:block!important;margin:0!important;padding:0!important;max-width:none!important}
-  .preview-panel,.preview-scroll{overflow:visible!important;margin:0!important;padding:0!important;display:block!important}
-  .paper{width:210mm!important;min-height:297mm!important;box-shadow:none!important;margin:0!important;padding:10mm 10mm 12mm!important}
-  .to-form{break-inside:auto}.sig-grid{break-inside:avoid}.form-row{break-inside:avoid}
-  .empty{color:transparent}
-  button{display:none!important}
-}
 
-/* Employee portal style — compact, mobile-first, matching the original application. */
-body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f4f7f6;color:#1f2937;font-size:13px;line-height:1.45}
-.app-header{padding:15px;background:#003811;color:#fff;border-bottom:3px solid #d4af37;position:sticky;top:0;z-index:15;display:flex;gap:10px;justify-content:space-between;align-items:center}
-.app-header strong{font-size:15px;color:white;letter-spacing:0}
-.app-header small{font-size:10px;color:#d4af37;font-weight:700;letter-spacing:0.06em}
-.tag{border:1px solid #d4af37;color:#d4af37;font-size:10px;padding:5px 8px}
-main{display:block;max-width:660px;margin:0 auto;padding:15px}
-.editor{display:flex;flex-direction:column;gap:0}
-.intro{padding:9px 4px 16px}
-.intro strong{font-size:17px;color:#003811}
-.intro div{margin-top:4px;color:#6b7280;font-size:11px}
-.panel{background:#fff;padding:15px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin:0 0 15px;border:1px solid #e5e7eb}
-h2{display:block;font-size:14px;color:#003811;border-bottom:1px solid #eee;padding-bottom:8px;margin:0 0 12px;text-transform:none;letter-spacing:normal}
-.description{font-size:11px;line-height:1.5;color:#6b7280;margin:0 0 12px}
-label{font-size:11px;font-weight:700;color:#6b7280;margin:0 0 5px}
-input,select,textarea{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:11px 12px;font-size:15px;min-height:43px;margin:0 0 12px;background:white}
-input:focus,select:focus,textarea:focus{outline:2px solid #b6cfbb;outline-offset:-1px}
-textarea{min-height:70px}
-.check-label{display:flex;align-items:center;gap:8px;color:#b91c1c;font-size:12px;font-weight:800;margin:0 0 12px}
-.check-label input{width:auto;margin:0;min-height:auto;accent-color:#003811}
-.two-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.add-person-row{display:flex;gap:6px;align-items:flex-start}
-.add-person-row input{min-width:0;flex:1}
-.add-person-row button{height:43px;flex:0 0 70px;padding:0}
-.entry{background:#f8fafc;border:1px solid #e3e9ec;border-radius:8px;padding:10px;margin:0 0 8px}
-.entry-title{color:#003811;font-weight:750;font-size:11px;letter-spacing:0;text-transform:none}
-.entry-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px 9px}
-.entry-fields label{font-size:10px}
-.entry-fields input,.entry-fields textarea{padding:9px 10px;font-size:13px;min-height:38px;margin:0}
-.entry-fields textarea{min-height:60px}
-.entry-title .remove{color:#dc2626}
-button{border:0;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
-button.primary{background:#003811;color:white;padding:9px 12px}
-button.secondary{background:#eef4ee;color:#003811;border:1px solid #e1ebe2;padding:9px 12px;font-size:12px}
-.btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;padding:14px;font-size:14px;font-weight:800;transition:filter .15s}
-.btn:active{filter:brightness(.94)}
-.btn-gold{background:#d4af37;color:#003811}
-.btn-muted{background:#e5e7eb;color:#1f2937}
-.action-area{margin:0 0 26px}
-.action-area .btn{margin-bottom:8px}
-.foot-help{text-align:center;font-size:11px;color:#647067;margin-top:10px}
-.helper{font-size:11px;color:#647067;margin:0 0 12px}
+
+[hidden]{display:none!important}
+#login-screen{height:100vh;display:flex;align-items:center;justify-content:center;padding:25px}
+#app-screen{display:none}
+#app-screen.active{display:block}
+#generator-header{padding-left:15px;padding-right:15px}
+#apply-view{max-width:650px;margin:0 auto}
+#app-screen input,#app-screen textarea,#app-screen select{box-sizing:border-box}
+#app-screen button{cursor:pointer}
+#saved-to-list .item{display:flex;gap:8px;align-items:center;justify-content:space-between;background:#f8fafb;padding:8px;margin-bottom:6px;border-radius:8px;border:1px solid #edf0f2}
+#saved-to-list small{display:block;color:#6b7280;font-size:10px;margin-top:3px}
+#saved-to-list button{padding:6px 10px;width:auto;margin:0;display:inline-block;white-space:nowrap}
+#saved-to-list .actions{display:flex;gap:4px}
+#saved-to-list strong{font-size:12px;color:#003811}
+#login-alert{font-size:11px;color:#b91c1c;min-height:16px}
+#search-results{position:relative;z-index:2}
+#search-results .search-row{cursor:pointer}
+#search-results .search-row:hover{background:#eef9f0}
+#dynamic-itin-fields .card{margin-bottom:12px}
+#itinerary-warning{font-size:11px;padding:9px;color:#854d0e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;display:none;margin:8px 0}
 #preview-view{display:none}
-.preview-toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;flex-wrap:wrap}
-.preview-toolbar>div{flex:1;text-align:center}
-.preview-toolbar strong{color:#003811;font-size:13px;display:block}
-.preview-toolbar small{color:#6b7280;font-size:10px;display:block}
-.preview-toolbar .btn{width:auto;padding:11px 12px;font-size:12px}
-.preview-toolbar .back{background:#e5e7eb;color:#1f2937}
-.preview-scroll{overflow:auto;border-radius:8px;background:#dfe7e0;padding:10px 0}
-.paper{box-shadow:0 6px 24px #0002}
-.preview-help{text-align:center;padding:10px}
-@media(max-width:700px){main{padding:12px}.preview-scroll{overflow-x:auto}.paper{margin-left:0;margin-right:0}.preview-toolbar>div{order:-1;flex:1 1 100%}.preview-toolbar .btn{flex:1}}
-@media(max-width:430px){.two-inputs{gap:6px}.app-header strong{font-size:14px}.tag{font-size:9px}.panel{padding:13px}.entry-fields{grid-template-columns:1fr}.entry-fields .full{grid-column:1}.add-person-row button{flex-basis:66px}}
-@media print{
-  body{margin:0!important;background:#fff!important}
-  .app-header,#form-view,.preview-toolbar,.preview-help{display:none!important}
-  main{padding:0!important;max-width:none!important;margin:0!important}
-  #preview-view{display:block!important}
-  .preview-scroll{display:block!important;overflow:visible!important;background:#fff!important;padding:0!important;border-radius:0!important}
-  .paper{zoom:1!important;width:210mm!important;min-height:297mm!important;margin:0!important;box-shadow:none!important;padding:10mm 10mm 12mm!important}
+body.print-preview{background:white}
+#preview-view .preview-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 15px;background:#003811;color:white}
+#preview-view .preview-toolbar button{border:0;cursor:pointer;padding:10px;border-radius:8px;font-weight:700;width:auto;flex:0 0 auto;margin:0;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+#preview-view .preview-toolbar > div{flex:1;min-width:0;font-size:13px}
+#preview-view .preview-toolbar small{display:block;font-size:10px;color:#d4af37;margin-top:3px}
+#preview-view > p{font-size:11px;color:#64748b;text-align:center;margin:0;padding:12px}
+#preview-view .preview-scroll{overflow:auto;padding:16px 8px;background:#e6ece8}
+#preview-view .paper{margin:0 auto}
+#preview-view .two-col{grid-template-columns:63.15% 36.85%}
+#preview-view .sig-grid{grid-template-rows:28mm 28mm}
+#preview-view .sig-bottom:before{height:9mm}
+@media(max-width:650px){#saved-to-list .item{flex-direction:column;align-items:flex-start}#saved-to-list .actions{align-self:flex-end}}
+@media print {
+  @page{size:A4 portrait;margin:0}
+  body{background:#fff!important;margin:0!important;padding:0!important}
+  #login-screen,#app-screen,#preview-view .preview-toolbar,.no-print{display:none!important}
+  #preview-view{display:block!important;position:static!important}
+  #preview-view .preview-scroll{overflow:visible!important;padding:0!important;background:#fff!important}
+  #preview-view .paper{zoom:1!important;width:210mm!important;min-height:297mm!important;margin:0!important;box-shadow:none!important;padding:10mm 10mm 12mm!important}
 }
+</style></head><body>
+<div id="login-screen" class="screen active">
+ <div style="width:100%;max-width:440px"><form id="login-form" style="background:white;padding:35px 25px;border-radius:15px;box-shadow:0 10px 25px #0002;border-top:6px solid #d4af37">
+  <h2 style="color:#003811;text-align:center;margin:0">DAR PORTAL</h2><p style="text-align:center;font-size:12px;color:gray;margin:10px 0 25px;font-weight:bold">CAMARINES SUR I — TRAVEL ORDER</p>
+  <input type="text" id="login-id" placeholder="Employee ID" autocomplete="username" required>
+  <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password" required>
+  <button class="btn btn-primary" id="login-button" type="submit">SECURE LOGIN</button>
+  <div id="login-alert" role="alert"></div>
+ </form></div>
+</div>
+<div id="app-screen" class="screen">
+ <div class="app-header" id="generator-header">
+  <div><div id="user-name" style="font-weight:bold;font-size:14px">Employee</div><div id="user-info" style="font-size:10px;color:#d4af37;font-weight:bold">Division | Position</div></div>
+  <button type="button" id="logout" style="background:none;border:1px solid white;color:white;border-radius:4px;padding:5px 10px;font-size:11px">Logout</button>
+ </div>
+ <div id="apply-view" class="view active">
+            <div class="card">
+                <h4>1. Personnel (Max 5)</h4>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="emp-search" placeholder="Search Name or ID" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" style="width: 70px; padding:0; height: 45px;" onclick="window.searchEmployees()">Find</button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+                <div id="personnel-draft-list" style="margin-top: 10px;"></div>
+            </div>
 
-/* Small login and saved-drafts additions; all original form styles remain intact. */
-#generator-main[hidden], #login-gate[hidden], #logout[hidden] { display:none!important }
-.login-stage{max-width:465px;margin:44px auto;padding:15px}
-.login-card{background:white;border-radius:14px;box-shadow:0 5px 23px #10261618;border-top:5px solid #d4af37;padding:25px}
-.login-card h2{font-size:18px;border:none;margin-bottom:6px;color:#003811}
-.login-card p{color:#6b7280;font-size:12px;margin:0 0 18px}
-.login-card button{width:100%;padding:13px;color:white;background:#003811}
-#login-status,#draft-status{font-size:12px;color:#475569;margin:7px 0 0;min-height:18px}
-#login-status.error,#draft-status.error{color:#b91c1c}
-#logout{color:#fff;border:1px solid #d4af37;padding:8px 10px;background:transparent;font-size:11px;white-space:nowrap}
-#signed-in-user{font-size:11px;color:#475569;background:#eef4ee;padding:10px 12px;border-radius:8px;margin:0 0 13px;font-weight:700}
-#employee-search-results{border:1px solid #d1d5db;background:#fff;border-radius:8px;max-height:190px;overflow-y:auto;margin:-11px 0 12px;box-shadow:0 8px 18px #0001}
-.search-result{display:block;border:none;border-bottom:1px solid #eee;padding:9px 11px;width:100%;text-align:left;background:#fff;color:#26382d;font-size:12px;font-weight:500}
-.search-result:hover,.search-result:focus{background:#ecfdf3}
-.search-result small{display:block;font-size:10px;color:#647067}
-#draft-list .draft-item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f8faf8;border:1px solid #e3eae3;border-radius:7px;padding:9px;margin:7px 0}
-#draft-list .draft-item strong{font-size:12px;color:#003811}
-#draft-list .draft-item small{display:block;font-size:10px;color:#647067}
-#draft-list .draft-actions{display:flex;gap:5px}
-#draft-list .draft-actions button{font-size:11px;padding:8px}
-#save-draft{background:#003811;color:white;margin-bottom:8px}
-@media (max-width:430px){.login-stage{margin:18px auto;padding:12px}#draft-list .draft-item{align-items:flex-start;flex-direction:column}#draft-list .draft-actions{align-self:flex-end}}
-</style>
-</head>
-<body>
-<header class="app-header"><div><strong>DAR PORTAL</strong><small>CAMARINES SUR I · TRAVEL ORDER GENERATOR</small></div><button type="button" id="logout" hidden>Logout</button></header>
-<section id="login-gate" class="login-stage"><form class="login-card" id="login-form">
-  <h2>Employee Login</h2><p>Use the same Employee ID and password as the DAR Employee Portal. This separate module saves only draft Travel Orders.</p>
-  <label for="login-id">Employee ID</label><input id="login-id" autocomplete="username" required placeholder="Employee ID">
-  <label for="login-pass">Password</label><input id="login-pass" type="password" autocomplete="current-password" required placeholder="Password">
-  <button id="login-button" type="submit">LOG IN</button>
-  <p id="login-status" role="status"></p>
- </form></section>
-<main id="generator-main" hidden>
-<section class="editor" id="form-view" aria-label="Travel order entry">
-  <div class="intro"><strong>Travel Order Application</strong><div>Prepare, save and print Travel Order drafts. No approval or official TO number is generated.</div></div>
-  <div id="signed-in-user"></div>
-  <div class="panel"><h2>My Saved Drafts</h2>
-    <p class="description">Drafts are saved to separate temporary-draft tables. Only the employee who saved a draft can reopen, change or delete it.</p>
-    <button class="secondary" type="button" id="new-draft">+ New Draft</button> <button class="secondary" type="button" id="refresh-drafts">↻ Refresh Drafts</button>
-    <div id="draft-list"><p class="helper">No drafts loaded.</p></div>
-    <p id="draft-status" role="status"></p>
-  </div>
-  <div class="panel"><h2>1. Personnel (Max 5)</h2>
-    <label for="quick-person">Employee name</label>
-    <div class="add-person-row"><input id="quick-person" autocomplete="off" placeholder="Search employee name or ID"><button class="primary" id="quick-add-person" type="button">Add</button></div>
-    <div id="employee-search-results" hidden></div>
-    <div id="personnel-list"></div>
-    <button type="button" id="add-person" class="secondary">+ Add another employee manually</button>
-  </div>
-  <div class="panel"><h2>2. Logistics &amp; Scope</h2>
-    <label class="check-label"><input type="checkbox" id="to-outside-bicol"> OUTSIDE BICOL REGION</label>
-    <label for="f-transport">Means of Transportation</label>
-    <select id="f-transport"><option value="LAND">Public Utility (LAND)</option><option value="GOV'T VEHICLE">Gov't Vehicle</option><option value="AIR">Air Travel</option><option value="WATER">Water Travel</option><option value="OTHERS">Others</option></select>
-    <div id="other-transport-group" hidden><label for="f-transport-other">Specify Transportation</label><input id="f-transport-other" placeholder="Type other means of transportation"></div>
-    <div id="departure-group" hidden><label for="f-depart">Departure Time</label><input id="f-depart" type="time"></div>
-    <div class="two-inputs"><div><label for="f-return">Return Time (optional)</label><input id="f-return" type="time"></div><div><label for="f-issued">Date Prepared</label><input type="date" id="f-issued"></div></div>
-    <label for="f-report">Report To</label><input id="f-report" placeholder="Office / Official to report to">
-    <label for="f-fund">Fund Source</label><select id="f-fund"><option value="GAS">GAS</option><option value="LTSP">LTSP</option><option value="AARC">AARC</option><option value="ALI/PALA">ALI/PALA</option><option value="ARBDSP">ARBDSP</option><option value="OTHERS">Others</option></select>
-    <div id="other-fund-group" hidden><label for="f-fund-other">Other Fund Source</label><input id="f-fund-other" placeholder="Specify funding source"></div>
-    <label for="f-live">Activity Setup</label><select id="f-live"><option value="">Not applicable</option><option value="LIVE-IN">Live-in</option><option value="LIVE-OUT">Live-out</option></select>
-  </div>
-  <div class="panel"><h2>3. Itinerary Builder</h2>
-    <label>Date Range (From – To, max 5 days for local travel)</label>
-    <div class="two-inputs"><div><input type="date" id="itin-from" aria-label="Travel from date"></div><div><input type="date" id="itin-to" aria-label="Travel to date"></div></div>
-    <div id="date-range-status" class="helper">Choose inclusive travel dates. Enter a destination and purpose for each day.</div>
-    <div id="itinerary-list"></div>
-    <button type="button" id="add-itinerary" class="secondary">+ Add another destination / date</button>
-  </div>
-  <div class="panel"><h2>4. Printed Signatories</h2>
-    <p class="description">Names and positions appear on the TO, with blank spaces for handwritten signatures. No online approval or electronic signatures.</p>
-    <label for="f-requested">Requested By (defaults to first traveler)</label><input id="f-requested" placeholder="Automatically uses first traveler">
-    <label for="f-requested-pos">Requested By – Position</label><input id="f-requested-pos" placeholder="Automatically uses first traveler's position">
-    <label for="f-recommending">Recommending Approval – Name</label><input id="f-recommending" placeholder="Division Chief / Recommending Officer">
-    <label for="f-recommending-pos">Recommending Approval – Position</label><input id="f-recommending-pos" placeholder="e.g., Chief, Legal Division">
-    <label for="f-approving">Approved By – Name</label><input id="f-approving" value="RICARDO C. GARCIA">
-    <label for="f-approving-pos">Approved By – Position</label><input id="f-approving-pos" value="PARPO II">
-  </div>
-  <div class="action-area">
-    <button class="btn" id="save-draft" type="button">💾 SAVE TEMPORARY DRAFT</button>
-    <button class="btn btn-gold" id="generate" type="button">📄 GENERATE TRAVEL ORDER</button>
-    <button class="btn btn-muted" id="clear" type="button">Clear Form</button>
-    <p class="foot-help">No TO number assigned · No QR code · No approval submission</p>
-  </div>
-</section>
+            <div class="card">
+                <h4>2. Logistics & Scope</h4>
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: bold; margin-bottom: 10px; font-size: 12px; color: var(--danger);">
+                    <input type="checkbox" id="to-outside-bicol" style="width: auto; margin: 0; padding: 0;"> OUTSIDE BICOL REGION
+                </label>
+                <label>Means of Transportation</label>
+                <select id="to-transport" onchange="document.getElementById('dep-time-group').style.display = this.value === 'GOV\'T VEHICLE' ? 'block' : 'none'">
+                    <option value="LAND">Public Utility (LAND)</option>
+                    <option value="GOV'T VEHICLE">Gov't Vehicle</option>
+                    <option value="AIR">Air Travel</option>
+                    <option value="WATER">Water Travel</option>
+                    <option value="OTHERS">Others</option>
+                </select>
+             <div id="dep-time-group" style="display: none; margin-top: 10px;">
+                    <label>Departure Time</label>
+                    <input type="time" id="to-dep-time" style="margin-bottom: 0;">
+                </div>
+            </div>
+
+            <div class="card" id="special-div-card" style="display: none;">
+                <h4>3. Special Assignment Division/s</h4>
+                <div id="special-div-list" class="radio-group"></div>
+            </div>
+
+            <div class="card">
+                <h4>4. Itinerary Builder</h4>
+                <label>Date Range (From - To, Max 5 days)</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="date" id="itin-from" onchange="window.handleStartDateChange()" onkeydown="return false">
+                    <input type="date" id="itin-to" onchange="window.generateItinFields()" onkeydown="return false">
+                </div>
+            <div id="dynamic-itin-fields" style="margin-top: 15px;"></div>
+                <datalist id="fund-sources-list">
+                    <option value="GAS"></option>
+                    <option value="LTSP"></option>
+                    <option value="AARC"></option>
+                    <option value="ALI/PALA"></option>
+                    <option value="ARBDSP"></option>
+                </datalist>
+            </div>
+
+            <div class="card" id="signatory-card">
+                <h4>Printed Signatories (Names Only)</h4>
+                <p style="font-size:11px;color:#6b7280;line-height:1.5;margin:-3px 0 12px">The TO contains the names and positions below; all signature spaces remain empty.</p>
+                <label>Requested By / Unit Head</label><input id="sig-requested" placeholder="Name of requesting officer / unit head">
+                <label>Position</label><input id="sig-requested-role" placeholder="MARPO / Unit Head">
+                <label>Recommending Approval</label><input id="sig-recommending" placeholder="Division Chief">
+                <label>Position</label><input id="sig-recommending-role" value="DIVISION CHIEF">
+                <label>Approved By</label><input id="sig-approver" value="RICARDO C. GARCIA">
+                <label>Position</label><input id="sig-approver-role" value="PARPO II">
+                <div id="regional-signatory" style="display:none">
+                  <label>Regional Director (Outside Bicol — 7+ Days)</label><input id="sig-rd" value="RODRIGO O. REALUBIT, CESO VI">
+                  <label>Position</label><input id="sig-rd-role" value="Regional Director">
+                </div>
+            </div>
+            <div class="card">
+                <h4>Saved Travel Orders</h4>
+                <p style="font-size:11px;color:#6b7280">Drafts and posted TOs are stored separately from official TO records.</p>
+                <div style="display:flex;gap:8px;margin-bottom:10px">
+                  <button class="btn btn-primary btn-small" onclick="window.newTO()">+ NEW TO</button>
+                  <button class="btn btn-primary btn-small" onclick="window.listTOs()">↻ REFRESH</button>
+                </div>
+                <div id="saved-to-list"></div><p id="page-status" role="status" style="font-size:11px;color:#64748b"></p>
+            </div>
+            <button class="btn btn-primary" id="btn-save-to" onclick="window.saveTO()">💾 SAVE DRAFT</button>
+            <button class="btn btn-gold" id="btn-submit-to" onclick="window.postAndPrint()">🖨️ POST & PRINT TRAVEL ORDER</button>
+        </div>
+
+        
+ <div id="itinerary-warning" aria-live="polite"></div>
+</div>
 <section class="preview-panel" id="preview-view" aria-label="Printable Travel Order">
   <div class="preview-toolbar no-print"><button class="btn back" type="button" id="back">← Back to Form</button><div><strong>Travel Order Preview</strong><small>Signatories are named; signature lines remain blank.</small></div><button class="btn btn-gold" id="print" type="button">🖨️ Print / Save PDF</button></div>
   <div class="preview-scroll"><article class="paper" id="preview" aria-live="polite"></article></div>
   <p class="helper preview-help no-print">Use Print / Save PDF to print on A4 paper, or select “Save as PDF” in the print window.</p>
 </section>
-</main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-(function(){
+
+<script>(()=>{
 'use strict';
 const $=id=>document.getElementById(id);
-// Public Supabase project URL / anon key match the main DAR Employee Portal.
-// The password is held only in runtime memory for the current page, never in storage.
-const SUPABASE_URL='https://ytfpiyfapvybihlngxks.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ';
-const db=window.supabase?.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-let loggedIn=null, loginSecret='',currentDraftId=null,employeeResult=null,searchNonce=0;
-function status(id,message,error=false){$(id).textContent=message;$(id).classList.toggle('error',error)}
-function getCredentials(){if(!loggedIn||!loginSecret)throw Error('Log in to access the draft database.');return {p_emp_id:loggedIn.emp_id,p_password:loginSecret}}
-async function dbCall(name,extra={}){
- if(!db)throw Error('Supabase connection library failed to load. Internet access is required.');
- const {data,error}=await db.rpc(name,{...getCredentials(),...extra});
- if(error)throw Error(error.message || 'Draft database is unavailable. Run the supplied DAR_TEMP_TO_TABLES.sql once in Supabase.');
+const URL='https://ytfpiyfapvybihlngxks.supabase.co';
+const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl0ZnBpeWZhcHZ5YmlobG5neGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDA2MTIsImV4cCI6MjA4NTY3NjYxMn0.7TRVjvFjxVtxkP_hL3wnlxPT6FXJd0y7aKHNzDHThAQ';
+// NOTE: an explicit API key from the source application is inserted by build step.
+const db=window.supabase?.createClient(URL,KEY);
+let user=null, password='', personnel=[], currentDraftId=null, searchResults=[], currentConflicts=[], generating=0, locked=false;
+const esc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const val=id=>($(id)?.value||'').trim();
+const getPST=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());let a={};parts.forEach(p=>a[p.type]=p.value);return `${a.year}-${a.month}-${a.day}`};
+const dateFmt=x=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(x||''))return '';return new Date(x+'T00:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',month:'long',day:'numeric',year:'numeric'})};
+const htime=t=>{if(!t)return '';const [h,m]=t.split(':').map(Number);return `${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`};
+const status=(s,error=false)=>{$('page-status').textContent=s;$('page-status').style.color=error?'#b91c1c':'#64748b'};
+async function rpc(name,args={}){
+ if(!db)throw Error('Supabase failed to load. Check your internet connection.');
+ if(!user || !password)throw Error('Log in again.');
+ const {data,error}=await db.rpc(name,{p_emp_id:String(user.emp_id),p_password:password,...args});
+ if(error)throw Error(error.message||`Unable to execute ${name}. Run the updated SQL setup first.`);
  return data;
 }
-async function authenticate(id,password){
- if(!db)throw Error('Could not load Supabase. Check your internet connection.');
- const {data,error}=await db.rpc('temp_to_login',{p_emp_id:id,p_password:password});
- if(error)throw Error(error.message||'Unable to log in. Verify that the SQL setup was applied.');
- return data;
-}
-$('login-form').addEventListener('submit',async ev=>{
- ev.preventDefault(); const id=val('login-id'),password=$('login-pass').value.trim();
- if(!id||!password)return;
- $('login-button').disabled=true;status('login-status','Checking employee credentials…');
+const errorText=e=>e?.message||String(e);
+$('login-form').addEventListener('submit',async e=>{
+ e.preventDefault();const id=val('login-id'),pass=val('login-pass');if(!id||!pass)return;
+ const btn=$('login-button');btn.disabled=true;$('login-alert').textContent='Checking credentials...';
  try{
-  const emp=await authenticate(id,password);
-  if(!emp||!emp.emp_id)throw Error('Unable to authenticate.');
-  loggedIn=emp;loginSecret=password;$('login-pass').value='';
-  $('login-gate').hidden=true;$('generator-main').hidden=false;$('logout').hidden=false;
-  $('signed-in-user').textContent='Logged in: '+emp.full_name+' | '+(emp.division||'DAR')+' | '+(emp.position||'Employee');
-  $('personnel-list').innerHTML='';addPerson({name:emp.full_name,position:emp.position,station:emp.station||'DARPO – CAMARINES SUR I'});
-  if(emp.recommending_name){$('f-recommending').value=emp.recommending_name;$('f-recommending-pos').value='Division Chief';}
-  render();await refreshDrafts();
- }catch(err){status('login-status',err.message,true)}finally{$('login-button').disabled=false;}
+  if(!db)throw Error('Supabase could not load. Internet is required to sign in and post.');
+  const {data,error}=await db.rpc('temp_to_login',{p_emp_id:id,p_password:pass});
+  if(error)throw Error(error.message);
+  if(!data?.emp_id)throw Error('Incorrect credentials.');
+  user=data;password=pass;$('login-pass').value='';$('login-screen').style.display='none';$('app-screen').classList.add('active');
+  $('user-name').textContent=user.full_name;$('user-info').textContent=`${user.division||'DAR'} | ${user.position||'Employee'}`;
+  makeNew(false);await window.listTOs();
+ }catch(err){$('login-alert').textContent=errorText(err)}finally{btn.disabled=false;}
 });
-$('logout').addEventListener('click',()=>{loginSecret='';loggedIn=null;currentDraftId=null;location.reload()});
-function collectDetails(){
- const ids=['f-transport','f-transport-other','f-depart','f-return','f-issued','f-report','f-fund','f-fund-other','f-live','f-requested','f-requested-pos','f-recommending','f-recommending-pos','f-approving','f-approving-pos'];
- const obj={personnel:gather('personnel-list'),date_from:val('itin-from'),date_to:val('itin-to'),outside_bicol:$('to-outside-bicol').checked};
- for(const id of ids)obj[id]=val(id);
- return obj;
-}
-function applyDetails(details,itinerary){
- $('personnel-list').innerHTML='';$('itinerary-list').innerHTML='';
- for(const person of (details.personnel||[]).slice(0,5))addPerson(person);
- if(!$('personnel-list').children.length)addPerson({name:loggedIn.full_name,position:loggedIn.position,station:loggedIn.station});
- $('to-outside-bicol').checked=!!details.outside_bicol;
- const ids=['f-transport','f-transport-other','f-depart','f-return','f-issued','f-report','f-fund','f-fund-other','f-live','f-requested','f-requested-pos','f-recommending','f-recommending-pos','f-approving','f-approving-pos'];
- for(const id of ids)if(Object.hasOwn(details,id))$(id).value=details[id]||'';
- $('itin-from').value=details.date_from||'';$('itin-to').value=details.date_to||'';
- for(const trip of (itinerary||[]).slice(0,30))addItinerary(trip);
- if(!$('itinerary-list').children.length)addItinerary({date:today()});
- const count=$('itinerary-list').children.length;
- $('date-range-status').textContent=count+' saved travel day'+(count===1?'':'s')+'.';
- updateConditionalFields();renumber();render();
-}
-function draftDate(value){return value?formatDate(value):'Date not set'}
-async function refreshDrafts(){
- status('draft-status','Loading your draft Travel Orders…');
- try{
-  const items=await dbCall('temp_to_list_drafts');const list=$('draft-list');list.replaceChildren();
-  if(!items?.length){const p=document.createElement('p');p.className='helper';p.textContent='No saved drafts yet.';list.append(p)}
-  for(const item of items||[]){
-   const row=document.createElement('div');row.className='draft-item';
-   const text=document.createElement('div'),name=document.createElement('strong'),info=document.createElement('small');
-   name.textContent=item.first_personnel||'Travel Order draft';
-   info.textContent=draftDate(item.date_from)+(item.date_to&&item.date_to!==item.date_from?' – '+draftDate(item.date_to):'')+' · Saved '+new Date(item.updated_at).toLocaleString('en-PH');
-   text.append(name,info);const actions=document.createElement('div');actions.className='draft-actions';
-   const open=document.createElement('button');open.className='secondary';open.type='button';open.textContent='Open';open.addEventListener('click',()=>openDraft(item.id));
-   const del=document.createElement('button');del.className='remove';del.type='button';del.textContent='Delete';del.addEventListener('click',()=>deleteDraft(item.id));
-   actions.append(open,del);row.append(text,actions);list.append(row);
-  }
-  status('draft-status',(items?.length||0)+' saved draft(s).');
- }catch(err){status('draft-status',err.message,true)}
-}
-async function openDraft(id){
- status('draft-status','Opening draft…');
- try{
-  const draft=await dbCall('temp_to_load_draft',{p_id:id});
-  applyDetails(draft.details||{},draft.itinerary||[]);currentDraftId=draft.id;
-  $('preview-view').style.display='none';$('form-view').style.display='flex';
-  status('draft-status','Draft opened. Edit and save when ready.');
- }catch(err){status('draft-status',err.message,true)}
-}
-async function deleteDraft(id){
- if(!confirm('Delete this temporary TO draft and all its itinerary days?'))return;
- try{
-  await dbCall('temp_to_delete_draft',{p_id:id});
-  if(currentDraftId===id)currentDraftId=null;
-  await refreshDrafts();
- }catch(err){status('draft-status',err.message,true)}
-}
-async function saveDraft(){
- const btn=$('save-draft');if(btn.disabled)return;
- btn.disabled=true;status('draft-status','Saving to temporary TO and itinerary tables…');
- try{
-  const draftId=await dbCall('temp_to_save_draft',{
-   p_details:collectDetails(),p_itinerary:gather('itinerary-list'),p_id:currentDraftId
-  });
-  currentDraftId=draftId;
-  await refreshDrafts();status('draft-status','Draft and itinerary saved successfully. No official TO number or approval was created.');
- }catch(err){status('draft-status',err.message,true)}finally{btn.disabled=false;}
-}
-$('save-draft').addEventListener('click',saveDraft);
-$('refresh-drafts').addEventListener('click',refreshDrafts);
-$('new-draft').addEventListener('click',()=>{$('clear').click()});
-// Employee lookup uses the main Employee masterlist, without returning passwords.
-$('quick-person').addEventListener('input',async()=>{
- employeeResult=null;const term=val('quick-person');const results=$('employee-search-results');
- if(term.length<2){results.hidden=true;results.replaceChildren();return}
- const nonce=++searchNonce;
- try{
-  const rows=await dbCall('temp_to_search_employees',{p_query:term});
-  if(nonce!==searchNonce)return;
-  results.replaceChildren();
-  for(const emp of rows||[]){
-   const button=document.createElement('button');button.className='search-result';button.type='button';
-   button.textContent=emp.name;const small=document.createElement('small');small.textContent=(emp.position||'')+' · '+(emp.station||'');button.append(small);
-   button.addEventListener('click',()=>{employeeResult=emp;$('quick-person').value=emp.name;results.hidden=true});
-   results.append(button);
-  }
-  results.hidden=!rows?.length;
- }catch(err){results.hidden=true;status('draft-status','Employee search: '+err.message,true)}
-});
-
-const MAX=5;
-const MAX_ITIN=30;
-function itineraryLimit(){return $('to-outside-bicol').checked?MAX_ITIN:5;}
-const dateNow=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()).replace(/^(\d{2})\/(\d{2})\/(\d{4})$/,'$3-$1-$2');
-// Intl locale can return MM/DD/YYYY on some browsers; use formatToParts for consistent ISO.
-function today(){const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());let o={};parts.forEach(p=>o[p.type]=p.value);return [o.year,o.month,o.day].join('-')}
-function e(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
-const val=id=>$(id).value.trim();
-function formatDate(s){if(!/^\d{4}-\d{2}-\d{2}$/.test(s||''))return '';const [y,m,d]=s.split('-').map(Number);const z=new Date(Date.UTC(y,m-1,d));if(z.getUTCFullYear()!==y||z.getUTCMonth()!==m-1||z.getUTCDate()!==d)return '';return new Intl.DateTimeFormat('en-US',{timeZone:'UTC',year:'numeric',month:'long',day:'numeric'}).format(z)}
-function time12(t){if(!t)return '';let [h,m]=t.split(':').map(Number);return ((h%12)||12)+':'+String(m).padStart(2,'0')+(h>=12?' PM':' AM')}
-function dayAfter(iso){if(!iso)return today();let d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)}
-function makeEntry(kind,data={}){
- const box=document.createElement('div');box.className='entry';box.dataset.kind=kind;
- if(kind==='person'){
-  box.innerHTML='<div class="entry-title"><span>Personnel</span><button class="remove" type="button">Remove</button></div><div class="entry-fields"><div class="full"><label>Name</label><input data-key="name" placeholder="Full name"></div><div><label>Position / Designation</label><input data-key="position" placeholder="e.g., Legal Assistant I"></div><div><label>Official Station</label><input data-key="station" placeholder="DARPO – Camarines Sur I"></div></div>';
- }else{
-  box.innerHTML='<div class="entry-title"><span>Travel Date / Destination</span><button class="remove" type="button">Remove</button></div><div class="entry-fields"><div><label>Travel Date</label><input type="date" data-key="date"></div><div><label>Destination</label><input data-key="destination" placeholder="Municipality / Venue"></div><div class="full"><label>Purpose / Activity</label><textarea data-key="purpose" rows="2" placeholder="Purpose of travel"></textarea></div></div>';
+$('logout').addEventListener('click',()=>{user=null;password='';location.reload()});
+window.newTO=function(){if(!confirm('Start a new Travel Order? Unsaved changes will be lost.'))return;makeNew()};
+function makeNew(notify=true){
+ currentDraftId=null;personnel=[{emp_id:String(user.emp_id),name:user.full_name,position:user.position||'',station:user.station||'DARPO – CAMARINES SUR I',unit:user.unit||'',division:user.division||''}];
+ window.renderPersonnel();
+ $('emp-search').value='';$('search-results').style.display='none';
+ $('to-transport').value='LAND';$('to-dep-time').value='';$('to-outside-bicol').checked=false;
+ $('special-div-card').style.display=String(user.s_assignment).toUpperCase()==='TRUE'?'block':'none';
+ $('special-div-list').replaceChildren();
+ if(String(user.s_assignment).toUpperCase()==='TRUE')for(const division of (user.division||'').split(',').map(x=>x.trim()).filter(Boolean)){
+  const lab=document.createElement('label');lab.className='radio-item';lab.style.fontSize='12px';const cb=document.createElement('input');cb.type='checkbox';cb.name='special_div';cb.value=division;cb.checked=true;lab.append(cb,document.createTextNode(division));$('special-div-list').append(lab);
  }
- box.querySelectorAll('[data-key]').forEach(inp=>{inp.value=data[inp.dataset.key]||'';inp.addEventListener('input',render)});
- box.querySelector('.remove').addEventListener('click',()=>{let list=box.parentElement;if(list.children.length<=1){alert('Keep at least one entry.');return}box.remove();renumber();render()});
- return box;
+ $('itin-from').value='';$('itin-to').value='';$('itin-to').min=getPST();$('itin-from').min=getPST();$('dynamic-itin-fields').replaceChildren();
+ $('regional-signatory').style.display='none';
+ $('sig-requested').value=user.unit&&user.unit!=='NA'?(user.unit_head_name||user.full_name):user.full_name;
+ $('sig-requested-role').value=user.position&&user.position.toUpperCase().includes('MARPO')?'MARPO':'MARPO / UNIT HEAD';
+ $('sig-recommending').value=user.recommending_name||'';$('sig-recommending-role').value='DIVISION CHIEF';
+ $('sig-approver').value='RICARDO C. GARCIA';$('sig-approver-role').value='PARPO II';
+ $('sig-rd').value='RODRIGO O. REALUBIT, CESO VI';$('sig-rd-role').value='Regional Director';
+ showTransport();showForm();if(notify)status('New Travel Order ready.');
 }
-function renumber(){[['personnel-list','Personnel'],['itinerary-list','Travel date']].forEach(([id,title])=>{[...$(id).children].forEach((node,i)=>node.querySelector('.entry-title span').textContent=title+' '+(i+1));});$('add-person').disabled=$('personnel-list').children.length>=MAX;$('add-itinerary').disabled=$('itinerary-list').children.length>=itineraryLimit();}
-function gather(id){return [...$(id).children].map(node=>{let out={};node.querySelectorAll('[data-key]').forEach(inp=>out[inp.dataset.key]=inp.value.trim());return out})}
-function checked(label,selected){return '<span class="check"><span class="square">'+(selected?'X':'&nbsp;')+'</span>'+e(label)+'</span>'}
-function row(key,contents){return '<div class="form-row"><strong>'+e(key)+'</strong>'+contents+'</div>'}
-function summary(list,key){let vals=[...new Set(list.map(p=>p[key]).filter(Boolean))];return vals.join(', ')}
-function render(){
- const travelers=gather('personnel-list');const trips=gather('itinerary-list').filter(it=>it.date||it.destination||it.purpose).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
- const dated=trips.filter(x=>formatDate(x.date));const first=dated[0]?.date||'';const last=dated[dated.length-1]?.date||'';
- let names=travelers.map(p=>[p.name,p.position].filter(Boolean).join(' / ')).filter(Boolean);
- let requested=val('f-requested')||travelers[0]?.name||'';
- let requestedPos=val('f-requested-pos')||travelers[0]?.position||'REQUESTING PERSONNEL';
- let travelLines=trips.map(x=>(x.date?formatDate(x.date)||x.date:'Date not specified')+(x.destination?' – '+x.destination:''));
- let purposeLines=trips.map(x=>{if(!x.purpose)return null;return (trips.length>1?(x.date?formatDate(x.date)+' – ':''):'')+x.purpose}).filter(Boolean);
- let departure=formatDate(first)+(val('f-depart')?' / '+time12(val('f-depart')):'');
- let arrival=formatDate(last)+(val('f-return')?' / '+time12(val('f-return')):'');
- let trans=val('f-transport'),fund=val('f-fund'),live=val('f-live');
+function showTransport(){ $('dep-time-group').style.display=val('to-transport')==="GOV'T VEHICLE"?'block':'none'; }
+$('to-transport').addEventListener('change',showTransport);
+function showForm(){$('app-screen').style.display='block';$('preview-view').style.display='none';window.scrollTo(0,0)}
+function showPreview(){$('app-screen').style.display='none';$('preview-view').style.display='block';window.scrollTo(0,0);fitPreview()}
+function fitPreview(){const paper=$('preview');paper.style.zoom=window.innerWidth<830?Math.min(1,(window.innerWidth-30)/794):1;}
+window.addEventListener('resize',fitPreview);
+window.renderPersonnel=()=>{
+ $('personnel-draft-list').innerHTML=personnel.map((p,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;background:#f0f4f8;padding:8px 12px;border-radius:8px;margin-bottom:5px;font-size:13px"><span>👤 ${esc(p.name)} <span style="color:#64748b;font-size:11px">${esc(p.position||'')}</span></span>${String(p.emp_id)!==String(user.emp_id)?`<button class="btn-danger" style="padding:2px 8px;width:auto;margin:0" onclick="window.removePersonnel(${i})">X</button>`:''}</div>`).join('');
+};
+window.removePersonnel=i=>{personnel.splice(i,1);window.renderPersonnel()};
+window.searchEmployees=async()=>{
+ const term=val('emp-search');if(term.length<2)return;const nonce=++generating;
+ const results=$('search-results');results.style.display='block';results.textContent='Searching...';
+ try{
+  const rows=await rpc('temp_to_search_employees',{p_query:term});if(nonce!==generating)return;
+  searchResults=rows||[];results.replaceChildren();
+  for(const p of searchResults){const b=document.createElement('div');b.className='search-row';b.textContent=`${p.name} (${p.emp_id})`;
+   b.addEventListener('click',()=>{if(personnel.length>=5)return alert('Maximum 5 personnel.');if(personnel.some(x=>String(x.emp_id)===String(p.emp_id)))return alert('Already included.');
+   personnel.push({...p});window.renderPersonnel();$('emp-search').value='';results.style.display='none';});results.append(b);}
+  if(!searchResults.length)results.textContent='No matching employees.';
+ }catch(err){results.textContent=errorText(err)}
+};
+$('emp-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();window.searchEmployees()}});
+const maxDays=()=> $('to-outside-bicol').checked?30:5;
+const dateList=(start,end)=>{
+ if(!start||!end)return [];
+ const dates=[];let t=Date.parse(start+'T00:00:00Z'),e=Date.parse(end+'T00:00:00Z');
+ if(!Number.isFinite(t)||!Number.isFinite(e)||t>e)return [];
+ for(;t<=e&&dates.length<=30;t+=86400000)dates.push(new Date(t).toISOString().slice(0,10));return dates;
+};
+function readItinerary(){return [...$('dynamic-itin-fields').querySelectorAll('.trip-card')].map(card=>({
+ date:card.dataset.date,destination:card.querySelector('[data-key="destination"]').value.trim(),purpose:card.querySelector('[data-key="purpose"]').value.trim(),
+ fund_source:card.querySelector('[data-key="fund_source"]').value.trim(),report_to:card.querySelector('[data-key="report_to"]').value.trim(),
+ unit:card.querySelector('[data-key="unit"]')?.value||'',has_pso:card.dataset.pso==='true'}));}
+function buildItinerary(items,infos=[]){
+ const cards=$('dynamic-itin-fields');cards.replaceChildren();
+ const isPBDD=String(user?.division||'').toUpperCase().includes('PBDD');
+ const origUnit=user?.unit||'';
+ const units=[...new Set([origUnit,'SIB/SMEDSS','EDES','CRFPS','NA'])].filter(Boolean);
+ items.forEach((day,i)=>{
+  const item=document.createElement('div');item.className='card trip-card';item.dataset.date=day.date;item.dataset.pso=String(!!day.has_pso);item.style.borderLeft='4px solid var(--dar-green)';
+  const options=units.map(u=>`<option value="${esc(u==='NA'?'':u)}" ${day.unit===(u==='NA'?'':u)?'selected':''}>${esc(u==='NA'?'NA (Direct to Chief)':u+(u===origUnit?' (Original Unit)':''))}</option>`).join('');
+  item.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h5 style="margin:0;color:var(--dar-green);font-size:13px">📅 ${esc(day.date)}${day.has_pso?' <span style="color:#b91c1c;font-size:9px">(HAS PSO)</span>':''}</h5><button type="button" class="delete-day" style="background:none;border:none;color:red;font-size:11px;font-weight:bold;cursor:pointer">DELETE</button></div>
+  <input type="text" data-key="destination" placeholder="Destination" value="${esc(day.destination||'')}">
+  ${i>0?'<label style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:normal;margin-bottom:8px;color:var(--text-muted)"><input type="checkbox" class="copy-purpose" style="width:auto;margin:0;padding:0"> Copy previous purpose</label>':''}
+  <textarea data-key="purpose" rows="2" placeholder="Purpose">${esc(day.purpose||'')}</textarea>
+  <input type="text" data-key="fund_source" list="fund-sources-list" placeholder="Fund Source (Select or Type)" value="${esc(day.fund_source||'')}" style="padding:8px;font-size:13px;margin-bottom:8px">
+  ${isPBDD?`<label style="font-size:11px">PBDD Unit for this Day</label><select data-key="unit" style="padding:8px;font-size:13px;margin-bottom:8px">${options}</select>`:''}
+  <input type="text" data-key="report_to" placeholder="Report To" value="${esc(day.report_to||'')}">`;
+  item.querySelector('.delete-day').addEventListener('click',()=>{item.remove();checkRegionSignatures()});
+  if(i>0)item.querySelector('.copy-purpose').addEventListener('change',e=>{
+    const prev=item.previousElementSibling;const target=item.querySelector('[data-key="purpose"]');
+    target.value=e.target.checked?(prev?.querySelector('[data-key="purpose"]')?.value||''):'';
+  });
+  cards.append(item);
+ });
+ checkRegionSignatures();
+}
+function checkRegionSignatures(){const d=readItinerary();$('regional-signatory').style.display=$('to-outside-bicol').checked&&d.length>=7?'block':'none'}
+window.handleStartDateChange=()=>{generating++;$('itin-to').value='';$('itin-to').min=val('itin-from')||getPST();$('dynamic-itin-fields').replaceChildren();currentConflicts=[];checkRegionSignatures()};
+window.generateItinFields=async function(){
+ const dates=dateList(val('itin-from'),val('itin-to'));
+ if(!dates.length)return alert('Select a valid From–To date range.');
+ if(val('itin-from')<getPST())return alert('No backdating allowed.');
+ if(dates.length>maxDays())return alert(`Maximum ${maxDays()} days${maxDays()===5?' for local travel':''}.`);
+ const existing=Object.fromEntries(readItinerary().map(x=>[x.date,x]));
+ buildItinerary(dates.map(date=>existing[date]||{date,unit:user?.unit||''}));
+ await checkConflicts(dates);
+};
+$('to-outside-bicol').addEventListener('change',()=>{checkRegionSignatures();if(val('itin-from')&&val('itin-to'))window.generateItinFields()});
+async function checkConflicts(dates){
+ const seq=++generating;const war=$('itinerary-warning');war.style.display='none';war.textContent='';
+ try{
+  const conflicts=await rpc('temp_to_check_conflicts',{p_from:dates[0],p_to:dates.at(-1)});
+  if(seq!==generating)return;
+  currentConflicts=conflicts||[];
+  for(const c of currentConflicts.filter(x=>x.kind==='PSO')){const card=[...$('dynamic-itin-fields').children].find(x=>x.dataset.date===c.date);if(card){card.dataset.pso='true';card.querySelector('h5').insertAdjacentHTML('beforeend',' <span style="color:#b91c1c;font-size:9px">(HAS PSO)</span>')}}
+  if(currentConflicts.length){
+   war.style.display='block';war.textContent='⚠ Schedule conflicts found (read-only): '+currentConflicts.map(c=>`${c.date} ${c.kind}${c.reference?' '+c.reference:''}`).join('; ')+'. This generator does not cancel or overwrite any official record.';
+   $('dynamic-itin-fields').before(war);
+  }
+ }catch(e){
+  war.style.display='block';war.textContent='⚠ Schedule conflict check unavailable: '+errorText(e)+'. Posting is not advised until checked.';
+  $('dynamic-itin-fields').before(war);
+  currentConflicts=null;
+ }
+}
+function serialize(){
+ const itinerary=readItinerary(); const funds=[...new Set(itinerary.map(x=>x.fund_source).filter(Boolean))];const reports=[...new Set(itinerary.map(x=>x.report_to).filter(Boolean))];
+ return {details:{personnel,date_from:val('itin-from'),date_to:val('itin-to'),outside_bicol:$('to-outside-bicol').checked,
+ transport:val('to-transport'),departure:val('to-dep-time'),fund_source:funds.join(', '),report_to:reports.join(', '),
+ special_divisions:[...document.querySelectorAll('input[name="special_div"]:checked')].map(x=>x.value),
+ signatories:{requested:val('sig-requested'),requested_role:val('sig-requested-role'),recommending:val('sig-recommending'),recommending_role:val('sig-recommending-role'),approving:val('sig-approver'),approving_role:val('sig-approver-role'),regional:val('sig-rd'),regional_role:val('sig-rd-role')},
+ prepared_date:getPST()},itinerary};
+}
+function validate(){
+ const r=serialize();if(!personnel.length)return alert('Add personnel.'),null;
+ const it=r.itinerary;
+ if(!it.length)return alert('Generate and complete the itinerary first.'),null;
+ if(it.some(x=>!x.date||!x.destination||!x.purpose||!x.report_to))return alert('For every day, complete Destination, Purpose, and Report To. Fund Source may be blank.'),null;
+ if(new Set(it.map(x=>x.date)).size!==it.length)return alert('Duplicate itinerary dates are not allowed.'),null;
+ if(it.length>maxDays())return alert('Exceeds allowed travel dates.'),null;
+ if(!r.details.signatories.recommending)return alert('Enter the recommending signatory name. No electronic signature will be inserted.'),null;
+ if(!r.details.signatories.approving)return alert('Provide the name of the approving signatory (no electronic signature).'),null;
+ return r;
+}
+async function saveDraft(payload){const id=await rpc('temp_to_save_draft',{p_details:payload.details,p_itinerary:payload.itinerary,p_id:currentDraftId});currentDraftId=id;return id;}
+window.saveTO=async()=>{if(locked)return;const p=validate();if(!p)return;locked=true;$('btn-save-to').disabled=true;
+ try{status('Saving temporary TO and itinerary...');await saveDraft(p);await window.listTOs();status('Draft saved. No official TO number was assigned.');}
+ catch(e){status(errorText(e),true);alert('Unable to save: '+errorText(e))}
+ finally{locked=false;$('btn-save-to').disabled=false;}
+};
+window.postAndPrint=async()=>{
+ if(locked)return;const p=validate();if(!p)return;
+ if(currentConflicts===null && !confirm('Schedule conflict check was unavailable. Post and print anyway?'))return;
+ if(currentConflicts?.length&&!confirm('Schedule conflicts were detected. Continue posting without changing any official TO/PSO/Leave?'))return;
+ locked=true;$('btn-submit-to').disabled=true;$('btn-submit-to').textContent='POSTING TO...';
+ try{
+  status('Posting temporary TO and itinerary...');const id=await saveDraft(p);
+  await rpc('temp_to_post_draft',{p_id:id});
+  renderPrint(p);showPreview();
+  // Browser print dialog: printing itself still requires confirmation on user's device.
+  window.print();
+  status('Posted and sent to printer. Use Print / Save PDF again if the print dialog was blocked.');
+ }catch(e){status(errorText(e),true);alert('Posting failed: '+errorText(e))}
+ finally{locked=false;$('btn-submit-to').disabled=false;$('btn-submit-to').textContent='🖨️ POST & PRINT TRAVEL ORDER';}
+};
+window.listTOs=async()=>{
+ try{const rows=await rpc('temp_to_list_drafts');const box=$('saved-to-list');box.replaceChildren();
+  if(!rows?.length){box.textContent='No saved Travel Orders yet.';return}
+  for(const r of rows){const item=document.createElement('div');item.className='item';
+   const info=document.createElement('div'),t=document.createElement('strong'),small=document.createElement('small');
+   t.textContent=`${r.first_personnel||'Travel Order'} · ${r.draft_status||'DRAFT'}`;
+   small.textContent=`${r.date_from||'No date'} to ${r.date_to||'No date'} · Updated ${new Date(r.updated_at).toLocaleString('en-PH')}`;
+   info.append(t,small);const actions=document.createElement('div');actions.className='actions';
+   const open=document.createElement('button');open.className='btn btn-primary btn-small';open.textContent='Open';open.onclick=()=>window.openTO(r.id);
+   const del=document.createElement('button');del.className='btn btn-danger btn-small';del.textContent='Delete';del.onclick=()=>window.deleteTO(r.id);
+   actions.append(open,del);if(r.draft_status==='POSTED'){
+    const pr=document.createElement('button');pr.className='btn btn-gold btn-small';pr.textContent='Print';pr.onclick=async()=>{await window.openTO(r.id);renderPrint(serialize());showPreview();window.print()};actions.append(pr);
+   }
+   item.append(info,actions);box.append(item);
+  }
+  status(`${rows.length} saved record(s).`);
+ }catch(e){status(errorText(e),true)}
+};
+window.openTO=async id=>{
+ try{
+ const row=await rpc('temp_to_load_draft',{p_id:id});const d=row.details||{};
+ currentDraftId=row.id;personnel=(d.personnel||[]).slice(0,5);if(!personnel.length)personnel=[{emp_id:String(user.emp_id),name:user.full_name,position:user.position,station:user.station}];window.renderPersonnel();
+ $('to-transport').value=d.transport||'LAND';$('to-dep-time').value=d.departure||'';$('to-outside-bicol').checked=!!d.outside_bicol;showTransport();
+ $('itin-from').value=d.date_from||'';$('itin-to').value=d.date_to||'';$('itin-to').min=d.date_from||getPST();
+ const special=new Set(d.special_divisions||[]);document.querySelectorAll('input[name="special_div"]').forEach(x=>x.checked=special.has(x.value));
+ const sig=d.signatories||{};
+ [['sig-requested','requested'],['sig-requested-role','requested_role'],['sig-recommending','recommending'],['sig-recommending-role','recommending_role'],['sig-approver','approving'],['sig-approver-role','approving_role'],['sig-rd','regional'],['sig-rd-role','regional_role']].forEach(([a,b])=>{if(b in sig)$(a).value=sig[b]||''});
+ buildItinerary(row.itinerary||[]);checkRegionSignatures();showForm();status(`Opened ${row.draft_status||'TO'} record.`);
+ }catch(e){status(errorText(e),true);alert('Unable to open: '+errorText(e))}
+};
+window.deleteTO=async id=>{if(!confirm('Delete this temporary TO and all its itinerary days?'))return;
+ try{await rpc('temp_to_delete_draft',{p_id:id});if(currentDraftId===id)currentDraftId=null;await window.listTOs();}
+ catch(e){status(errorText(e),true)}
+};
+$('back').addEventListener('click',()=>{showForm();window.listTOs()});
+$('print').addEventListener('click',()=>{const p=validate();if(!p)return;renderPrint(p);window.print()});
+
+function renderPrint(payload){
+ const travelers=payload.details.personnel||[];
+ const trips=[...(payload.itinerary||[])].filter(x=>x.date||x.destination||x.purpose).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
+ const dated=trips.filter(x=>dateFmt(x.date));const first=dated[0]?.date||'';const last=dated[dated.length-1]?.date||'';
+ const names=travelers.map(p=>[p.name,p.position].filter(Boolean).join(' / ')).filter(Boolean);
+ const s=payload.details.signatories||{};
+ const requested=s.requested||user?.full_name||'';
+ const requestedPos=s.requested_role||user?.position||'MARPO / UNIT HEAD';
+ const travelLines=trips.map(x=>`${dateFmt(x.date)||x.date||'Date not specified'}${x.destination?' – '+x.destination:''}`);
+ const purposeLines=trips.map(x=>x.purpose?(trips.length>1?`${dateFmt(x.date)} – `:'')+x.purpose:null).filter(Boolean);
+ const departure=dateFmt(first)+(payload.details.departure?' / '+htime(payload.details.departure):'');
+ const arrival=dateFmt(last);
+ const trans=payload.details.transport||'LAND';
+ const funds=[...new Set(trips.map(x=>String(x.fund_source||'').trim().toUpperCase()).filter(Boolean))];
+ const reports=[...new Set(trips.map(x=>String(x.report_to||'').trim()).filter(Boolean))];
+ const fund=funds.join(', ');
+ const live='';
+ const val=id=>({'f-issued':payload.details.prepared_date,'f-report':reports.join(', '),'f-recommending':s.recommending,'f-recommending-pos':s.recommending_role,'f-approving':s.approving,'f-approving-pos':s.approving_role,'f-depart':payload.details.departure,'f-return':'','f-transport-other':'','f-fund-other':funds.filter(x=>!['GAS','LTSP','AARC','ALI/PALA','ARBDSP'].includes(x)).join(', ')})[id]||'';
+ const checked=(label,selected)=>'<span class="check"><span class="square">'+(selected?'X':'&nbsp;')+'</span>'+esc(label)+'</span>';
+ const row=(key,contents)=>'<div class="form-row"><strong>'+esc(key)+'</strong>'+contents+'</div>';
+ const summary=(list,key)=>[...new Set(list.map(p=>p[key]).filter(Boolean))].join(', ');
+ const e=esc;const formatDate=dateFmt;const time12=htime;
  const empty='&nbsp;';
  $('preview').innerHTML=`
  <div class="letterhead"><div class="rep">REPUBLIC OF THE PHILIPPINES</div><div class="dept">DEPARTMENT OF AGRARIAN REFORM</div><div class="region">PROVINCIAL OFFICE – CAMARINES SUR I</div></div>
@@ -427,68 +521,19 @@ function render(){
   <div class="two-col compact"><div><strong>DEPARTURE DATE / TIME:</strong><div class="line-value">${e(departure)||empty}</div></div><div><strong>RETURN DATE / TIME:</strong><div class="line-value">${e(arrival)||empty}</div></div></div>
   <div class="form-row inline" style="border-top:1px solid #222"><strong>REPORT TO:</strong><span class="line-value">${e(val('f-report'))||empty}</span></div>
   ${row('PURPOSE OF TRAVEL:',`<div class="detail-block">${purposeLines.length?purposeLines.map(l=>'<div>'+e(l)+'</div>').join(''):'<div>&nbsp;</div>'}</div><div class="hint">(specify date of activity/ies, projects or cases to be attended)</div>`)}
-  <div class="form-row"><strong>FUND SOURCE:</strong><div class="checkline">${['GAS','LTSP','AARC','ALI/PALA','ARBDSP','OTHERS'].map(f=>checked(f,fund===f)).join('')}${fund==='OTHERS'&&val('f-fund-other')?' '+e(val('f-fund-other')):''}</div></div>
+  <div class="form-row"><strong>FUND SOURCE:</strong><div class="checkline">${['GAS','LTSP','AARC','ALI/PALA','ARBDSP','OTHERS'].map(f=>checked(f,f==='OTHERS'?funds.some(x=>!['GAS','LTSP','AARC','ALI/PALA','ARBDSP'].includes(x)):funds.includes(f))).join('')}${val('f-fund-other')?' '+e(val('f-fund-other')):''}</div></div>
   <div class="form-row" style="font-size:8pt">In case of training / seminar / workshop / consultation / briefing / conference, check if:
   <div class="checkline" style="display:inline-flex;margin-left:10px">${checked('LIVE-IN',live==='LIVE-IN')}${checked('LIVE-OUT',live==='LIVE-OUT')}</div></div>
   <div class="sig-grid">
    <div class="sig-cell"><div class="sig-label">REQUESTED BY:</div><div class="sig-bottom"><div class="sig-name">${e(requested)||empty}</div><div class="sig-position">${e(requestedPos)}</div></div></div>
    <div class="sig-cell"><div class="sig-label">RECOMMENDING APPROVAL:</div><div class="sig-bottom"><div class="sig-name">${e(val('f-recommending'))||empty}</div><div class="sig-position">${e(val('f-recommending-pos'))}</div></div></div>
    <div class="sig-cell cert">I hereby certify that the travel is necessary; that a report of the previous travel had already been submitted; and that there are no other parties than those stated in this T.O.</div>
-   <div class="sig-cell"><div class="sig-label">APPROVED BY:</div><div class="sig-bottom"><div class="sig-name">${e(val('f-approving'))||empty}</div><div class="sig-position">${e(val('f-approving-pos'))}</div></div></div>
+   <div class="sig-cell"><div class="sig-label">APPROVED BY:</div><div class="sig-bottom" style="display:flex;gap:5px;align-items:end;justify-content:center"><div style="flex:1"><div class="sig-name">${e(val('f-approving'))||empty}</div><div class="sig-position">${e(val('f-approving-pos'))}</div></div>${payload.details.outside_bicol&&trips.length>=7?`<div style="flex:1;border-left:1px solid #777;padding-left:5px"><div class="sig-name">${e(s.regional||'')}</div><div class="sig-position">${e(s.regional_role||'Regional Director')}</div></div>`:''}</div></div>
   </div>
   <div class="print-foot"><strong>IMPORTANT: To be accomplished in Triplicate</strong>Original – Attachment to Voucher<br>Duplicate – Human Resource Copy<br>Triplicate – Employee's Copy</div>
  </div>
  <div class="note">This Order shall serve as Travel Order and shall remain in force unless sooner revoked or amended.</div>`;
 }
-function validate(){let people=gather('personnel-list'),itin=gather('itinerary-list');if(!people.some(p=>p.name)){alert('Enter at least one personnel name.');return false}if(itin.some(r=>!r.date||!r.destination||!r.purpose)){alert('Enter a date, destination, and purpose for every itinerary entry.');return false}if(!itin.some(r=>r.date&&r.destination&&r.purpose)){alert('Add at least one complete itinerary.');return false}if(!val('f-report')){alert('Enter the Report To office or person.');return false}if(!val('f-recommending')){alert('Enter the name of the recommending signatory before printing.');$('f-recommending').focus();return false}if(!val('f-approving')){alert('Enter the name of the approving signatory before printing.');$('f-approving').focus();return false}return true}
-function addPerson(data={}){if($('personnel-list').children.length>=MAX)return;$('personnel-list').appendChild(makeEntry('person',data));renumber();render()}
-function addItinerary(data={}){if($('itinerary-list').children.length>=itineraryLimit())return;$('itinerary-list').appendChild(makeEntry('itinerary',data));renumber();render()}
-$('add-person').addEventListener('click',()=>addPerson({station:'DARPO – CAMARINES SUR I'}));
-$('quick-add-person').addEventListener('click',()=>{const inp=$('quick-person');if(!inp.value.trim())return inp.focus();const data=employeeResult&&employeeResult.name===inp.value.trim()?{name:employeeResult.name,position:employeeResult.position,station:employeeResult.station}:{name:inp.value.trim(),station:loggedIn?.station||'DARPO – CAMARINES SUR I'};if($('personnel-list').children.length===1&&!gather('personnel-list')[0].name){const fields=$('personnel-list').querySelectorAll('[data-key]');fields.forEach(f=>{if(data[f.dataset.key])f.value=data[f.dataset.key]});render()}else{addPerson(data)}inp.value='';employeeResult=null;$('employee-search-results').hidden=true;});
-$('quick-person').addEventListener('keydown',evt=>{if(evt.key==='Enter'){evt.preventDefault();$('quick-add-person').click()}});
-function updateConditionalFields(){
- $('other-transport-group').hidden=val('f-transport')!=='OTHERS';
- $('departure-group').hidden=val('f-transport')!=="GOV'T VEHICLE";
- $('other-fund-group').hidden=val('f-fund')!=='OTHERS';
-}
-['f-transport','f-fund'].forEach(id=>$(id).addEventListener('change',updateConditionalFields));
-function fitPreview(){
- const paper=$('preview');if(!paper)return;
- paper.style.zoom=window.innerWidth<830?Math.min(1,(window.innerWidth-44)/794):1;
-}
-window.addEventListener('resize',fitPreview);
-function syncDateRange(){
- let from=$('itin-from').value, to=$('itin-to').value;
- if(!from||!to)return;
- if(to<from){$('date-range-status').textContent='End date cannot be before the start date.';return}
- const start=new Date(from+'T00:00:00Z'),end=new Date(to+'T00:00:00Z');
- const count=Math.round((end-start)/86400000)+1;
- const max=$('to-outside-bicol').checked?30:5;
- if(count>max){$('date-range-status').textContent='Choose '+max+' days or fewer'+(max===5?' for local travel.':' (maximum supported by this printable page).');return}
- let existing=gather('itinerary-list');
- const byDate=new Map(existing.filter(x=>x.date).map(x=>[x.date,x]));
- $('itinerary-list').innerHTML='';
- for(let i=0;i<count;i++){const date=new Date(start.getTime()+i*86400000).toISOString().slice(0,10);addItinerary(byDate.get(date)||{date});}
- $('date-range-status').textContent=count+' travel day'+(count===1?'':'s')+' selected. Enter destination and purpose for each day.';
- renumber();render();
-}
-$('itin-from').addEventListener('change',()=>{if(!$('itin-to').value||$('itin-to').value<$('itin-from').value)$('itin-to').value=$('itin-from').value;syncDateRange()});
-$('itin-to').addEventListener('change',syncDateRange);
-$('to-outside-bicol').addEventListener('change',syncDateRange);
-$('add-itinerary').addEventListener('click',()=>{let last=gather('itinerary-list').at(-1);addItinerary({date:last?.date?dayAfter(last.date):today()})});
-document.querySelectorAll('input,select,textarea').forEach(c=>c.addEventListener('input',render));
-$('generate').addEventListener('click',()=>{render();if(!validate())return;$('form-view').style.display='none';$('preview-view').style.display='block';fitPreview();window.scrollTo({top:0,behavior:'instant'});});
-$('back').addEventListener('click',()=>{$('preview-view').style.display='none';$('form-view').style.display='flex';window.scrollTo({top:0,behavior:'instant'});});
-$('print').addEventListener('click',()=>{render();if(validate())window.print()});
-$('clear').addEventListener('click',()=>{if(!confirm('Clear form and start a new draft? Unsaved changes will be lost.'))return;currentDraftId=null;
- document.querySelectorAll('#form-view input,#form-view textarea').forEach(el=>{if(el.type==='checkbox')el.checked=false;else el.value=''});
- $('f-issued').value=today();$('f-transport').value='LAND';$('f-fund').value='GAS';$('f-live').value='';$('f-recommending').value='';$('f-recommending-pos').value='';$('f-approving').value='RICARDO C. GARCIA';$('f-approving-pos').value='PARPO II';
- $('personnel-list').innerHTML='';$('itinerary-list').innerHTML='';addPerson({name:loggedIn?.full_name||'',position:loggedIn?.position||'',station:loggedIn?.station||'DARPO – CAMARINES SUR I'});
- if(loggedIn?.recommending_name){$('f-recommending').value=loggedIn.recommending_name;$('f-recommending-pos').value='Division Chief';}
- $('itin-from').value=today();$('itin-to').value=today();syncDateRange();updateConditionalFields();fitPreview();render();
-});
-$('f-issued').value=today();addPerson({station:'DARPO – CAMARINES SUR I'});
-$('itin-from').value=today();$('itin-to').value=today();syncDateRange();updateConditionalFields();fitPreview();render();
+
 })();
-</script>
-</body></html>
+</script></body></html>
