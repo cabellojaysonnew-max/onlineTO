@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.18-travel-order-dated-details-signatories-20261029"; 
+        const APP_VERSION = "v1.19-all-divisions-backdating-20261029"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -751,26 +751,20 @@ async function hardReloadSystem() {
 
         const todayStr = getPSTDate();
 
-        // Travel Order exception restricted to DIVISION AJDP only (not fund source, title, or employee type).
-        // A user with multiple assigned divisions qualifies only when AJDP is explicitly one of them.
+        // Division detection remains solely for AJDP's existing continuous TO numbering.
         const isAJDPDivision = division => String(division || '').split(',')
             .some(part => /(?:^|[^A-Z0-9])AJDP(?:$|[^A-Z0-9])/i.test(part));
 
-        // Apply on password login, biometric login, and restored sessions alike.
+        // All employees may choose past or future itinerary dates.
+        // Keep the end-date restriction so it cannot precede the start date.
+        // Applied on password login, biometric login, and restored sessions alike.
         window.applyTODatePolicy = function() {
             const fromInput = document.getElementById('itin-from');
             const toInput = document.getElementById('itin-to');
             if (!fromInput || !toInput) return;
-            const ajdp = isAJDPDivision(currentUser?.division);
-            if (ajdp) {
-                fromInput.removeAttribute('min');
-                // The end date must still be on/after the chosen starting date.
-                if (fromInput.value) toInput.min = fromInput.value;
-                else toInput.removeAttribute('min');
-            } else {
-                fromInput.min = todayStr;
-                toInput.min = fromInput.value && fromInput.value > todayStr ? fromInput.value : todayStr;
-            }
+            fromInput.removeAttribute('min');
+            if (fromInput.value) toInput.min = fromInput.value;
+            else toInput.removeAttribute('min');
         };
 
         // PASSWORD HASHING UTILITY
@@ -2073,8 +2067,6 @@ const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
                 }
                 return;
             }
-            if (fromDate < todayStr && !isAJDPDivision(currentUser?.division))
-                return alert("Backdating is available only to Division AJDP.");
             if (toDate < fromDate) return alert("End date cannot be before Start date.");
 
             const start = new Date(fromDate + 'T00:00:00Z');
@@ -2295,10 +2287,6 @@ const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
         window.submitTO = async function() {
             if (isSubmitting) return;
             if (itineraryDraft.length === 0) return alert("Itinerary is empty.");
-            const hasBackdatedTravel = itineraryDraft.some(it => it.date && it.date < todayStr);
-            if (hasBackdatedTravel && !isAJDPDivision(currentUser?.division))
-                return alert("Only personnel under Division AJDP can create backdated itineraries.");
-
             const uniqueItineraryDraft = [];
             const seenSubmitDates = new Set();
             itineraryDraft.forEach(it => {
@@ -2354,12 +2342,6 @@ const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
                 const { data: empDetails, error: empDetailsError } = await supabase.from('employees')
                     .select('emp_id, division, unit, position').in('emp_id', empIds);
                 if (empDetailsError) throw empDetailsError;
-                // AJDP backdating applies to AJDP personnel, not just the submitting account.
-                if (hasBackdatedTravel && empIds.some(id =>
-                    !isAJDPDivision((empDetails || []).find(e => String(e.emp_id) === String(id))?.division))) {
-                    throw new Error("Backdated AJDP itineraries may include only Division AJDP personnel.");
-                }
-
                 let finalDiv = currentUser.division;
                 let finalUnit = currentUser.unit;
                 let isPBDD = String(finalDiv).toUpperCase().includes('PBDD');
