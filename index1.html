@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.20-to-signature-line-spacing-20261029"; 
+        const APP_VERSION = "v1.21-backdated-date-filed-20261030"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -3431,7 +3431,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         };
  
         // Fields are overlaid INSIDE the unmodified grid/ruled lines of the source PDF.
-        write(neatDate(order.created_at),137,165,144,8.6);
+        // Date Filed on the printed Travel Order: when a past itinerary is entered,
+        // use its first travel date. Otherwise use the actual filing date.
+        // Keep travel_orders.created_at unchanged as the genuine database/audit timestamp.
+        const recordedFiledDate = order.created_at
+            ? getPSTDateFromDateObj(new Date(order.created_at)) : getPSTDate();
+        const selectedBackdate = String(itin[0]?.travel_date || '').slice(0, 10);
+        const printedFiledDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedBackdate)
+            && selectedBackdate < recordedFiledDate ? selectedBackdate : recordedFiledDate;
+        write(neatDate(printedFiledDate),137,165,144,8.6);
         // No printed TO number, no generated QR and no date of electronic approval.
         write(names,138,214,143,8.3,true);
         write(positions,138,228,143,8.0);
