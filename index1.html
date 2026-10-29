@@ -3271,29 +3271,119 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             arr.forEach((s,i)=>write(s,x,y+i*lineHeight,maxWidth,size,bold));
         };
         const mark=(x,y)=>write('X',x,y,13,12,true);
-        // Keep every dated item visible within the sample's original ruled fields.
-        // If content cannot fit, refuse an incomplete form rather than silently truncate it.
-        const writeDatedField = (rows, x, baselines, width, originalSize=8.0) => {
-            const input=rows.map(safe).filter(Boolean);
-            if(!input.length)return;
-            const maxRows=baselines.length;
-            for(let sz=originalSize;sz>=5.4;sz-=0.2){
-                const result=[];
-                for(const item of input){
-                    let line='';
-                    for(const word of item.split(/\s+/)){
-                        const candidate=line ? line+' '+word : word;
-                        if(line && formFont.widthOfTextAtSize(candidate,sz)>width){result.push(line);line=word;}
-                        else line=candidate;
-                    }
-                    if(line)result.push(line);
+        // Preserve the user's original, one-page A4 form. If any of its small
+        // ruled fields cannot contain all dated entries at a legible size,
+        // refer to a complete attached itinerary instead of rejecting/truncating.
+        const fullyWrapped = (input, maxWidth, fontSize, font=formFont) => {
+            const lines=[];
+            const words=safe(input).split(/\s+/).filter(Boolean);
+            let current='';
+            for(const token of words){
+                // Break even unspaced long strings rather than clip or append ellipses.
+                const pieces=[];
+                let piece='';
+                for(const char of token){
+                    if(piece && font.widthOfTextAtSize(piece+char,fontSize)>maxWidth){pieces.push(piece);piece=char;}
+                    else piece+=char;
                 }
-                if(result.length<=maxRows && result.every(v=>formFont.widthOfTextAtSize(v,sz)<=width)){
-                    result.forEach((line,i)=>write(line,x,baselines[i],width,sz));
-                    return;
+                if(piece)pieces.push(piece);
+                for(let n=0;n<pieces.length;n++){
+                    const part=pieces[n];
+                    const candidate=current ? current+' '+part : part;
+                    if(current && font.widthOfTextAtSize(candidate,fontSize)>maxWidth){
+                        lines.push(current); current=part;
+                    } else current=candidate;
+                    if(n<pieces.length-1){lines.push(current);current='';}
                 }
             }
-            throw new Error('The dated Destination/Report To/Purpose entries exceed the available space on the exact one-page Travel Order form. Please shorten the descriptions without omitting travel dates.');
+            if(current)lines.push(current);
+            return lines;
+        };
+        const fitDatedField = (rows,baselines,width,originalSize=8.0) => {
+            const input=rows.map(safe).filter(Boolean);
+            if(!input.length)return {size:originalSize,lines:[]};
+            // Lower bound is intentionally readable; details move to the
+            // continuation page rather than shrinking to microprint.
+            for(let sz=originalSize;sz>=7.0;sz-=0.2){
+                const lines=input.flatMap(item=>fullyWrapped(item,width,sz));
+                if(lines.length<=baselines.length)return {size:sz,lines};
+            }
+            return null;
+        };
+        const drawDatedFit=(fit,x,baselines,width)=>{
+            if(!fit)return;
+            fit.lines.forEach((line,i)=>write(line,x,baselines[i],width,fit.size));
+        };
+        const datedDestination=dateRows('destination');
+        const datedReport=dateRows('report_to',order.report_to || '');
+        const datedPurpose=dateRows('purpose');
+        const destinationFit=fitDatedField(datedDestination,[300,309],395,8.0);
+        const reportFit=fitDatedField(datedReport,[365,374],418,8.0);
+        const purposeFit=fitDatedField(datedPurpose,[414,433,453],498,8.2);
+        const needsContinuation=!(destinationFit && reportFit && purposeFit);
+        const continuationLabel='SEE ATTACHED DATED ITINERARY ('+itin.length+' DAY'+(itin.length===1?'':'S')+')';
+
+        // Page 2 onward is a complete, date-by-date continuation, only when
+        // needed. It is fully paginated and neither changes the official form
+        // on page 1 nor its existing signatories and footer.
+        const addDatedContinuation = () => {
+            const margin=37;
+            const usable=page.getWidth()-margin*2;
+            const lineGap=12.6;
+            let sheet, cursor;
+            const sheetText=(v,x,top,size=9,font=formFont,color=black)=>{
+                if(!v)return;
+                sheet.drawText(safe(v),{x,y:sheet.getHeight()-top,font,size,color});
+            };
+            const newSheet=()=>{
+                sheet=pdf.addPage([page.getWidth(),page.getHeight()]);
+                cursor=42;
+                sheetText('REPUBLIC OF THE PHILIPPINES',margin,cursor,8.5,formBold);
+                sheetText('DEPARTMENT OF AGRARIAN REFORM',margin,cursor+13,9.5,formBold);
+                sheetText('TRAVEL ORDER - DATED ITINERARY (CONTINUATION)',margin,cursor+37,12.5,formBold);
+                sheetText('Integral attachment to the Travel Order on the preceding form.',margin,cursor+54,8.4);
+                sheet.drawLine({start:{x:margin,y:sheet.getHeight()-cursor-66},end:{x:margin+usable,y:sheet.getHeight()-cursor-66},thickness:0.7,color:PDFLib.rgb(0.3,0.3,0.3)});
+                cursor+=84;
+            };
+            const space=(height)=>{
+                if(!sheet || cursor+height>page.getHeight()-55)newSheet();
+            };
+            const field=(label,value)=>{
+                const content=fullyWrapped(value||'-',usable-124,9.2);
+                const lines=content.length?content:['-'];
+                let at=0;
+                while(at<lines.length){
+                    space(25);
+                    const capacity=Math.floor((page.getHeight()-55-cursor-5)/lineGap);
+                    if(capacity<1){newSheet();continue;}
+                    const count=Math.min(capacity,lines.length-at);
+                    sheetText(at===0?label:label+' (cont.)',margin+10,cursor,8.3,formBold);
+                    for(let i=0;i<count;i++)sheetText(lines[at+i],margin+119,cursor+i*lineGap,9.2);
+                    cursor+=count*lineGap+9;
+                    at+=count;
+                }
+            };
+            for(const day of itin){
+                space(107);
+                const date=longDate(day.travel_date);
+                sheet.drawRectangle({x:margin,y:sheet.getHeight()-cursor-14,width:usable,height:21,color:PDFLib.rgb(0.94,0.96,0.97)});
+                sheetText(date,margin+9,cursor,10,formBold);
+                cursor+=32;
+                field('DESTINATION:',day.destination||'');
+                field('REPORT TO:',reportByDate.size ? (reportByDate.get(day.travel_date)||'') : (order.report_to||''));
+                field('PURPOSE OF TRAVEL:',day.purpose||'');
+                cursor+=10;
+            }
+            // Page counts can only be determined after all continuation pages exist.
+            const count=pdf.getPageCount();
+            pdf.getPages().slice(1).forEach((p,i)=>{
+                p.drawLine({start:{x:margin,y:37},end:{x:page.getWidth()-margin,y:37},thickness:0.5,color:PDFLib.rgb(0.6,0.6,0.6)});
+                p.drawText('TRAVEL ORDER - CONTINUATION SHEET',{
+                    x:margin,y:24,font:formFont,size:7.6,color:black
+                });
+                const pageLabel='Page '+(i+2)+' of '+count;
+                p.drawText(pageLabel,{x:page.getWidth()-margin-formFont.widthOfTextAtSize(pageLabel,7.6),y:24,font:formFont,size:7.6,color:black});
+            });
         };
         // Erase only the sample form's gray placeholder names beneath signature lines.
         // The original boxes, signature lines and headings remain intact.
@@ -3318,12 +3408,15 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         else if(tr==='LAND') mark(294,270);
         else if(tr.includes('VEHICLE')) mark(345,270);
         else {mark(468,270); if(tr!=='OTHERS')write(order.transport,530,270,30,6.8);}
-        writeDatedField(dateRows('destination'),160,[300,309],395,8.0);
+        if(needsContinuation)write(continuationLabel,160,300,395,8.0);
+        else drawDatedFit(destinationFit,160,[300,309],395);
         write(spanDates(itin.length ? [itin[0].travel_date] : []),151,339,125,8.1);
         write(spanDates(itin.length ? [itin[itin.length-1].travel_date] : []),393,339,171,8.1);
-        writeDatedField(dateRows('report_to',order.report_to || ''),138,[365,374],418,8.0);
+        if(needsContinuation)write(continuationLabel,138,365,418,8.0);
+        else drawDatedFit(reportFit,138,[365,374],418);
         // The original purpose box has exactly three lines; include the date per activity.
-        writeDatedField(dateRows('purpose'),48,[414,433,453],498,8.2);
+        if(needsContinuation)write(continuationLabel,48,414,498,8.2);
+        else drawDatedFit(purposeFit,48,[414,433,453],498);
         const fund=upper(order.fund_source).split(',').map(v=>v.trim()).filter(Boolean);
         const matches=name=>fund.includes(name);
         if(matches('GAS'))mark(154,497);
@@ -3370,7 +3463,8 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         }
         replaceSignaturePlaceholder(361,710,152,11);
         signatory('RICARDO C. GARCIA','PARPO II',437,714,245);
-        // Exactly the sample's 1-page form: do not draw new table lines or a new footer.
+        // The official first page remains the unchanged sample; overflow adds sheets.
+        if(needsContinuation)addDatedContinuation();
         const output=await pdf.save({useObjectStreams:false});
         const blob=new Blob([output],{type:'application/pdf'});
         const url=URL.createObjectURL(blob);
