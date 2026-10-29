@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.17-ajdp-exact-pdf-travel-order-20261029"; 
+        const APP_VERSION = "v1.18-travel-order-dated-details-signatories-20261029"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -2309,7 +2309,7 @@ const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
             });
             itineraryDraft = uniqueItineraryDraft;
             
-        const batchItin = []; const reportTos = new Set(); const pbddUnits = new Set(); const fundSources = new Set();
+        const batchItin = []; const reportTos = []; const pbddUnits = new Set(); const fundSources = new Set();
             for (let it of itineraryDraft) {
             const destEl = document.getElementById(it.destId);
             const purpEl = document.getElementById(it.purpId);
@@ -2330,7 +2330,9 @@ const mandatory=LeaveParity.mandatory(ledgers,currentYear,currentUser.emp_id);
             if (!dest || !purp || !rep) return alert(`Fill all fields (except Fund Source) for ${it.date}.`);
             
             batchItin.push({ travel_date: it.date, destination: dest, purpose: purp });
-            reportTos.add(rep);
+            // Preserve the report-to person/office for its actual travel date.
+            // Use the existing travel_orders.report_to column; no database migration.
+            reportTos.push({date:it.date, value:rep});
             if (fund) fundSources.add(fund); // Only add to array if not blank
             
             // Safely capture selected units
@@ -2496,7 +2498,7 @@ return {
                         status: pRouteStatus, 
                         transport, 
                         fund_source: fundSource,
-                        report_to: Array.from(reportTos).join(", "),
+                        report_to: reportTos.map(r => r.date + ' - ' + r.value).join(' | '),
                         remarks: baseRemarks.join(" | ")
                     };
                 });
@@ -2745,7 +2747,13 @@ window.modifyPendingTO = async function(toNo) {
             
             const isPBDD = currentUser && String(currentUser.division).toUpperCase().includes('PBDD');
             const userUnit = currentUser && currentUser.unit ? currentUser.unit.trim() : '';
-
+            // Travel Orders saved by this version retain a separate report-to for each date.
+            // For older orders, fall back to the original undated report-to field.
+            const reportByDate = new Map();
+            String(myTo.report_to || '').split(' | ').forEach(part => {
+                const match = part.match(/^(\d{4}-\d{2}-\d{2}) - ([\s\S]+)$/);
+                if (match) reportByDate.set(match[1], match[2].trim());
+            });
 
         let pbddOptions = '';
         if (userUnit) pbddOptions += `<option value="${userUnit === 'NA' ? '' : userUnit}">${userUnit === 'NA' ? 'NA (Direct to Chief)' : userUnit + ' (Original Unit)'}</option>`;
@@ -2770,7 +2778,7 @@ window.modifyPendingTO = async function(toNo) {
                         <textarea id="purp-${idx}" rows="2" placeholder="Purpose" style="padding:8px; font-size:13px; margin-bottom:8px;">${i.purpose}</textarea>
                         <input type="text" id="fund-${idx}" list="fund-sources-list" placeholder="Fund Source (Select or Type)" value="${(myTo.fund_source || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:8px;">
                         ${pbddSelect}
-                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${(myTo.report_to || '').replace(/"/g, '&quot;')}" style="padding:8px; font-size:13px; margin-bottom:0;">
+                        <input type="text" id="rep-${idx}" placeholder="Report To" value="${(reportByDate.get(i.travel_date) ?? (reportByDate.size ? '' : (myTo.report_to || ''))).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" style="padding:8px; font-size:13px; margin-bottom:0;">
                     </div>`;
                 itineraryDraft.push({ date: i.travel_date, destId: `dest-${idx}`, purpId: `purp-${idx}`, repId: `rep-${idx}`, fundId: `fund-${idx}`, unitId: isPBDD ? `unit-${idx}` : null, cardId: cardId, hasPSO: false });
             });
@@ -3209,6 +3217,21 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const names = distinct(orders.map(o=>upper(o.emp_name || lookup(o.emp_id).full_name))).join(', ');
         const positions = distinct(orders.map(o=>upper(lookup(o.emp_id).position))).join(', ');
         const stations = distinct(orders.map(o=>upper(lookup(o.emp_id).station))).join(', ');
+        const longDate = value => {
+            const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return match ? new Date(Date.UTC(+match[1], +match[2]-1, +match[3])).toLocaleDateString('en-US',
+                {month:'long', day:'numeric', year:'numeric', timeZone:'UTC'}) : String(value || '');
+        };
+        // Legacy TOs have one combined Report To; newer records store a dated list.
+        const reportByDate = new Map();
+        String(order.report_to || '').split(' | ').forEach(part => {
+            const m = part.match(/^(\d{4}-\d{2}-\d{2}) - ([\s\S]+)$/);
+            if(m)reportByDate.set(m[1],m[2].trim());
+        });
+        const dateRows = (field, legacyValue='') => itin.map(row =>
+            longDate(row.travel_date) + ' - ' +
+            (field==='report_to' ? (reportByDate.size ? (reportByDate.get(row.travel_date) || '') : legacyValue) : (row[field] || ''))
+        ).filter(v=>!v.endsWith(' - '));
         const neatDate = v => {
             if(!v) return '';
             const m=String(v).match(/^(\d{4})-(\d\d)-(\d\d)/);
@@ -3266,7 +3289,41 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
             arr.forEach((s,i)=>write(s,x,y+i*lineHeight,maxWidth,size,bold));
         };
         const mark=(x,y)=>write('X',x,y,13,12,true);
-
+        // Keep every dated item visible within the sample's original ruled fields.
+        // If content cannot fit, refuse an incomplete form rather than silently truncate it.
+        const writeDatedField = (rows, x, baselines, width, originalSize=8.0) => {
+            const input=rows.map(safe).filter(Boolean);
+            if(!input.length)return;
+            const maxRows=baselines.length;
+            for(let sz=originalSize;sz>=5.4;sz-=0.2){
+                const result=[];
+                for(const item of input){
+                    let line='';
+                    for(const word of item.split(/\s+/)){
+                        const candidate=line ? line+' '+word : word;
+                        if(line && formFont.widthOfTextAtSize(candidate,sz)>width){result.push(line);line=word;}
+                        else line=candidate;
+                    }
+                    if(line)result.push(line);
+                }
+                if(result.length<=maxRows && result.every(v=>formFont.widthOfTextAtSize(v,sz)<=width)){
+                    result.forEach((line,i)=>write(line,x,baselines[i],width,sz));
+                    return;
+                }
+            }
+            throw new Error('The dated Destination/Report To/Purpose entries exceed the available space on the exact one-page Travel Order form. Please shorten the descriptions without omitting travel dates.');
+        };
+        // Erase only the sample form's gray placeholder names beneath signature lines.
+        // The original boxes, signature lines and headings remain intact.
+        const replaceSignaturePlaceholder = (x,top,width,height)=>page.drawRectangle({
+            x,y:H-top-height,width,height,color:PDFLib.rgb(1,1,1),borderWidth:0
+        });
+        const signatory = (person,position,x,top,maxWidth,gap=9)=>{
+            const name=upper(person);if(!name)return;
+            write(name,x,top,maxWidth,7.8,true,'center');
+            if(position)write(upper(position),x,top+gap,maxWidth,6.5,false,'center');
+        };
+ 
         // Fields are overlaid INSIDE the unmodified grid/ruled lines of the source PDF.
         write(neatDate(order.created_at),137,165,144,8.6);
         // No printed TO number, no generated QR and no date of electronic approval.
@@ -3279,14 +3336,12 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         else if(tr==='LAND') mark(294,270);
         else if(tr.includes('VEHICLE')) mark(345,270);
         else {mark(468,270); if(tr!=='OTHERS')write(order.transport,530,270,30,6.8);}
-        write(distinct(itin.map(i=>i.destination)).join('; '),138,306,416,8.2);
+        writeDatedField(dateRows('destination'),160,[300,309],395,8.0);
         write(spanDates(itin.length ? [itin[0].travel_date] : []),151,339,125,8.1);
         write(spanDates(itin.length ? [itin[itin.length-1].travel_date] : []),393,339,171,8.1);
-        write(order.report_to || '',137,372,420,8.5);
-        // Fixed-height purpose box: keep paragraph inside three original ruled lines.
-        const purposeValues = distinct(itin.map(i=>i.purpose));
-        const purposeText=purposeValues.join('; ');
-        textLines(purposeText,48,415,498,19.7,3,8.3);
+        writeDatedField(dateRows('report_to',order.report_to || ''),138,[365,374],418,8.0);
+        // The original purpose box has exactly three lines; include the date per activity.
+        writeDatedField(dateRows('purpose'),48,[414,433,453],498,8.2);
         const fund=upper(order.fund_source).split(',').map(v=>v.trim()).filter(Boolean);
         const matches=name=>fund.includes(name);
         if(matches('GAS'))mark(154,497);
@@ -3297,47 +3352,42 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const otherFunds=fund.filter(x=>!['GAS','LTSP','AARC','ALI/PALA','ALI','PALA','ARBDSP'].includes(x));
         if(otherFunds.length){mark(390,523);write(otherFunds.join(', '),457,523,95,7);}
 
-        // Preserve the original requested/recommended/recommending/approved sections.
-        // Signatory names only: signature lines remain blank for manual signing.
-        const units=distinct(orders.flatMap(o=>String(o.unit||'').split(',').map(s=>s.trim()).filter(s=>!['PARPO','NA'].includes(s.toUpperCase()))));
-        const divisions=distinct(orders.flatMap(o=>String(o.division||'').split(',').map(s=>s.trim())));
-        const isMarpo=upper(currentUser?.position).includes('MARPO');
-        let unitHeads=[]; let divisionChiefs=[];
-        if(!isMarpo&&units.length){
-            const res=await supabase.from('users').select('full_name,username').in('unit',units);
-            if(!res.error)unitHeads=res.data||[];
+        // Keep all original signatory sections and printed signature rules.
+        // No e-signature or electronic approval is requested.
+        // REQUESTED BY: the employee logged into the portal, not every companion on a group TO.
+        const loggedEmployee=employeeRecords.find(e=>String(e.emp_id)===String(currentUser?.emp_id)) || {};
+        const requesterName=currentUser?.full_name || loggedEmployee.full_name || order.emp_name || '';
+        const requesterPosition=currentUser?.position || loggedEmployee.position || '';
+        const ownUnit=String(currentUser?.unit || order.unit || '').trim();
+        const ownDivision=String(currentUser?.division || order.division || '').split(',')[0].trim();
+        const units=distinct(ownUnit.split(',').map(v=>v.trim()).filter(v=>v && !['NA','PARPO'].includes(upper(v))));
+        let unitHead=[];
+        if(units.length){
+            const response=await supabase.from('users').select('full_name,role,unit')
+                .in('unit',units).in('role',['UNIT_HEAD','UNIT HEAD','MARPO']);
+            if(response.error)throw response.error;
+            unitHead=distinct((response.data||[]).map(r=>r.full_name));
         }
-        if(upper(currentUser?.unit)!=='PARPO'&&divisions.length){
-            const res=await supabase.from('users').select('full_name,username,role').in('division',divisions).in('role',['CHIEF','PARPO I','PARPO_I','PARPO1','PARPO_1']);
-            if(!res.error)divisionChiefs=(res.data||[]).map(u=>({...u,custom_role:/^PARPO[ _]?I$|^PARPO1$|^PARPO_1$/i.test(u.role||'')?'PARPO I':'DIVISION CHIEF'}));
+        let divisionChief=[];
+        if(ownDivision){
+            const response=await supabase.from('users').select('full_name,role,division')
+                .eq('division',ownDivision).eq('role','CHIEF');
+            if(response.error)throw response.error;
+            divisionChief=distinct((response.data||[]).map(r=>r.full_name));
         }
-        const arbdsp=upper(order.division+' '+order.unit+' '+order.fund_source).includes('ARBDSP');
-        if(arbdsp&&!divisionChiefs.some(u=>u.custom_role==='PARPO I')){
-            const res=await supabase.from('users').select('full_name,username').in('role',['PARPO_I','PARPO I','PARPO1','PARPO_1']).limit(1);
-            const p1=(res.data||[])[0];
-            if(p1)divisionChiefs.push({...p1,custom_role:'PARPO I'});
-            else if(order.parpo1_signed)divisionChiefs.push({full_name:order.parpo1_signed,custom_role:'PARPO I'});
+        // Replace the printed helper text, not the signature lines, with real name/position.
+        replaceSignaturePlaceholder(104,613,125,11);
+        signatory(requesterName,requesterPosition,162,618,220);
+        replaceSignaturePlaceholder(105,664,120,10);
+        if(unitHead.length){
+            signatory(unitHead.join(' / '),'UNIT HEAD',162,666,220,6);
         }
-        if(unitHeads.length){
-            write(distinct(unitHeads.map(x=>upper(x.full_name))).join(' / '),163,606,210,8.0,true,'center');
+        if(divisionChief.length){
+            replaceSignaturePlaceholder(349,652,180,11);
+            signatory(divisionChief.join(' / '),'DIVISION CHIEF',437,657,250);
         }
-        const divisionOnly=divisionChiefs.filter(x=>x.custom_role!=='PARPO I');
-        const parpoOne=divisionChiefs.filter(x=>x.custom_role==='PARPO I');
-        if(divisionOnly.length){
-            write(distinct(divisionOnly.map(x=>upper(x.full_name))).join(' / '),430,639,235,7.9,true,'center');
-        } else if(parpoOne.length){
-            write(distinct(parpoOne.map(x=>upper(x.full_name))).join(' / '),430,639,235,7.9,true,'center');
-        }
-        // Original form has a separate lower-left RECOMMENDING APPROVAL BY area.
-        // Show PARPO I there only if it is an additional signatory, without signatures.
-        if(parpoOne.length && divisionOnly.length){
-            write(distinct(parpoOne.map(x=>upper(x.full_name))).join(' / '),163,657,210,7.9,true,'center');
-        }
-        const start=itin[0]?.travel_date||'';
-        const end=itin[itin.length-1]?.travel_date||'';
-        const dayCount=start&&end ? Math.round((new Date(end+'T00:00:00Z')-new Date(start+'T00:00:00Z'))/86400000)+1 : 0;
-        const outsideBicol=upper(order.remarks).includes('OUTSIDE BICOL')&&dayCount>=7;
-        write(outsideBicol?'RICARDO C. GARCIA / RODRIGO O. REALUBIT, CESO VI':'RICARDO C. GARCIA',430,702,235,8.1,true,'center');
+        replaceSignaturePlaceholder(361,710,152,11);
+        signatory('RICARDO C. GARCIA','PARPO II',437,714,245);
         // Exactly the sample's 1-page form: do not draw new table lines or a new footer.
         const output=await pdf.save({useObjectStreams:false});
         const blob=new Blob([output],{type:'application/pdf'});
