@@ -2535,21 +2535,24 @@ return {
             const div = (targetDiv || currentUser.division || "GEN").split(',')[0].trim().substring(0, 5).toUpperCase();
             const isSplit = currentUser && String(currentUser.type).toUpperCase() === 'SPLIT';
 
-            // AJDP division is a single continuous annual sequence, regardless of SPLIT type.
-            // Include existing AJDP-SPLIT references to avoid restarting or duplicating numbers.
-            if (isAJDPDivision(targetDiv || currentUser?.division)) {
+            // AJDP regular TO numbering continues from existing regular AJDP TOs
+            // in the original travel_orders database. SPLIT retains its original
+            // separate numbering path below, as in the reference version.
+            if (isAJDPDivision(targetDiv || currentUser?.division) && !isSplit) {
                 const ajdpYear = todayStr.slice(0, 4);
                 let maxSeq = 0;
                 let offset = 0;
                 const pageSize = 500;
                 while (true) {
                     const { data: existing, error } = await supabase.from('travel_orders')
-                        .select('to_no').like('to_no', `${ajdpYear}-AJDP-%`)
+                        .select('to_no')
+                        .like('to_no', `${ajdpYear}-AJDP-%`)
+                        .not('to_no', 'like', '%-SPLIT-%')
                         .order('to_no', { ascending: true })
                         .range(offset, offset + pageSize - 1);
                     if (error) throw error;
                     for (const row of existing || []) {
-                        const match = String(row.to_no || '').match(/^\d{4}-AJDP-(?:SPLIT-)?(\d+)$/i);
+                        const match = String(row.to_no || '').match(/^\d{4}-AJDP-(\d+)$/i);
                         if (match) maxSeq = Math.max(maxSeq, Number(match[1]));
                     }
                     if (!existing || existing.length < pageSize) break;
@@ -3440,7 +3443,11 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         const printedFiledDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedBackdate)
             && selectedBackdate < recordedFiledDate ? selectedBackdate : recordedFiledDate;
         write(neatDate(printedFiledDate),137,165,144,8.6);
-        // No printed TO number, no generated QR and no date of electronic approval.
+        // Print AJDP's original database TO reference in the existing TO number field.
+        // Other divisions keep the printed field blank; their internal TO IDs remain intact.
+        if (/^\d{4}-AJDP-(?:SPLIT-)?\d+$/i.test(String(toNo || ''))) {
+            write(toNo,137,191,140,8.4,true);
+        }
         write(names,138,214,143,8.3,true);
         write(positions,138,228,143,8.0);
         write(stations,389,214,175,8.3);
