@@ -5,7 +5,7 @@
         // AUTOMATIC REFRESH SCRIPT
         // Update this version string (e.g., "v1.1", "v1.2") whenever you deploy new code.
         // It forces the browser to pull the latest updates automatically.
-        const APP_VERSION = "v1.23-travel-purpose-auto-compress-20261103"; 
+        const APP_VERSION = "v1.24-travel-purpose-single-page-dedup-20261103"; 
         if (localStorage.getItem("dar_app_version") !== APP_VERSION) {
             localStorage.setItem("dar_app_version", APP_VERSION);
             window.location.reload(true);
@@ -3352,78 +3352,135 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         };
         placeNarrow('destination', {label:'Destination',left:139,right:557,baselines:[300.4,307.3],font:7.6,min:6.2});
         placeNarrow('report_to', {label:'Report To',left:138,right:557,baselines:[362.6,371.0],font:7.5,min:6.0});
-        // AUTO-FIT PURPOSE OF TRAVEL (and only this field).
-        // The original form has THREE ruled bands, with usable space above
-        // each rule. Allocate the SIX possible writing baselines dynamically:
-        // a longer date may use more lines if another date uses fewer lines.
-        // Never truncate, strike-through or require the user to shorten text.
-        const purposeSingle = [415.0, 433.3, 450.9];
-        const purposeDouble = [[411.4,419.8],[430.3,438.8],[448.6,456.5]];
-        const purposeFlow = purposeDouble.flat();
-        let purposeOverflow = null;
+        // SMART SINGLE-PAGE PURPOSE OF TRAVEL. Only this field is changed.
+        // Group recurring duties before resizing, so the employee does not
+        // have to shorten the descriptions and an extra page is never added.
+        const normalizePurpose = value => safe(value).toLowerCase()
+            .replace(/\bfollow[ -]?up\b/g, 'followup')
+            .replace(/\bconcerns\b/g, 'concern')
+            .replace(/\bdocuments\b/g, 'documentation')
+            .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        // Only a substantive title (at least three words) may establish a
+        // common purpose. Parenthetical details are never discarded.
+        const purposeStem = value => {
+            const head = String(value || '').split(/\s*\(/, 1)[0].trim();
+            const normalized = normalizePurpose(head);
+            return normalized.split(' ').length >= 3 ? normalized : '';
+        };
+        const samePurpose = (left, right) => {
+            const a = normalizePurpose(left), b = normalizePurpose(right);
+            if (!a || !b) return false;
+            if (a === b) return true;
+            const sa = purposeStem(left), sb = purposeStem(right);
+            if (sa && sa === sb) return true;
+            // One entry may have a generic purpose while another adds a
+            // parenthetical detail. Do not merge different activities merely
+            // because they belong to the same project (e.g. SPLIT-ALI).
+            if (sa && sa === b && a.startsWith(b + ' ')) return true;
+            if (sb && sb === a && b.startsWith(a + ' ')) return true;
+            return false;
+        };
+        const groupTravelPurposes = rows => {
+            const groups = [];
+            for (const row of rows) {
+                const value = safe(row.purpose);
+                if (!value) continue;
+                const travelDate = String(row.travel_date || '').slice(0, 10);
+                let group = groups.find(g => g.variants.some(existing => samePurpose(existing, value)));
+                if (!group) {
+                    group = {dates:[], variants:[]};
+                    groups.push(group);
+                }
+                if (travelDate && !group.dates.includes(travelDate)) group.dates.push(travelDate);
+                if (!group.variants.some(v => normalizePurpose(v) === normalizePurpose(value))) group.variants.push(value);
+            }
+            return groups;
+        };
+        const combinePurposeDetails = variants => {
+            // Prefer the most descriptive version, then append only genuinely
+            // new information from another version of the same purpose.
+            const ordered = variants.slice().sort((a, b) => b.length - a.length);
+            let result = ordered[0] || '';
+            for (const candidate of ordered.slice(1)) {
+                const normResult = normalizePurpose(result);
+                const normCandidate = normalizePurpose(candidate);
+                if (normResult.includes(normCandidate)) continue;
+                const stem = purposeStem(candidate);
+                const head = String(candidate).split(/\s*\(/,1)[0].trim();
+                let addition = stem && head ? String(candidate).slice(head.length).trim() : candidate;
+                addition = addition.replace(/^\s*[(:;,.\-]+|[):;,.\-\s]+$/g, '').trim();
+                if (addition && !normalizePurpose(result).includes(normalizePurpose(addition))) {
+                    result += '; ' + addition;
+                }
+            }
+            return result;
+        };
+        const compactPurposeDates = (dates, abbreviated = true) => {
+            const sorted = [...new Set(dates)].filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)).sort();
+            if (!sorted.length) return '';
+            if (sorted.length === 1) return printableDate(sorted[0], abbreviated);
+            const months = abbreviated
+                ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+                : ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const parsed = sorted.map(d => ({date:d,year:d.slice(0,4),month:+d.slice(5,7),day:+d.slice(8,10)}));
+            const sameMonth = parsed.every(d=>d.year===parsed[0].year && d.month===parsed[0].month);
+            const consecutive = sorted.every((d,i) => i===0 ||
+                (Date.parse(d+'T00:00:00Z') - Date.parse(sorted[i-1]+'T00:00:00Z')) === 86400000);
+            if (sameMonth) {
+                const front = months[parsed[0].month-1] + ' ';
+                if (consecutive) return front+parsed[0].day+'-'+parsed[parsed.length-1].day+', '+parsed[0].year;
+                return front+parsed.map(d=>d.day).join(', ')+', '+parsed[0].year;
+            }
+            // Only use a range when ALL intervening days are included.
+            if (consecutive) return printableDate(sorted[0],abbreviated)+' - '+printableDate(sorted[sorted.length-1],abbreviated);
+            return sorted.map(d=>printableDate(d,abbreviated)).join('; ');
+        };
+        const purposeGroups = groupTravelPurposes(itin);
+        const groupedPurposeEntries = abbreviated => purposeGroups.map(g =>
+            compactPurposeDates(g.dates, abbreviated) + ' - ' + combinePurposeDetails(g.variants));
+        const purposeSingles = [415.0, 433.3, 450.9];
+        const purposeDouble = [[411.4, 419.8], [430.3, 438.8], [448.6, 456.5]];
+        const purposeSix = purposeDouble.flat();
+        // Compact and ultra-compact baselines are positioned strictly between
+        // the ORIGINAL three printed writing rules at 422.55, 441.26, 458.46.
+        const purposeEight = [408.8,414.8,420.8,428.8,434.8,440.8,449.7,456.0];
+        const purposeTen = [407.6,412.0,416.4,421.0,430.0,435.0,440.2,447.8,452.3,457.0];
         const renderPurpose = () => {
-            const originalEntries = datedEntries('purpose', false);
-            if (!originalEntries.length) return;
-            // Prefer the largest readable font and, at that size, complete
-            // dates before abbreviated month names. The same exact statements
-            // are used for every layout candidate.
-            for (let tenths = 82; tenths >= 44; tenths--) {
+            if (!purposeGroups.length) return;
+            // Largest font that fits wins. The lettering scales automatically,
+            // but no purpose or distinct contextual detail is dropped.
+            for (let tenths = 90; tenths >= 32; tenths--) {
                 const size = tenths / 10;
-                for (const shortDate of [false, true]) {
-                    const entries = shortDate ? datedEntries('purpose', true) : originalEntries;
-                    // Layout A: one date per ruled band, preserving original
-                    // per-date alignment for ordinary one-to-three-day trips.
-                    if (entries.length <= 3) {
-                        const blocks = entries.map(value => wrapFull(value, 506, size));
-                        if (blocks.every(block => block.length <= 2) &&
-                            (size <= 7.1 || blocks.every(block => block.length === 1))) {
-                            blocks.forEach((lines, index) => lines.forEach((line, row) =>
-                                drawText(line, 49,
-                                    lines.length === 1 ? purposeSingle[index] : purposeDouble[index][row],
-                                    506, size, false, 'left', size)));
-                            return;
-                        }
+                for (const shortDate of [true, false]) {
+                    const entries = groupedPurposeEntries(shortDate);
+                    const fullBlocks = entries.map(text => wrapFull(text, 506, size));
+                    // One purpose per printed band whenever possible.
+                    if (entries.length <= 3 && fullBlocks.every(b => b.length === 1)) {
+                        fullBlocks.forEach((b,i)=>drawText(b[0],49,purposeSingles[i],506,size,false,'left',size));
+                        return;
                     }
-                    // Layout B: two entries per band for four to six dates.
-                    if (entries.length <= 6) {
-                        const width = 247;
-                        const blocks = entries.map(value => wrapFull(value, width, size));
-                        if (blocks.every(block => block.length <= 2) &&
-                            (size <= 7.1 || blocks.every(block => block.length === 1))) {
-                            blocks.forEach((lines, index) => {
-                                const band = Math.floor(index / 2);
-                                const x = index % 2 ? 309 : 49;
-                                lines.forEach((line, row) => drawText(line, x,
-                                    lines.length === 1 ? purposeSingle[band] : purposeDouble[band][row],
-                                    width, size, false, 'left', size));
-                            });
-                            return;
-                        }
+                    if (size <= 7.5 && entries.length <= 3 && fullBlocks.every(b => b.length <= 2)) {
+                        fullBlocks.forEach((block,i)=>block.forEach((line,j)=>drawText(line,49,
+                            block.length === 1 ? purposeSingles[i] : purposeDouble[i][j],506,size,false,'left',size)));
+                        return;
                     }
-                    // Layout C: use ALL SIX baselines as a continuous writing
-                    // area. This removes the former 2-lines-per-date limit.
-                    // Each date begins a new wrapped line; no contents merge.
-                    const blocks = entries.map(value => wrapFull(value, 506, size));
-                    const totalLines = blocks.reduce((sum, block) => sum + block.length, 0);
-                    if (totalLines <= purposeFlow.length && size <= 7.1) {
-                        let next = 0;
-                        for (const block of blocks) {
-                            for (const line of block) {
-                                drawText(line, 49, purposeFlow[next++], 506, size, false, 'left', size);
-                            }
+                    const total = fullBlocks.reduce((sum,b)=>sum+b.length,0);
+                    const flow = total <= 6 && size <= 7.5 ? purposeSix :
+                        total <= 8 && size <= 5.7 ? purposeEight :
+                        total <= 10 && size <= 4.2 ? purposeTen : null;
+                    if (flow) {
+                        let index = 0;
+                        for (const block of fullBlocks) for (const line of block) {
+                            drawText(line,49,flow[index++],506,size,false,'left',size);
                         }
                         return;
                     }
                 }
             }
-            // Physical paper has a finite area. For extraordinarily long
-            // narratives, do NOT produce microscopic illegible print or an
-            // error asking the employee to manually shorten the statement.
-            // Keep page 1 as the EXACT official form and automatically append
-            // the complete, readable text on a continuation page instead.
-            purposeOverflow = originalEntries;
-            drawText('Complete dated Purpose of Travel: SEE ATTACHED CONTINUATION PAGE',
-                49, purposeSingle[0], 506, 8.0, false, 'left', 7.0);
+            // A physical one-page form has finite printable space. Fail only
+            // for extreme amounts of UNIQUE text; never silently cut content,
+            // and NEVER generate a second page without user authorization.
+            throw new Error('The distinct Purpose of Travel details exceed the available space even after grouping and maximum single-page compression.');
         };
         renderPurpose();
 
@@ -3504,39 +3561,7 @@ window.generateOfficialPDFNewFormat = async function(toNo) {
         if(unitHead.length)signer(unitHead.join(' / '),'UNIT HEAD',162,672.7,226);
         if(divisionChief.length)signer(divisionChief.join(' / '),'DIVISION CHIEF',437,660.5,246);
         signer('RICARDO C. GARCIA','PARPO II',437,718.5,245);
-        // The official form remains page 1, untouched. Only when the complete
-        // Purpose is physically too long even after auto-compression do we
-        // include its full text on a clearly labeled additional page.
-        if (purposeOverflow && purposeOverflow.length) {
-            const continuation = pdf.addPage([page.getWidth(), page.getHeight()]);
-            const cHeight = continuation.getHeight();
-            const cWidth = continuation.getWidth();
-            const left = 50, right = 50, contentWidth = cWidth - left - right;
-            continuation.drawText('TRAVEL ORDER - PURPOSE OF TRAVEL (CONTINUATION)', {
-                x:left, y:cHeight - 61, size:12, font:formBold, color:black
-            });
-            continuation.drawText('All dated descriptions are reproduced in full.', {
-                x:left, y:cHeight - 83, size:9, font:formFont, color:black
-            });
-            let currentPage = continuation;
-            let cursor = 112;
-            const fontSize = 9;
-            const lineHeight = 14;
-            for (const entry of purposeOverflow) {
-                const lines = wrapFull(entry, contentWidth, fontSize);
-                for (const line of lines) {
-                    if (cursor + lineHeight > cHeight - 55) {
-                        currentPage = pdf.addPage([cWidth, cHeight]);
-                        cursor = 65;
-                    }
-                    currentPage.drawText(line, {
-                        x:left, y:cHeight - cursor, size:fontSize, font:formFont, color:black
-                    });
-                    cursor += lineHeight;
-                }
-                cursor += 9;
-            }
-        }
+        // Exactly one official Travel Order page; never append a continuation.
         const output=await pdf.save({useObjectStreams:false});
         const blob=new Blob([output],{type:'application/pdf'});
         const url=URL.createObjectURL(blob);
